@@ -1,0 +1,667 @@
+# CM3 Batch Automations - Usage Guide
+
+## Overview
+
+This guide provides practical examples for using CM3 Batch Automations in both **CLI mode** and **API mode**.
+
+---
+
+## Table of Contents
+
+1. [Quick Start](#quick-start)
+2. [CLI Usage](#cli-usage)
+3. [API Usage](#api-usage)
+4. [Universal Mapping](#universal-mapping)
+5. [Common Workflows](#common-workflows)
+6. [Troubleshooting](#troubleshooting)
+
+---
+
+## Quick Start
+
+### Starting the API Server
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Start API server (development mode)
+uvicorn src.api.main:app --reload --port 8000
+
+# Access Swagger UI
+open http://localhost:8000/docs
+```
+
+### CLI Commands
+
+```bash
+# Detect file format
+cm3-batch detect -f data/samples/customers.txt
+
+# Parse file
+cm3-batch parse -f data/samples/customers.txt
+
+# Compare files
+cm3-batch compare -f1 file1.txt -f2 file2.txt -k customer_id
+```
+
+---
+
+## CLI Usage
+
+### 1. File Format Detection
+
+Automatically detect the format of a file:
+
+```bash
+cm3-batch detect -f data/samples/p327_test_data.txt
+```
+
+**Output:**
+```
+Format: fixed_width
+Confidence: 0.95
+Record Length: 2809
+Line Count: 10
+```
+
+### 2. File Parsing
+
+Parse a file using a mapping:
+
+```bash
+# Parse with universal mapping
+cm3-batch parse -f data/samples/p327_test_data.txt \
+  -m config/mappings/p327_universal.json \
+  -o output.csv
+```
+
+**Options:**
+- `-f, --file`: Input file path
+- `-m, --mapping`: Mapping configuration file
+- `-o, --output`: Output file path
+- `--format`: Output format (csv, json, excel)
+
+### 3. File Comparison
+
+Compare two files and generate a report:
+
+```bash
+cm3-batch compare \
+  -f1 data/samples/file1.txt \
+  -f2 data/samples/file2.txt \
+  -k ACCT-NUM \
+  -m config/mappings/p327_universal.json \
+  -o reports/comparison_report.html
+```
+
+**Options:**
+- `-f1, --file1`: First file to compare
+- `-f2, --file2`: Second file to compare
+- `-k, --key-columns`: Key columns for matching (comma-separated)
+- `-m, --mapping`: Mapping configuration
+- `-o, --output`: Output report path
+- `--detailed`: Include field-level differences
+
+### 4. Database Operations
+
+Extract data from Oracle database:
+
+```bash
+cm3-batch extract \
+  -t CUSTOMER_TABLE \
+  -o output.txt \
+  -l 1000 \
+  --format fixed_width
+```
+
+**Options:**
+- `-t, --table`: Table name
+- `-o, --output`: Output file path
+- `-l, --limit`: Number of rows to extract
+- `--format`: Output format
+
+Reconcile mapping with database schema:
+
+```bash
+cm3-batch reconcile \
+  -m config/mappings/customer_mapping.json \
+  -t CUSTOMER_TABLE
+```
+
+### 5. Validation
+
+Validate a file against mapping rules:
+
+```bash
+cm3-batch validate \
+  -f data/samples/customers.txt \
+  -m config/mappings/customer_mapping.json
+```
+
+---
+
+## API Usage
+
+### Accessing the API
+
+**Swagger UI (Interactive):**
+```
+http://localhost:8000/docs
+```
+
+**ReDoc (Alternative):**
+```
+http://localhost:8000/redoc
+```
+
+**Health Check:**
+```bash
+curl http://localhost:8000/api/v1/system/health
+```
+
+### 1. System Endpoints
+
+#### Health Check
+
+```bash
+curl http://localhost:8000/api/v1/system/health
+```
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "timestamp": "2026-02-07T19:30:00Z"
+}
+```
+
+#### System Information
+
+```bash
+curl http://localhost:8000/api/v1/system/info
+```
+
+**Response:**
+```json
+{
+  "python_version": "3.9.0",
+  "api_version": "1.0.0",
+  "supported_formats": ["pipe_delimited", "fixed_width", "csv", "tsv"],
+  "database_connected": false
+}
+```
+
+### 2. Mapping Endpoints
+
+#### Upload Excel/CSV Template
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/mappings/upload" \
+  -F "file=@data/mappings/p327-target-template.xlsx" \
+  -F "mapping_name=p327_mapping" \
+  -F "file_format=fixed_width"
+```
+
+**Response:**
+```json
+{
+  "filename": "p327-target-template.xlsx",
+  "size": 45678,
+  "mapping_id": "p327_mapping",
+  "message": "Template converted successfully. Mapping saved as 'p327_mapping'"
+}
+```
+
+#### List All Mappings
+
+```bash
+curl http://localhost:8000/api/v1/mappings/
+```
+
+**Response:**
+```json
+[
+  {
+    "id": "p327_universal",
+    "mapping_name": "p327_universal",
+    "version": "1.0.0",
+    "format": "fixed_width",
+    "total_fields": 252,
+    "created_date": "2026-02-07T18:31:00Z"
+  }
+]
+```
+
+#### Get Mapping by ID
+
+```bash
+curl http://localhost:8000/api/v1/mappings/p327_universal
+```
+
+**Response:**
+```json
+{
+  "id": "p327_universal",
+  "mapping_name": "p327_universal",
+  "version": "1.0.0",
+  "description": "P327 Fixed-Width Mapping",
+  "source": {
+    "type": "file",
+    "format": "fixed_width",
+    "encoding": "UTF-8"
+  },
+  "fields": [...],
+  "total_fields": 252,
+  "total_record_length": 2809
+}
+```
+
+#### Delete Mapping
+
+```bash
+curl -X DELETE http://localhost:8000/api/v1/mappings/p327_mapping
+```
+
+### 3. File Endpoints
+
+#### Detect File Format
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/files/detect" \
+  -F "file=@data/samples/p327_test_data.txt"
+```
+
+**Response:**
+```json
+{
+  "format": "fixed_width",
+  "confidence": 0.95,
+  "line_count": 10,
+  "record_length": 2809,
+  "sample_lines": ["...", "..."]
+}
+```
+
+#### Parse File
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/files/parse" \
+  -F "file=@data/samples/p327_test_data.txt" \
+  -F 'request={"mapping_id": "p327_universal", "output_format": "csv"}'
+```
+
+**Response:**
+```json
+{
+  "rows_parsed": 10,
+  "columns": 252,
+  "preview": [{...}, {...}],
+  "download_url": "/api/v1/files/download/parsed_p327_test_data.txt.csv",
+  "errors": []
+}
+```
+
+#### Compare Files
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/files/compare" \
+  -F "file1=@data/samples/file1.txt" \
+  -F "file2=@data/samples/file2.txt" \
+  -F 'request={"mapping_id": "p327_universal", "key_columns": ["ACCT-NUM"]}'
+```
+
+**Response:**
+```json
+{
+  "total_rows_file1": 10,
+  "total_rows_file2": 10,
+  "matching_rows": 8,
+  "only_in_file1": 1,
+  "only_in_file2": 1,
+  "differences": 2,
+  "report_url": "/api/v1/reports/comparison_12345.html"
+}
+```
+
+### 4. Using Python Requests
+
+```python
+import requests
+
+# Upload template
+with open('template.xlsx', 'rb') as f:
+    response = requests.post(
+        'http://localhost:8000/api/v1/mappings/upload',
+        files={'file': f},
+        params={'mapping_name': 'my_mapping', 'file_format': 'fixed_width'}
+    )
+    print(response.json())
+
+# List mappings
+response = requests.get('http://localhost:8000/api/v1/mappings/')
+mappings = response.json()
+for mapping in mappings:
+    print(f"{mapping['id']}: {mapping['total_fields']} fields")
+
+# Parse file
+with open('data.txt', 'rb') as f:
+    response = requests.post(
+        'http://localhost:8000/api/v1/files/parse',
+        files={'file': f},
+        json={'mapping_id': 'my_mapping', 'output_format': 'csv'}
+    )
+    result = response.json()
+    print(f"Parsed {result['rows_parsed']} rows")
+```
+
+---
+
+## Universal Mapping
+
+### Creating Mappings from Templates
+
+#### From Excel Template
+
+```bash
+python src/config/template_converter.py \
+  data/mappings/my_template.xlsx \
+  config/mappings/my_mapping.json \
+  my_mapping_name \
+  fixed_width
+```
+
+#### From CSV Template
+
+```bash
+python src/config/template_converter.py \
+  data/mappings/my_template.csv \
+  config/mappings/my_mapping.json \
+  my_mapping_name \
+  pipe_delimited
+```
+
+### Validating Mappings
+
+```bash
+python src/config/universal_mapping_parser.py \
+  config/mappings/my_mapping.json
+```
+
+**Output:**
+```
+✓ Mapping is valid
+Format: fixed_width
+Total Fields: 252
+Total Record Length: 2809
+```
+
+### Using Mappings in Code
+
+```python
+from src.config.universal_mapping_parser import UniversalMappingParser
+from src.parsers.fixed_width_parser import FixedWidthParser
+
+# Load mapping
+parser = UniversalMappingParser(mapping_path="config/mappings/p327_universal.json")
+
+# Get field positions for fixed-width
+if parser.get_format() == 'fixed_width':
+    positions = parser.get_field_positions()
+    # Returns: [('FIELD1', 0, 10), ('FIELD2', 10, 25), ...]
+    
+    # Parse file
+    file_parser = FixedWidthParser('data.txt', positions)
+    df = file_parser.parse()
+
+# Get column names for delimited
+else:
+    columns = parser.get_column_names()
+    delimiter = parser.get_delimiter()
+```
+
+---
+
+## Common Workflows
+
+### Workflow 1: Upload Template and Parse File (API)
+
+```bash
+# 1. Upload Excel template
+curl -X POST "http://localhost:8000/api/v1/mappings/upload" \
+  -F "file=@template.xlsx" \
+  -F "mapping_name=my_mapping"
+
+# 2. Parse data file
+curl -X POST "http://localhost:8000/api/v1/files/parse" \
+  -F "file=@data.txt" \
+  -F 'request={"mapping_id": "my_mapping", "output_format": "csv"}'
+
+# 3. Download parsed file
+curl -O http://localhost:8000/api/v1/files/download/parsed_data.txt.csv
+```
+
+### Workflow 2: Compare Two Files (CLI)
+
+```bash
+# 1. Create mapping from template
+python src/config/template_converter.py \
+  template.xlsx \
+  config/mappings/my_mapping.json \
+  my_mapping \
+  fixed_width
+
+# 2. Compare files
+cm3-batch compare \
+  -f1 file1.txt \
+  -f2 file2.txt \
+  -k ACCT-NUM \
+  -m config/mappings/my_mapping.json \
+  -o reports/comparison.html
+
+# 3. View report
+open reports/comparison.html
+```
+
+### Workflow 3: Database Extract and Validate
+
+```bash
+# 1. Extract from database
+cm3-batch extract \
+  -t CUSTOMER_TABLE \
+  -o extracted_data.txt \
+  --format fixed_width
+
+# 2. Validate against mapping
+cm3-batch validate \
+  -f extracted_data.txt \
+  -m config/mappings/customer_mapping.json
+
+# 3. Generate report
+cm3-batch parse \
+  -f extracted_data.txt \
+  -m config/mappings/customer_mapping.json \
+  -o validated_data.csv
+```
+
+### Workflow 4: Automated Testing (API)
+
+```python
+import requests
+
+base_url = "http://localhost:8000"
+
+# 1. Health check
+health = requests.get(f"{base_url}/api/v1/system/health")
+assert health.json()["status"] == "healthy"
+
+# 2. Upload template
+with open("template.xlsx", "rb") as f:
+    upload = requests.post(
+        f"{base_url}/api/v1/mappings/upload",
+        files={"file": f},
+        params={"mapping_name": "test_mapping"}
+    )
+    mapping_id = upload.json()["mapping_id"]
+
+# 3. Detect file format
+with open("data.txt", "rb") as f:
+    detect = requests.post(
+        f"{base_url}/api/v1/files/detect",
+        files={"file": f}
+    )
+    print(f"Detected format: {detect.json()['format']}")
+
+# 4. Parse file
+with open("data.txt", "rb") as f:
+    parse = requests.post(
+        f"{base_url}/api/v1/files/parse",
+        files={"file": f},
+        json={"mapping_id": mapping_id}
+    )
+    print(f"Parsed {parse.json()['rows_parsed']} rows")
+```
+
+---
+
+## Troubleshooting
+
+### API Server Won't Start
+
+```bash
+# Check if port is in use
+lsof -i :8000
+
+# Kill process using port
+kill -9 <PID>
+
+# Start with different port
+uvicorn src.api.main:app --port 8001
+```
+
+### File Upload Fails
+
+```bash
+# Check file size
+ls -lh file.txt
+
+# Check uploads directory exists
+mkdir -p uploads
+
+# Check permissions
+chmod 755 uploads
+```
+
+### Mapping Validation Errors
+
+```bash
+# Validate mapping schema
+python src/config/universal_mapping_parser.py config/mappings/my_mapping.json
+
+# Check JSON syntax
+python -m json.tool config/mappings/my_mapping.json
+```
+
+### Oracle Connection Issues
+
+```bash
+# Test Oracle client
+python -c "import cx_Oracle; print(cx_Oracle.clientversion())"
+
+# Check environment variables
+echo $ORACLE_HOME
+echo $LD_LIBRARY_PATH
+
+# Test connection
+python -c "import cx_Oracle; conn = cx_Oracle.connect('user/pass@dsn'); print('Connected')"
+```
+
+### File Parsing Errors
+
+```bash
+# Check file encoding
+file -i data.txt
+
+# Detect format first
+curl -X POST "http://localhost:8000/api/v1/files/detect" -F "file=@data.txt"
+
+# Validate mapping matches file format
+python src/config/universal_mapping_parser.py config/mappings/my_mapping.json
+```
+
+---
+
+## Environment Variables
+
+Create a `.env` file in the project root:
+
+```bash
+# Oracle Database
+ORACLE_USER=your_username
+ORACLE_PASSWORD=your_password
+ORACLE_DSN=hostname:port/service_name
+
+# API Configuration
+API_PORT=8000
+API_HOST=0.0.0.0
+API_WORKERS=4
+
+# Logging
+LOG_LEVEL=INFO
+LOG_DIR=logs
+```
+
+---
+
+## Additional Resources
+
+- **Universal Mapping Guide**: [docs/UNIVERSAL_MAPPING_GUIDE.md](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/UNIVERSAL_MAPPING_GUIDE.md)
+- **Testing Guide**: [docs/TESTING_GUIDE.md](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/TESTING_GUIDE.md)
+- **Deployment Options**: [docs/DEPLOYMENT_OPTIONS.md](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/DEPLOYMENT_OPTIONS.md)
+- **Architecture**: [docs/architecture.md](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/architecture.md)
+- **API Walkthrough**: [api_walkthrough.md](file:///Users/pavankanduri/.gemini/antigravity/brain/3550ba02-e58b-4642-9248-092dac86dbcc/api_walkthrough.md)
+
+---
+
+## Quick Reference
+
+### CLI Commands
+```bash
+cm3-batch detect -f <file>              # Detect format
+cm3-batch parse -f <file> -m <mapping>  # Parse file
+cm3-batch compare -f1 <f1> -f2 <f2>     # Compare files
+cm3-batch validate -f <file>            # Validate file
+cm3-batch extract -t <table>            # Extract from DB
+cm3-batch reconcile -m <mapping>        # Reconcile mapping
+```
+
+### API Endpoints
+```
+GET  /api/v1/system/health              # Health check
+POST /api/v1/mappings/upload            # Upload template
+GET  /api/v1/mappings/                  # List mappings
+POST /api/v1/files/detect               # Detect format
+POST /api/v1/files/parse                # Parse file
+POST /api/v1/files/compare              # Compare files
+```
+
+### Python Usage
+```python
+# Universal Mapping
+from src.config.universal_mapping_parser import UniversalMappingParser
+parser = UniversalMappingParser(mapping_path="config/mappings/my_mapping.json")
+
+# File Parsing
+from src.parsers.fixed_width_parser import FixedWidthParser
+parser = FixedWidthParser(file_path, field_positions)
+df = parser.parse()
+
+# API Client
+import requests
+response = requests.get("http://localhost:8000/api/v1/system/health")
+```
+
+---
+
+**Need Help?** Check the [Swagger UI](http://localhost:8000/docs) for interactive API documentation!
