@@ -1,0 +1,625 @@
+"""Enhanced file validation with data profiling and quality metrics."""
+
+import os
+from typing import List, Dict, Any, Optional
+import pandas as pd
+import numpy as np
+from datetime import datetime
+from .base_parser import BaseParser
+
+
+class EnhancedFileValidator:
+    """Enhanced validator with comprehensive data profiling and quality metrics."""
+
+    def __init__(self, parser: BaseParser, mapping_config: Optional[Dict] = None):
+        """Initialize enhanced validator.
+        
+        Args:
+            parser: Parser instance to use for validation
+            mapping_config: Optional mapping configuration for schema validation
+        """
+        self.parser = parser
+        self.mapping_config = mapping_config
+        self.errors: List[Dict[str, Any]] = []
+        self.warnings: List[Dict[str, Any]] = []
+        self.info: List[Dict[str, Any]] = []
+
+    def validate(self, detailed: bool = True) -> Dict[str, Any]:
+        """Perform comprehensive file validation with data profiling.
+        
+        Args:
+            detailed: Include detailed field-level analysis
+        
+        Returns:
+            Comprehensive validation results dictionary
+        """
+        self.errors = []
+        self.warnings = []
+        self.info = []
+
+        # File metadata
+        file_metadata = self._get_file_metadata()
+
+        # Check file exists
+        if not self._validate_file_exists():
+            return self._build_result(False, file_metadata, None)
+
+        # Check file size
+        self._validate_file_size()
+
+        # Check file format
+        if not self._validate_format():
+            return self._build_result(False, file_metadata, None)
+
+        # Parse and analyze data
+        try:
+            df = self.parser.parse()
+            
+            # Data quality metrics
+            quality_metrics = self._calculate_quality_metrics(df)
+            
+            # Field-level analysis
+            field_analysis = self._analyze_fields(df) if detailed else {}
+            
+            # Duplicate analysis
+            duplicate_analysis = self._analyze_duplicates(df)
+            
+            # Date field analysis
+            date_analysis = self._analyze_date_fields(df) if detailed else {}
+            
+            # Schema validation (if mapping provided)
+            if self.mapping_config:
+                self._validate_schema(df)
+            
+            # Data profiling
+            data_profile = self._profile_data(df) if detailed else {}
+            
+            # Appendix data
+            appendix_data = self._build_appendix_data(df, detailed)
+            
+        except Exception as e:
+            self.errors.append({
+                'severity': 'critical',
+                'category': 'parsing',
+                'message': f"Parse error: {str(e)}",
+                'row': None,
+                'field': None
+            })
+            return self._build_result(False, file_metadata, None)
+
+        # Build comprehensive result
+        return self._build_result(
+            valid=len(self.errors) == 0,
+            file_metadata=file_metadata,
+            df=df,
+            quality_metrics=quality_metrics,
+            field_analysis=field_analysis,
+            duplicate_analysis=duplicate_analysis,
+            date_analysis=date_analysis,
+            data_profile=data_profile,
+            appendix=appendix_data
+        )
+
+    def _get_file_metadata(self) -> Dict[str, Any]:
+        """Get file metadata."""
+        file_path = self.parser.file_path
+        
+        if not os.path.exists(file_path):
+            return {'file_path': file_path, 'exists': False}
+        
+        stat = os.stat(file_path)
+        
+        return {
+            'file_path': file_path,
+            'file_name': os.path.basename(file_path),
+            'exists': True,
+            'size_bytes': stat.st_size,
+            'size_mb': stat.st_size / (1024 * 1024),
+            'modified_time': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            'format': self.parser.__class__.__name__.replace('Parser', '').lower()
+        }
+
+    def _validate_file_exists(self) -> bool:
+        """Check if file exists."""
+        if not os.path.exists(self.parser.file_path):
+            self.errors.append({
+                'severity': 'critical',
+                'category': 'file',
+                'message': f"File not found: {self.parser.file_path}",
+                'row': None,
+                'field': None
+            })
+            return False
+        return True
+
+    def _validate_file_size(self) -> None:
+        """Check file size."""
+        size = os.path.getsize(self.parser.file_path)
+        
+        if size == 0:
+            self.errors.append({
+                'severity': 'critical',
+                'category': 'file',
+                'message': "File is empty",
+                'row': None,
+                'field': None
+            })
+        elif size < 10:
+            self.warnings.append({
+                'severity': 'warning',
+                'category': 'file',
+                'message': "File is very small (< 10 bytes)",
+                'row': None,
+                'field': None
+            })
+        elif size > 1024 * 1024 * 1024:  # 1GB
+            self.info.append({
+                'severity': 'info',
+                'category': 'file',
+                'message': f"Large file detected ({size / (1024**3):.2f} GB)",
+                'row': None,
+                'field': None
+            })
+
+    def _validate_format(self) -> bool:
+        """Validate file format."""
+        try:
+            if not self.parser.validate_format():
+                self.errors.append({
+                    'severity': 'critical',
+                    'category': 'format',
+                    'message': "Invalid file format",
+                    'row': None,
+                    'field': None
+                })
+                return False
+            return True
+        except Exception as e:
+            self.errors.append({
+                'severity': 'critical',
+                'category': 'format',
+                'message': f"Format validation error: {str(e)}",
+                'row': None,
+                'field': None
+            })
+            return False
+
+    def _calculate_quality_metrics(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """Calculate overall data quality metrics."""
+        total_cells = df.shape[0] * df.shape[1]
+        null_cells = df.isnull().sum().sum()
+        filled_cells = total_cells - null_cells
+        
+        # Completeness
+        completeness = (filled_cells / total_cells * 100) if total_cells > 0 else 0
+        
+        # Uniqueness
+        total_rows = len(df)
+        unique_rows = len(df.drop_duplicates())
+        uniqueness = (unique_rows / total_rows * 100) if total_rows > 0 else 0
+        
+        # Overall quality score (weighted average)
+        quality_score = (completeness * 0.6 + uniqueness * 0.4)
+        
+        return {
+            'total_rows': total_rows,
+            'total_columns': df.shape[1],
+            'total_cells': total_cells,
+            'filled_cells': filled_cells,
+            'null_cells': null_cells,
+            'completeness_pct': round(completeness, 2),
+            'unique_rows': unique_rows,
+            'duplicate_rows': total_rows - unique_rows,
+            'uniqueness_pct': round(uniqueness, 2),
+            'quality_score': round(quality_score, 2)
+        }
+
+    def _analyze_fields(self, df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
+        """Perform field-level analysis."""
+        field_analysis = {}
+        
+        for col in df.columns:
+            field_analysis[col] = self._analyze_field(df[col], col)
+        
+        return field_analysis
+
+    def _analyze_field(self, series: pd.Series, field_name: str) -> Dict[str, Any]:
+        """Analyze a single field."""
+        total = len(series)
+        null_count = series.isnull().sum()
+        filled_count = total - null_count
+        fill_rate = (filled_count / total * 100) if total > 0 else 0
+        
+        # Infer data type
+        dtype = str(series.dtype)
+        inferred_type = self._infer_data_type(series)
+        
+        # Unique values
+        unique_count = series.nunique()
+        unique_ratio = (unique_count / filled_count * 100) if filled_count > 0 else 0
+        
+        # Sample values
+        sample_values = series.dropna().head(5).tolist()
+        
+        analysis = {
+            'data_type': dtype,
+            'inferred_type': inferred_type,
+            'total_values': total,
+            'null_count': null_count,
+            'filled_count': filled_count,
+            'fill_rate_pct': round(fill_rate, 2),
+            'unique_count': unique_count,
+            'unique_ratio_pct': round(unique_ratio, 2),
+            'sample_values': [str(v) for v in sample_values]
+        }
+        
+        # Numeric analysis
+        if inferred_type == 'numeric':
+            analysis.update(self._analyze_numeric_field(series))
+        
+        # String analysis
+        elif inferred_type == 'string':
+            analysis.update(self._analyze_string_field(series))
+        
+        return analysis
+
+    def _infer_data_type(self, series: pd.Series) -> str:
+        """Infer the actual data type of a field."""
+        import re
+        
+        non_null = series.dropna()
+        
+        if len(non_null) == 0:
+            return 'empty'
+        
+        # Check if field name suggests it's a date
+        field_name = series.name if hasattr(series, 'name') else ''
+        is_date_field = bool(re.search(r'date|time|dt|timestamp', str(field_name), re.IGNORECASE))
+        
+        # For potential date fields, try datetime first
+        if is_date_field:
+            # Check for YYYYMMDD pattern (8-digit dates) first
+            # Sample first 100 values to check pattern
+            sample = non_null.head(100).astype(str).str.strip()
+            yyyymmdd_pattern = r'^\d{8}$'
+            yyyymmdd_matches = sample.str.match(yyyymmdd_pattern).sum()
+            
+            if yyyymmdd_matches / len(sample) >= 0.8:  # 80% match YYYYMMDD pattern
+                # Try to parse as dates
+                try:
+                    import warnings
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        parsed = pd.to_datetime(sample, format='%Y%m%d', errors='coerce')
+                        valid_dates = parsed.notna().sum()
+                        if valid_dates / len(sample) >= 0.8:
+                            return 'datetime'
+                except:
+                    pass
+            
+            # Try general datetime parsing for date fields
+            try:
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    parsed = pd.to_datetime(non_null, errors='coerce')
+                    valid_pct = parsed.notna().sum() / len(non_null) * 100
+                    if valid_pct >= 50:
+                        return 'datetime'
+            except:
+                pass
+        
+        # Try numeric (but only if not a date pattern)
+        try:
+            pd.to_numeric(non_null)
+            return 'numeric'
+        except:
+            pass
+        
+        # Try datetime for non-date-named fields
+        if not is_date_field:
+            try:
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    pd.to_datetime(non_null)
+                    return 'datetime'
+            except:
+                pass
+        
+        return 'string'
+
+    def _analyze_numeric_field(self, series: pd.Series) -> Dict[str, Any]:
+        """Analyze numeric field."""
+        numeric_series = pd.to_numeric(series, errors='coerce').dropna()
+        
+        if len(numeric_series) == 0:
+            return {}
+        
+        return {
+            'min': float(numeric_series.min()),
+            'max': float(numeric_series.max()),
+            'mean': float(numeric_series.mean()),
+            'median': float(numeric_series.median()),
+            'std_dev': float(numeric_series.std())
+        }
+
+    def _analyze_string_field(self, series: pd.Series) -> Dict[str, Any]:
+        """Analyze string field."""
+        string_series = series.dropna().astype(str)
+        
+        if len(string_series) == 0:
+            return {}
+        
+        lengths = string_series.str.len()
+        
+        return {
+            'min_length': int(lengths.min()),
+            'max_length': int(lengths.max()),
+            'avg_length': round(float(lengths.mean()), 2)
+        }
+
+    def _analyze_duplicates(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """Analyze duplicate rows."""
+        total_rows = len(df)
+        unique_rows = len(df.drop_duplicates())
+        duplicate_rows = total_rows - unique_rows
+        
+        # Find most duplicated rows
+        if duplicate_rows > 0:
+            dup_counts = df.groupby(list(df.columns)).size().reset_index(name='count')
+            dup_counts = dup_counts[dup_counts['count'] > 1].sort_values('count', ascending=False)
+            top_duplicates = dup_counts.head(10)['count'].tolist()
+        else:
+            top_duplicates = []
+        
+        return {
+            'total_rows': total_rows,
+            'unique_rows': unique_rows,
+            'duplicate_rows': duplicate_rows,
+            'duplicate_pct': round((duplicate_rows / total_rows * 100) if total_rows > 0 else 0, 2),
+            'top_duplicate_counts': top_duplicates
+        }
+
+    def _validate_schema(self, df: pd.DataFrame) -> None:
+        """Validate data against schema from mapping."""
+        if not self.mapping_config or 'fields' not in self.mapping_config:
+            return
+        
+        expected_fields = {f['name'] for f in self.mapping_config['fields']}
+        actual_fields = set(df.columns)
+        
+        # Missing fields
+        missing = expected_fields - actual_fields
+        if missing:
+            for field in missing:
+                self.errors.append({
+                    'severity': 'error',
+                    'category': 'schema',
+                    'message': f"Missing required field: {field}",
+                    'row': None,
+                    'field': field
+                })
+        
+        # Extra fields
+        extra = actual_fields - expected_fields
+        if extra:
+            for field in extra:
+                self.warnings.append({
+                    'severity': 'warning',
+                    'category': 'schema',
+                    'message': f"Unexpected field: {field}",
+                    'row': None,
+                    'field': field
+                })
+
+    def _profile_data(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """Generate data profile statistics."""
+        return {
+            'row_count': len(df),
+            'column_count': len(df.columns),
+            'memory_usage_mb': round(df.memory_usage(deep=True).sum() / (1024 * 1024), 2),
+            'columns': list(df.columns)
+        }
+
+    def _analyze_date_fields(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """Analyze date/datetime fields comprehensively."""
+        import warnings
+        
+        date_analysis = {}
+        
+        for col in df.columns:
+            # Try to parse as datetime
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    date_series = pd.to_datetime(df[col], errors='coerce')
+                
+                # Check if at least 50% of values are valid dates
+                valid_dates = date_series.notna()
+                valid_pct = valid_dates.sum() / len(df) * 100 if len(df) > 0 else 0
+                
+                if valid_pct >= 50:  # Consider it a date field if >= 50% are valid dates
+                    invalid_count = (~valid_dates).sum()
+                    future_count = (date_series > pd.Timestamp.now()).sum()
+                    null_count = df[col].isna().sum()
+                    
+                    # Detect date formats
+                    detected_formats = self._detect_date_formats(df[col])
+                    
+                    # Calculate date range
+                    valid_date_series = date_series[valid_dates]
+                    if len(valid_date_series) > 0:
+                        earliest = valid_date_series.min()
+                        latest = valid_date_series.max()
+                        date_range_days = (latest - earliest).days
+                    else:
+                        earliest = None
+                        latest = None
+                        date_range_days = 0
+                    
+                    date_analysis[col] = {
+                        'earliest_date': earliest.isoformat() if earliest else None,
+                        'latest_date': latest.isoformat() if latest else None,
+                        'date_range_days': date_range_days,
+                        'valid_date_count': valid_dates.sum(),
+                        'valid_date_pct': round(valid_pct, 2),
+                        'invalid_date_count': invalid_count,
+                        'invalid_date_pct': round((invalid_count / len(df) * 100) if len(df) > 0 else 0, 2),
+                        'future_date_count': future_count,
+                        'future_date_pct': round((future_count / len(df) * 100) if len(df) > 0 else 0, 2),
+                        'null_date_count': null_count,
+                        'null_date_pct': round((null_count / len(df) * 100) if len(df) > 0 else 0, 2),
+                        'detected_formats': detected_formats
+                    }
+                    
+                    # Add warnings for invalid/future dates
+                    if invalid_count > 0:
+                        self.warnings.append({
+                            'severity': 'warning',
+                            'category': 'data',
+                            'message': f"Field '{col}' has {invalid_count} invalid date values ({invalid_count / len(df) * 100:.2f}%)",
+                            'row': None,
+                            'field': col
+                        })
+                    
+                    if future_count > 0:
+                        self.info.append({
+                            'severity': 'info',
+                            'category': 'data',
+                            'message': f"Field '{col}' has {future_count} future date values ({future_count / len(df) * 100:.2f}%)",
+                            'row': None,
+                            'field': col
+                        })
+            except:
+                continue
+        
+        return date_analysis
+
+    def _detect_date_formats(self, series: pd.Series) -> List[str]:
+        """Detect common date formats in the series."""
+        import warnings
+        
+        formats = []
+        sample = series.dropna().head(100)
+        
+        if len(sample) == 0:
+            return formats
+        
+        common_formats = [
+            ('%Y-%m-%d', 'YYYY-MM-DD'),
+            ('%m/%d/%Y', 'MM/DD/YYYY'),
+            ('%d/%m/%Y', 'DD/MM/YYYY'),
+            ('%Y%m%d', 'YYYYMMDD'),
+            ('%m-%d-%Y', 'MM-DD-YYYY'),
+            ('%d-%m-%Y', 'DD-MM-YYYY'),
+            ('%Y/%m/%d', 'YYYY/MM/DD'),
+        ]
+        
+        for fmt_code, fmt_name in common_formats:
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    parsed = pd.to_datetime(sample, format=fmt_code, errors='coerce')
+                    if parsed.notna().sum() / len(sample) > 0.8:
+                        formats.append(fmt_name)
+            except:
+                continue
+        
+        return formats if formats else ['Mixed/Unknown']
+
+    def _build_appendix_data(self, df: pd.DataFrame, detailed: bool) -> Dict[str, Any]:
+        """Build appendix data for the report."""
+        # Validation configuration
+        validation_config = {
+            'detailed_mode': detailed,
+            'mapping_file': self.mapping_config.get('file_path') if self.mapping_config and 'file_path' in self.mapping_config else None,
+            'validation_timestamp': datetime.now().isoformat(),
+            'validator_version': '1.0.0'
+        }
+        
+        # Mapping details
+        mapping_details = self._get_mapping_details()
+        
+        # Affected rows summary
+        all_issues = self.errors + self.warnings
+        affected_rows_summary = self._get_affected_rows_summary(all_issues, len(df))
+        
+        return {
+            'validation_config': validation_config,
+            'mapping_details': mapping_details,
+            'affected_rows': affected_rows_summary
+        }
+
+    def _get_mapping_details(self) -> Optional[Dict[str, Any]]:
+        """Extract mapping file details."""
+        if not self.mapping_config or 'fields' not in self.mapping_config:
+            return None
+        
+        fields = self.mapping_config.get('fields', [])
+        required_fields = [f['name'] for f in fields if f.get('required', False)]
+        
+        # Calculate total width for fixed-width files
+        total_width = sum(f.get('length', 0) for f in fields)
+        
+        return {
+            'total_fields': len(fields),
+            'field_names': [f['name'] for f in fields],
+            'required_fields': required_fields,
+            'required_field_count': len(required_fields),
+            'total_width': total_width if total_width > 0 else None
+        }
+
+    def _get_affected_rows_summary(self, issues: List[Dict], total_rows: int) -> Dict[str, Any]:
+        """Get summary of rows affected by issues."""
+        affected_rows = set()
+        issues_by_row = {}
+        
+        for issue in issues:
+            if 'row' in issue and issue['row'] is not None:
+                row_num = issue['row']
+                affected_rows.add(row_num)
+                
+                if row_num not in issues_by_row:
+                    issues_by_row[row_num] = []
+                issues_by_row[row_num].append(issue)
+        
+        # Get top 100 most problematic rows
+        top_problematic = sorted(
+            issues_by_row.items(),
+            key=lambda x: len(x[1]),
+            reverse=True
+        )[:100]
+        
+        return {
+            'total_affected_rows': len(affected_rows),
+            'affected_row_pct': round((len(affected_rows) / total_rows * 100) if total_rows > 0 else 0, 2),
+            'top_problematic_rows': [
+                {
+                    'row_number': row,
+                    'issue_count': len(issues),
+                    'issues': [i.get('message', '') for i in issues[:10]]  # Limit to 10 issues per row
+                }
+                for row, issues in top_problematic
+            ]
+        }
+
+    def _build_result(self, valid: bool, file_metadata: Dict[str, Any], 
+                     df: Optional[pd.DataFrame], **kwargs) -> Dict[str, Any]:
+        """Build comprehensive validation result."""
+        result = {
+            'valid': valid,
+            'timestamp': datetime.now().isoformat(),
+            'file_metadata': file_metadata,
+            'errors': self.errors,
+            'warnings': self.warnings,
+            'info': self.info,
+            'error_count': len(self.errors),
+            'warning_count': len(self.warnings),
+            'info_count': len(self.info)
+        }
+        
+        # Add optional components
+        result.update(kwargs)
+        
+        return result

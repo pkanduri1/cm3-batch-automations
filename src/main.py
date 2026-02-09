@@ -42,9 +42,10 @@ def detect(file):
 
 @cli.command()
 @click.option('--file', '-f', required=True, help='File to parse')
+@click.option('--mapping', '-m', help='Mapping configuration file')
 @click.option('--format', '-t', help='File format (auto-detect if not specified)')
 @click.option('--output', '-o', help='Output file (default: stdout)')
-def parse(file, format, output):
+def parse(file, mapping, format, output):
     """Parse file and display contents."""
     logger = setup_logger('cm3-batch', log_to_file=False)
     
@@ -52,20 +53,39 @@ def parse(file, format, output):
         from src.parsers.format_detector import FormatDetector
         from src.parsers.pipe_delimited_parser import PipeDelimitedParser
         from src.parsers.fixed_width_parser import FixedWidthParser
+        from src.config.universal_mapping_parser import UniversalMappingParser
+        import json
         
-        # Auto-detect if format not specified
-        if not format:
-            detector = FormatDetector()
-            parser_class = detector.get_parser_class(file)
-            parser = parser_class(file)
+        # If mapping provided, use it to parse
+        if mapping:
+            with open(mapping, 'r') as f:
+                mapping_config = json.load(f)
+            
+            # Build field specs from mapping
+            field_specs = []
+            current_pos = 0
+            for field in mapping_config.get('fields', []):
+                field_name = field['name']
+                field_length = field['length']
+                field_specs.append((field_name, current_pos, current_pos + field_length))
+                current_pos += field_length
+            
+            # Use FixedWidthParser with field specs
+            parser = FixedWidthParser(file, field_specs)
         else:
-            if format == 'pipe':
-                parser = PipeDelimitedParser(file)
-            elif format == 'fixed':
-                parser = FixedWidthParser(file, [])
+            # Auto-detect if format not specified
+            if not format:
+                detector = FormatDetector()
+                parser_class = detector.get_parser_class(file)
+                parser = parser_class(file)
             else:
-                click.echo(f"Unknown format: {format}")
-                sys.exit(1)
+                if format == 'pipe':
+                    parser = PipeDelimitedParser(file)
+                elif format == 'fixed':
+                    parser = FixedWidthParser(file, [])
+                else:
+                    click.echo(f"Unknown format: {format}")
+                    sys.exit(1)
         
         df = parser.parse()
         logger.info(f"Parsed {len(df)} rows, {len(df.columns)} columns")
@@ -85,44 +105,99 @@ def parse(file, format, output):
 @cli.command()
 @click.option('--file', '-f', required=True, help='File to validate')
 @click.option('--mapping', '-m', help='Mapping file for schema validation')
-def validate(file, mapping):
+@click.option('--output', '-o', help='Output HTML report file')
+@click.option('--detailed/--basic', default=True, help='Include detailed field analysis')
+def validate(file, mapping, output, detailed):
     """Validate file format and content."""
     logger = setup_logger('cm3-batch', log_to_file=False)
-    
+
     try:
         from src.parsers.format_detector import FormatDetector
-        from src.parsers.validator import FileValidator
-        
+        from src.parsers.enhanced_validator import EnhancedFileValidator
+        from src.parsers.fixed_width_parser import FixedWidthParser
+        from src.reporters.validation_reporter import ValidationReporter
+        import json
+
         # Get parser
         detector = FormatDetector()
         parser_class = detector.get_parser_class(file)
-        parser = parser_class(file)
         
-        # Validate
-        validator = FileValidator(parser)
-        result = validator.validate()
+        # Load mapping config if provided
+        mapping_config = None
+        if mapping:
+            with open(mapping, 'r') as f:
+                mapping_config = json.load(f)
         
+        # If mapping provided and it's a fixed-width file, use mapping to build column specs
+        if mapping_config and parser_class == FixedWidthParser:
+            # Build field specs from mapping
+            field_specs = []
+            current_pos = 0
+            for field in mapping_config.get('fields', []):
+                field_name = field['name']
+                field_length = field['length']
+                field_specs.append((field_name, current_pos, current_pos + field_length))
+                current_pos += field_length
+            
+            parser = FixedWidthParser(file, field_specs)
+        else:
+            parser = parser_class(file)
+
+        # Validate with enhanced validator
+        validator = EnhancedFileValidator(parser, mapping_config)
+        result = validator.validate(detailed=detailed)
+
+        # Display console summary
         if result['valid']:
             click.echo(click.style('✓ File is valid', fg='green'))
         else:
             click.echo(click.style('✗ File validation failed', fg='red'))
-            for error in result['errors']:
-                click.echo(click.style(f"  ERROR: {error}", fg='red'))
         
+        # Display quality score
+        quality_score = result.get('quality_metrics', {}).get('quality_score', 0)
+        click.echo(f"\nData Quality Score: {quality_score}%")
+        
+        # Display summary metrics
+        metrics = result.get('quality_metrics', {})
+        if metrics:
+            click.echo(f"  Total Rows: {metrics.get('total_rows', 0):,}")
+            click.echo(f"  Total Columns: {metrics.get('total_columns', 0):,}")
+            click.echo(f"  Completeness: {metrics.get('completeness_pct', 0)}%")
+            click.echo(f"  Uniqueness: {metrics.get('uniqueness_pct', 0)}%")
+        
+        # Display errors
+        if result['errors']:
+            click.echo(click.style(f"\nErrors ({len(result['errors'])}):", fg='red'))
+            for error in result['errors'][:5]:  # Show first 5
+                click.echo(click.style(f"  • {error.get('message', '')}", fg='red'))
+            if len(result['errors']) > 5:
+                click.echo(click.style(f"  ... and {len(result['errors']) - 5} more", fg='red'))
+
+        # Display warnings
         if result['warnings']:
-            click.echo(click.style('\nWarnings:', fg='yellow'))
-            for warning in result['warnings']:
-                click.echo(click.style(f"  {warning}", fg='yellow'))
+            click.echo(click.style(f"\nWarnings ({len(result['warnings'])}):", fg='yellow'))
+            for warning in result['warnings'][:5]:  # Show first 5
+                click.echo(click.style(f"  • {warning.get('message', '')}", fg='yellow'))
+            if len(result['warnings']) > 5:
+                click.echo(click.style(f"  ... and {len(result['warnings']) - 5} more", fg='yellow'))
         
+        # Generate HTML report if output specified
+        if output:
+            reporter = ValidationReporter()
+            reporter.generate(result, output)
+            click.echo(f"\n✓ Validation report generated: {output}")
+
     except Exception as e:
         logger.error(f"Error validating file: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 
 @cli.command()
 @click.option('--file1', '-f1', required=True, help='First file')
 @click.option('--file2', '-f2', required=True, help='Second file')
-@click.option('--keys', '-k', required=True, help='Key columns (comma-separated)')
+@click.option('--keys', '-k', help='Key columns (comma-separated). If not provided, compares row-by-row.')
 @click.option('--output', '-o', help='Output HTML report file')
 @click.option('--thresholds', '-t', help='Threshold configuration file')
 @click.option('--detailed/--basic', default=True, help='Detailed field analysis')
@@ -141,13 +216,32 @@ def compare(file1, file2, keys, output, thresholds, detailed, chunk_size, progre
         from src.validators.threshold import ThresholdEvaluator, ThresholdConfig
         from src.config.loader import ConfigLoader
         
-        key_columns = [k.strip() for k in keys.split(',')]
+        # Parse key columns if provided
+        if keys:
+            key_columns = [k.strip() for k in keys.split(',')]
+            comparison_mode = "key-based"
+        else:
+            key_columns = None
+            comparison_mode = "row-by-row"
+            click.echo(f"No keys provided - using row-by-row comparison...")
         
         # Use chunked processing for large files
         if use_chunked:
+            if not keys:
+                click.echo(click.style("Error: Row-by-row comparison is not supported with chunked processing.", fg='red'))
+                click.echo("Please provide key columns with -k option or use standard comparison (remove --use-chunked).")
+                sys.exit(1)
+            
             click.echo(f"Using chunked processing (chunk size: {chunk_size:,})...")
+            
+            # Detect delimiter from file extension
+            delimiter = ','  # Default to comma for CSV
+            if file1.endswith('.txt') or file1.endswith('.dat'):
+                delimiter = '|'  # Pipe for text files
+            
             comparator = ChunkedFileComparator(
                 file1, file2, key_columns,
+                delimiter=delimiter,
                 chunk_size=chunk_size
             )
             results = comparator.compare(detailed=detailed, show_progress=progress)
@@ -172,8 +266,13 @@ def compare(file1, file2, keys, output, thresholds, detailed, chunk_size, progre
         click.echo(f"  Total rows (File 1): {results['total_rows_file1']}")
         click.echo(f"  Total rows (File 2): {results['total_rows_file2']}")
         click.echo(f"  Matching rows: {results['matching_rows']}")
-        click.echo(f"  Only in File 1: {len(results['only_in_file1'])}")
-        click.echo(f"  Only in File 2: {len(results['only_in_file2'])}")
+        
+        # Use count fields if lists are empty (chunked processing)
+        only_in_file1 = results.get('only_in_file1_count', len(results.get('only_in_file1', [])))
+        only_in_file2 = results.get('only_in_file2_count', len(results.get('only_in_file2', [])))
+        
+        click.echo(f"  Only in File 1: {only_in_file1}")
+        click.echo(f"  Only in File 2: {only_in_file2}")
         click.echo(f"  Rows with differences: {results.get('rows_with_differences', len(results['differences']))}")
         
         # Evaluate thresholds

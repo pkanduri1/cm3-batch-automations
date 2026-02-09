@@ -76,14 +76,17 @@ class ChunkedFileComparator:
             only_in_file1_count = self._count_unmatched_file1(matched_keys)
             
             # Calculate statistics
-            matching_rows = file1_count - only_in_file1_count - len(differences)
+            matching_rows = matched_keys - len(differences)
+            only_in_file2_count = file2_count - matched_keys
             
             results = {
                 'total_rows_file1': file1_count,
                 'total_rows_file2': file2_count,
                 'matching_rows': matching_rows,
+                'only_in_file1': [],  # Empty list for chunked processing (too large to store)
+                'only_in_file2': [],  # Empty list for chunked processing (too large to store)
                 'only_in_file1_count': only_in_file1_count,
-                'only_in_file2_count': file2_count - matched_keys - len(differences),
+                'only_in_file2_count': only_in_file2_count,
                 'rows_with_differences': len(differences),
                 'differences': differences[:1000] if len(differences) > 1000 else differences,  # Limit for memory
                 'differences_truncated': len(differences) > 1000,

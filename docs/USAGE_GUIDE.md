@@ -131,7 +131,9 @@ cm3-batch reconcile \
 
 ### 5. Validation
 
-Validate a file against mapping rules:
+Validate a file against mapping rules and generate comprehensive HTML reports:
+
+#### Basic Validation
 
 ```bash
 cm3-batch validate \
@@ -139,7 +141,132 @@ cm3-batch validate \
   -m config/mappings/customer_mapping.json
 ```
 
+**Console Output:**
+```
+✓ File is valid
+
+Data Quality Score: 95.5%
+  Total Rows: 1,000
+  Total Columns: 25
+  Completeness: 98.2%
+  Uniqueness: 87.3%
+```
+
+#### Generate HTML Report
+
+```bash
+cm3-batch validate \
+  -f data/samples/p327_test_data.txt \
+  -m config/mappings/p327_universal.json \
+  -o reports/validation_report.html \
+  --detailed
+```
+
+**Options:**
+- `-f, --file`: Input file to validate
+- `-m, --mapping`: Mapping configuration file
+- `-o, --output`: Output HTML report path
+- `--detailed`: Enable detailed analysis (recommended)
+
+#### Validation Report Features
+
+The generated HTML report includes:
+
+**1. Executive Summary**
+- Overall validation status (✓ Valid / ✗ Invalid)
+- Data quality score (0-100%)
+- Key metrics: total rows, columns, completeness, uniqueness
+- Issue counts: errors, warnings, info messages
+
+**2. File Metadata**
+- File size and record count
+- Detected format and confidence score
+- Processing timestamp
+
+**3. Quality Metrics Dashboard**
+- Visual quality score gauge
+- Completeness percentage
+- Uniqueness percentage
+- Interactive charts (Chart.js)
+
+**4. Issues and Warnings**
+- Categorized by severity (errors, warnings, info)
+- Field-specific issues with row numbers
+- Schema validation failures
+- Data quality concerns
+
+**5. Interactive Field-Level Analysis**
+- **Search**: Filter fields by name in real-time
+- **Sort**: Click column headers to sort by:
+  - Field Name (alphabetical)
+  - Data Type (numeric, string, datetime)
+  - Fill Rate (percentage)
+  - Unique Values (count)
+- **Pagination**: Navigate through fields (50 per page)
+- **Details**: For each field:
+  - Inferred data type
+  - Fill rate and null count
+  - Unique value count and ratio
+  - Sample values
+
+**6. Date Field Analysis** (when date fields detected)
+- Date range (earliest to latest, span in days)
+- Invalid dates count and percentage
+- Future dates count and percentage
+- Null dates count and percentage
+- Detected date format (e.g., YYYYMMDD, YYYY-MM-DD)
+
+**7. Duplicate Analysis**
+- Total duplicate count
+- Percentage of duplicates
+- Sample duplicate records
+
+**8. Appendix**
+- **Validation Configuration**:
+  - Detailed mode setting
+  - Mapping file path
+  - Validation timestamp
+  - Validator version
+- **Mapping File Details**:
+  - Total fields count
+  - Total width (for fixed-width files)
+  - Required fields count
+  - Collapsible list of required field names
+- **Affected Rows Summary**:
+  - Total rows with issues
+  - Percentage affected
+  - Top 10 most problematic rows with issue details
+
+#### Example: Comprehensive Validation
+
+```bash
+# Validate P327 file with detailed analysis
+cm3-batch validate \
+  -f data/samples/p327_test_data_a_20000.txt \
+  -m config/mappings/p327_universal.json \
+  -o reports/p327_validation.html \
+  --detailed
+
+# Output:
+# ✓ File is valid
+# 
+# Data Quality Score: 60.26%
+#   Total Rows: 20,000
+#   Total Columns: 252
+#   Completeness: 100.0%
+#   Uniqueness: 0.65%
+# 
+# ✓ Validation report generated: reports/p327_validation.html
+```
+
+Open the HTML report in your browser to explore:
+- Interactive field filtering and sorting
+- Date field analysis with YYYYMMDD format detection
+- Detailed appendix with mapping configuration
+- Visual quality metrics and charts
+
 ---
+
 
 ## API Usage
 

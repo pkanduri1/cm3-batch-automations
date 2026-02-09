@@ -9,10 +9,19 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 - **Template-Based Configuration**: Create mappings from Excel/CSV templates without custom scripts
 - **File Parsing**: Support for multiple file formats with auto-detection
 - **Database Integration**: Oracle database connectivity with cx_Oracle
-- **Data Validation**: Column mapping validation and data integrity checks
+- **Data Validation**: Comprehensive validation with interactive HTML reports
 - **File Comparison**: Compare files and identify differences with field-level analysis
-- **HTML Reporting**: Generate detailed comparison reports
+- **HTML Reporting**: Generate detailed comparison and validation reports
 - **REST API**: FastAPI-based REST API with Swagger UI (interactive documentation)
+
+### Validation Features (New!)
+- **Interactive Field-Level Analysis**: Search, sort, and paginate through field statistics
+- **Date Field Detection**: Automatic detection of date fields with YYYYMMDD format support
+- **Data Quality Metrics**: Overall quality score, completeness, and uniqueness tracking
+- **Visual Dashboards**: Chart.js-powered visualizations and quality gauges
+- **Detailed Appendix**: Validation configuration, mapping details, and affected rows summary
+- **Duplicate Detection**: Identify and report duplicate records
+- **Issue Categorization**: Errors, warnings, and info messages with field-level details
 
 ### Advanced Features
 - **Configurable**: JSON-based configuration for different environments
@@ -39,8 +48,8 @@ cm3-batch detect -f data/samples/customers.txt
 # Parse file
 cm3-batch parse -f data/samples/customers.txt
 
-# Validate file
-cm3-batch validate -f data/samples/customers.txt
+# Validate file with HTML report
+cm3-batch validate -f data/samples/customers.txt -m config/mappings/customer_mapping.json -o reports/validation.html --detailed
 
 # Compare files
 cm3-batch compare -f1 file1.txt -f2 file2.txt -k customer_id -o report.html

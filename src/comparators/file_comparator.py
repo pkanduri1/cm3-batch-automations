@@ -8,14 +8,14 @@ from ..utils.logger import get_logger
 class FileComparator:
     """Compares two DataFrames and identifies differences."""
 
-    def __init__(self, df1: pd.DataFrame, df2: pd.DataFrame, key_columns: List[str],
+    def __init__(self, df1: pd.DataFrame, df2: pd.DataFrame, key_columns: Optional[List[str]] = None,
                  ignore_columns: Optional[List[str]] = None):
         """Initialize file comparator.
         
         Args:
             df1: First DataFrame
             df2: Second DataFrame
-            key_columns: Columns to use as unique identifiers
+            key_columns: Columns to use as unique identifiers. If None, compares row-by-row.
             ignore_columns: Columns to ignore in comparison
         """
         self.df1 = df1
@@ -33,6 +33,11 @@ class FileComparator:
         Returns:
             Dictionary containing comparison results
         """
+        # Row-by-row comparison if no keys provided
+        if self.key_columns is None:
+            return self._compare_row_by_row(detailed)
+        
+        # Key-based comparison
         only_in_df1 = self._find_unique_rows(self.df1, self.df2)
         only_in_df2 = self._find_unique_rows(self.df2, self.df1)
         
@@ -227,5 +232,78 @@ class FileComparator:
                 summary.append(f"  {field}: {count} differences")
         
         summary.append("=" * 70)
-        
         return "\n".join(summary)
+    
+    def _compare_row_by_row(self, detailed: bool = True) -> Dict[str, Any]:
+        """Compare files row-by-row (positional comparison).
+        
+        Args:
+            detailed: Include detailed field-level differences
+            
+        Returns:
+            Dictionary containing comparison results
+        """
+        min_rows = min(len(self.df1), len(self.df2))
+        
+        differences = []
+        matching_rows = 0
+        
+        # Compare rows that exist in both files
+        for idx in range(min_rows):
+            row1 = self.df1.iloc[idx]
+            row2 = self.df2.iloc[idx]
+            
+            # Get columns to compare (excluding ignored columns)
+            compare_cols = [col for col in self.df1.columns if col not in self.ignore_columns and col in self.df2.columns]
+            
+            row_diffs = {}
+            for col in compare_cols:
+                val1 = row1[col] if pd.notna(row1[col]) else ''
+                val2 = row2[col] if pd.notna(row2[col]) else ''
+                
+                if str(val1) != str(val2):
+                    if detailed:
+                        row_diffs[col] = {
+                            'file1': str(val1),
+                            'file2': str(val2),
+                            'type': 'value_difference'
+                        }
+                    else:
+                        row_diffs[col] = {'file1': str(val1), 'file2': str(val2)}
+            
+            if row_diffs:
+                diff_entry = {
+                    'row_number': idx + 1,  # 1-indexed for user display
+                    'differences': row_diffs
+                }
+                if detailed:
+                    diff_entry['difference_count'] = len(row_diffs)
+                differences.append(diff_entry)
+            else:
+                matching_rows += 1
+        
+        # Rows only in file1 (if file1 is longer)
+        only_in_file1 = []
+        if len(self.df1) > len(self.df2):
+            for idx in range(min_rows, len(self.df1)):
+                only_in_file1.append({'row_number': idx + 1})
+        
+        # Rows only in file2 (if file2 is longer)
+        only_in_file2 = []
+        if len(self.df2) > len(self.df1):
+            for idx in range(min_rows, len(self.df2)):
+                only_in_file2.append({'row_number': idx + 1})
+        
+        field_diff_stats = self._calculate_field_statistics(differences) if detailed else {}
+        
+        return {
+            "only_in_file1": only_in_file1,
+            "only_in_file2": only_in_file2,
+            "differences": differences,
+            "total_rows_file1": len(self.df1),
+            "total_rows_file2": len(self.df2),
+            "matching_rows": matching_rows,
+            "rows_with_differences": len(differences),
+            "field_statistics": field_diff_stats,
+            "comparison_mode": "row-by-row"
+        }
