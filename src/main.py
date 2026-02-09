@@ -126,32 +126,46 @@ def validate(file, mapping):
 @click.option('--output', '-o', help='Output HTML report file')
 @click.option('--thresholds', '-t', help='Threshold configuration file')
 @click.option('--detailed/--basic', default=True, help='Detailed field analysis')
-def compare(file1, file2, keys, output, thresholds, detailed):
+@click.option('--chunk-size', default=100000, help='Chunk size for large files (default: 100000)')
+@click.option('--progress/--no-progress', default=True, help='Show progress bar')
+@click.option('--use-chunked', is_flag=True, help='Use chunked processing for large files')
+def compare(file1, file2, keys, output, thresholds, detailed, chunk_size, progress, use_chunked):
     """Compare two files and generate report."""
     logger = setup_logger('cm3-batch', log_to_file=False)
     
     try:
         from src.parsers.format_detector import FormatDetector
         from src.comparators.file_comparator import FileComparator
+        from src.comparators.chunked_comparator import ChunkedFileComparator
         from src.reporters.html_reporter import HTMLReporter
         from src.validators.threshold import ThresholdEvaluator, ThresholdConfig
         from src.config.loader import ConfigLoader
         
-        # Parse both files
-        detector = FormatDetector()
-        
-        parser1_class = detector.get_parser_class(file1)
-        parser1 = parser1_class(file1)
-        df1 = parser1.parse()
-        
-        parser2_class = detector.get_parser_class(file2)
-        parser2 = parser2_class(file2)
-        df2 = parser2.parse()
-        
-        # Compare
         key_columns = [k.strip() for k in keys.split(',')]
-        comparator = FileComparator(df1, df2, key_columns)
-        results = comparator.compare(detailed=detailed)
+        
+        # Use chunked processing for large files
+        if use_chunked:
+            click.echo(f"Using chunked processing (chunk size: {chunk_size:,})...")
+            comparator = ChunkedFileComparator(
+                file1, file2, key_columns,
+                chunk_size=chunk_size
+            )
+            results = comparator.compare(detailed=detailed, show_progress=progress)
+        else:
+            # Parse both files (original method)
+            detector = FormatDetector()
+            
+            parser1_class = detector.get_parser_class(file1)
+            parser1 = parser1_class(file1)
+            df1 = parser1.parse()
+            
+            parser2_class = detector.get_parser_class(file2)
+            parser2 = parser2_class(file2)
+            df2 = parser2.parse()
+            
+            # Compare
+            comparator = FileComparator(df1, df2, key_columns)
+            results = comparator.compare(detailed=detailed)
         
         # Display summary
         click.echo(f"\nComparison Summary:")
