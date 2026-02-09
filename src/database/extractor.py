@@ -75,33 +75,42 @@ class DataExtractor:
         """
         return self.executor.execute_query(query, params)
 
-    def extract_to_file(self, table_name: str, output_file: str,
+    def extract_to_file(self, table_name: Optional[str] = None, output_file: str = None,
                        columns: Optional[List[str]] = None,
                        where_clause: Optional[str] = None,
                        delimiter: str = '|',
-                       chunk_size: int = 10000) -> Dict[str, Any]:
+                       chunk_size: int = 10000,
+                       query: Optional[str] = None) -> Dict[str, Any]:
         """Extract data to file in chunks.
         
         Args:
-            table_name: Name of the table
+            table_name: Name of the table (optional if query is provided)
             output_file: Output file path
-            columns: List of columns to extract
-            where_clause: Optional WHERE clause
+            columns: List of columns to extract (ignored if query is provided)
+            where_clause: Optional WHERE clause (ignored if query is provided)
             delimiter: File delimiter
             chunk_size: Number of rows per chunk
+            query: Optional raw SQL query (overrides table_name/columns/where_clause)
             
         Returns:
             Dictionary with extraction statistics
         """
         # Build query
-        if columns:
-            col_list = ', '.join(columns)
-        else:
-            col_list = '*'
+        if query:
+            # Use custom SQL query directly
+            sql_query = query
+        elif table_name:
+            # Build table-based query
+            if columns:
+                col_list = ', '.join(columns)
+            else:
+                col_list = '*'
 
-        query = f"SELECT {col_list} FROM {table_name}"
-        if where_clause:
-            query += f" WHERE {where_clause}"
+            sql_query = f"SELECT {col_list} FROM {table_name}"
+            if where_clause:
+                sql_query += f" WHERE {where_clause}"
+        else:
+            raise ValueError("Either 'table_name' or 'query' must be provided")
 
         total_rows = 0
         chunks_written = 0
@@ -109,7 +118,7 @@ class DataExtractor:
         try:
             with self.connection as conn:
                 cursor = conn.cursor()
-                cursor.execute(query)
+                cursor.execute(sql_query)
                 
                 # Get column names
                 col_names = [desc[0] for desc in cursor.description]
@@ -141,6 +150,7 @@ class DataExtractor:
             'total_rows': total_rows,
             'chunks_written': chunks_written,
             'chunk_size': chunk_size,
+            'query': sql_query,
         }
 
     def get_table_stats(self, table_name: str) -> Dict[str, Any]:

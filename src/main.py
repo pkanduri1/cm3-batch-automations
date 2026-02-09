@@ -445,13 +445,30 @@ def reconcile(mapping):
 
 
 @cli.command()
-@click.option('--table', '-t', required=True, help='Table name to extract')
+@click.option('--table', '-t', help='Table name to extract')
+@click.option('--query', '-q', help='SQL query to execute')
+@click.option('--sql-file', '-s', type=click.Path(exists=True), help='Path to SQL file')
 @click.option('--output', '-o', required=True, help='Output file path')
-@click.option('--limit', '-l', type=int, help='Limit number of rows')
+@click.option('--limit', '-l', type=int, help='Limit number of rows (only for --table)')
 @click.option('--delimiter', '-d', default='|', help='Output delimiter (default: |)')
-def extract(table, output, limit, delimiter):
-    """Extract data from Oracle database to file."""
+def extract(table, query, sql_file, output, limit, delimiter):
+    """Extract data from Oracle database to file.
+    
+    Supports three modes:
+    1. Table extraction: --table TABLENAME
+    2. Direct query: --query "SELECT ..."
+    3. SQL file: --sql-file path/to/query.sql
+    """
     logger = setup_logger('cm3-batch', log_to_file=False)
+    
+    # Validate input options
+    options_provided = sum([bool(table), bool(query), bool(sql_file)])
+    if options_provided == 0:
+        click.echo(click.style('Error: Must provide one of --table, --query, or --sql-file', fg='red'))
+        sys.exit(1)
+    elif options_provided > 1:
+        click.echo(click.style('Error: Only one of --table, --query, or --sql-file can be specified', fg='red'))
+        sys.exit(1)
     
     try:
         from src.database.connection import OracleConnection
@@ -460,22 +477,42 @@ def extract(table, output, limit, delimiter):
         conn = OracleConnection.from_env()
         extractor = DataExtractor(conn)
         
-        click.echo(f"\nExtracting from table: {table}")
-        
-        if limit:
-            df = extractor.extract_table(table, limit=limit)
-            df.to_csv(output, sep=delimiter, index=False, header=False)
-            click.echo(f"Extracted {len(df)} rows to {output}")
-        else:
-            stats = extractor.extract_to_file(table, output, delimiter=delimiter)
+        # Determine extraction mode
+        if sql_file:
+            # Read SQL from file
+            with open(sql_file, 'r') as f:
+                sql_query = f.read().strip()
+            click.echo(f"\nExecuting SQL from file: {sql_file}")
+            stats = extractor.extract_to_file(output_file=output, query=sql_query, delimiter=delimiter)
             click.echo(f"Extracted {stats['total_rows']} rows to {output}")
             click.echo(f"Chunks written: {stats['chunks_written']}")
+            
+        elif query:
+            # Use provided SQL query
+            click.echo(f"\nExecuting custom query")
+            stats = extractor.extract_to_file(output_file=output, query=query, delimiter=delimiter)
+            click.echo(f"Extracted {stats['total_rows']} rows to {output}")
+            click.echo(f"Chunks written: {stats['chunks_written']}")
+            
+        else:
+            # Table extraction
+            click.echo(f"\nExtracting from table: {table}")
+            
+            if limit:
+                df = extractor.extract_table(table, limit=limit)
+                df.to_csv(output, sep=delimiter, index=False, header=False)
+                click.echo(f"Extracted {len(df)} rows to {output}")
+            else:
+                stats = extractor.extract_to_file(table_name=table, output_file=output, delimiter=delimiter)
+                click.echo(f"Extracted {stats['total_rows']} rows to {output}")
+                click.echo(f"Chunks written: {stats['chunks_written']}")
         
         click.echo(click.style('✓ Extraction complete', fg='green'))
         
     except Exception as e:
         logger.error(f"Error extracting data: {e}")
         sys.exit(1)
+
 
 
 def main():

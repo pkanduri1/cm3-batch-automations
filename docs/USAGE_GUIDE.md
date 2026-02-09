@@ -129,6 +129,62 @@ cm3-batch reconcile \
   -t CUSTOMER_TABLE
 ```
 
+#### Source Data Verification (New!)
+
+Validate generated files against their source data using custom SQL queries.
+
+**Extract from SQL File:**
+```bash
+cm3-batch extract \
+  --sql-file config/queries/p327_source.sql \
+  -o trusted_p327.txt \
+  -d "|"
+```
+
+**Extract with Inline Query:**
+```bash
+cm3-batch extract \
+  --query "SELECT l.location_code, a.account_number FROM accounts a JOIN locations l ON a.location_id = l.id WHERE a.status = 'ACTIVE'" \
+  -o trusted_data.txt
+```
+
+**Trusted Source Verification Workflow:**
+
+1. **Create Source Query** (`config/queries/p327_source.sql`):
+   ```sql
+   SELECT 
+       l.location_code,
+       a.account_number,
+       c.currency_code
+   FROM accounts a
+   JOIN locations l ON a.location_id = l.id
+   JOIN currencies c ON a.currency_id = c.id
+   WHERE a.status = 'ACTIVE'
+   AND a.balance > 0
+   ```
+
+2. **Extract Trusted Source:**
+   ```bash
+   cm3-batch extract --sql-file config/queries/p327_source.sql -o trusted.txt
+   ```
+
+3. **Compare with Generated File:**
+   ```bash
+   cm3-batch compare \
+     -f1 generated_p327.txt \
+     -f2 trusted.txt \
+     -k account_number \
+     -o verification_report.html
+   ```
+
+**Extract Command Options:**
+- `-t, --table`: Table name (for simple table extraction)
+- `-q, --query`: Inline SQL query
+- `-s, --sql-file`: Path to SQL file
+- `-o, --output`: Output file path (required)
+- `-l, --limit`: Row limit (only for --table mode)
+- `-d, --delimiter`: Output delimiter (default: |)
+
 ### 5. Business Rules (New!)
 
 Convert business rules from Excel template to JSON:
