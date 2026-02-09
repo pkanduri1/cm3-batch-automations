@@ -129,7 +129,22 @@ cm3-batch reconcile \
   -t CUSTOMER_TABLE
 ```
 
-### 5. Validation
+### 5. Business Rules (New!)
+
+Convert business rules from Excel template to JSON:
+
+```bash
+cm3-batch convert-rules \
+  -t config/templates/rules_template.xlsx \
+  -o config/rules/business_rules.json
+```
+
+**Options:**
+- `-t, --template`: Excel (.xlsx) or CSV (.csv) template file
+- `-o, --output`: Output JSON rules file
+- `-s, --sheet`: Sheet name (for Excel, optional)
+
+### 6. Validation
 
 Validate a file against mapping rules and generate comprehensive HTML reports:
 
@@ -159,12 +174,14 @@ cm3-batch validate \
   -f data/samples/p327_test_data.txt \
   -m config/mappings/p327_universal.json \
   -o reports/validation_report.html \
+  --rules config/rules/p327_business_rules.json \
   --detailed
 ```
 
 **Options:**
 - `-f, --file`: Input file to validate
 - `-m, --mapping`: Mapping configuration file
+- `-r, --rules`: Business rules configuration file (JSON)
 - `-o, --output`: Output HTML report path
 - `--detailed`: Enable detailed analysis (recommended)
 
@@ -235,7 +252,20 @@ The generated HTML report includes:
 - **Affected Rows Summary**:
   - Total rows with issues
   - Percentage affected
+  - Total rows with issues
+  - Percentage affected
   - Top 10 most problematic rows with issue details
+
+**9. Business Rule Validation** (when rules provided)
+- **Execution Statistics**:
+  - Rules executed / total rules
+  - Total violations count
+  - Compliance rate percentage
+- **Violations by Rule**:
+  - Rule name and ID
+  - Severity level (Error/Warning/Info)
+  - Violation count
+  - Sample issues with row numbers
 
 #### Example: Comprehensive Validation
 
@@ -759,6 +789,7 @@ cm3-batch detect -f <file>              # Detect format
 cm3-batch parse -f <file> -m <mapping>  # Parse file
 cm3-batch compare -f1 <f1> -f2 <f2>     # Compare files
 cm3-batch validate -f <file>            # Validate file
+cm3-batch convert-rules -t <template>   # Convert rules
 cm3-batch extract -t <table>            # Extract from DB
 cm3-batch reconcile -m <mapping>        # Reconcile mapping
 ```

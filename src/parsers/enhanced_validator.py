@@ -11,18 +11,26 @@ from .base_parser import BaseParser
 class EnhancedFileValidator:
     """Enhanced validator with comprehensive data profiling and quality metrics."""
 
-    def __init__(self, parser: BaseParser, mapping_config: Optional[Dict] = None):
+    def __init__(self, parser: BaseParser, mapping_config: Optional[Dict] = None, 
+                 rules_config_path: Optional[str] = None):
         """Initialize enhanced validator.
         
         Args:
             parser: Parser instance to use for validation
             mapping_config: Optional mapping configuration for schema validation
+            rules_config_path: Optional path to business rules JSON configuration
         """
         self.parser = parser
         self.mapping_config = mapping_config
+        self.rules_config_path = rules_config_path
         self.errors: List[Dict[str, Any]] = []
         self.warnings: List[Dict[str, Any]] = []
         self.info: List[Dict[str, Any]] = []
+        self.rule_engine = None
+        
+        # Load business rules if provided
+        if rules_config_path:
+            self.rule_engine = self._load_rule_engine(rules_config_path)
 
     def validate(self, detailed: bool = True) -> Dict[str, Any]:
         """Perform comprehensive file validation with data profiling.
@@ -77,6 +85,9 @@ class EnhancedFileValidator:
             # Appendix data
             appendix_data = self._build_appendix_data(df, detailed)
             
+            # Business rules validation
+            business_rules_result = self._validate_business_rules(df) if self.rule_engine else None
+            
         except Exception as e:
             self.errors.append({
                 'severity': 'critical',
@@ -97,7 +108,8 @@ class EnhancedFileValidator:
             duplicate_analysis=duplicate_analysis,
             date_analysis=date_analysis,
             data_profile=data_profile,
-            appendix=appendix_data
+            appendix=appendix_data,
+            business_rules=business_rules_result
         )
 
     def _get_file_metadata(self) -> Dict[str, Any]:
@@ -623,3 +635,97 @@ class EnhancedFileValidator:
         result.update(kwargs)
         
         return result
+    
+    def _load_rule_engine(self, rules_config_path: str):
+        """Load business rules engine from configuration file."""
+        import json
+        from src.validators.rule_engine import RuleEngine
+        
+        try:
+            with open(rules_config_path, 'r') as f:
+                rules_config = json.load(f)
+            
+            return RuleEngine(rules_config)
+        except Exception as e:
+            self.warnings.append({
+                'severity': 'warning',
+                'category': 'business_rules',
+                'message': f"Failed to load business rules: {str(e)}",
+                'row': None,
+                'field': None
+            })
+            return None
+    
+    def _validate_business_rules(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """Execute business rules and return violations."""
+        if not self.rule_engine:
+            return {
+                'violations': [],
+                'statistics': {},
+                'enabled': False
+            }
+        
+        try:
+            # Set total rows for compliance calculation
+            self.rule_engine.set_total_rows(len(df))
+            
+            # Execute rules
+            violations = self.rule_engine.validate(df)
+            statistics = self.rule_engine.get_statistics()
+            
+            # Convert violations to dictionaries
+            violations_dict = [v.to_dict() for v in violations]
+            
+            # Add rule violations to warnings/errors based on severity
+            for violation in violations:
+                if violation.severity == 'error':
+                    self.errors.append({
+                        'severity': 'error',
+                        'category': 'business_rule',
+                        'message': violation.message,
+                        'row': violation.row_number,
+                        'field': violation.field,
+                        'rule_id': violation.rule_id,
+                        'rule_name': violation.rule_name
+                    })
+                elif violation.severity == 'warning':
+                    self.warnings.append({
+                        'severity': 'warning',
+                        'category': 'business_rule',
+                        'message': violation.message,
+                        'row': violation.row_number,
+                        'field': violation.field,
+                        'rule_id': violation.rule_id,
+                        'rule_name': violation.rule_name
+                    })
+                else:  # info
+                    self.info.append({
+                        'severity': 'info',
+                        'category': 'business_rule',
+                        'message': violation.message,
+                        'row': violation.row_number,
+                        'field': violation.field,
+                        'rule_id': violation.rule_id,
+                        'rule_name': violation.rule_name
+                    })
+            
+            return {
+                'violations': violations_dict,
+                'statistics': statistics,
+                'enabled': True
+            }
+        
+        except Exception as e:
+            self.warnings.append({
+                'severity': 'warning',
+                'category': 'business_rules',
+                'message': f"Error executing business rules: {str(e)}",
+                'row': None,
+                'field': None
+            })
+            return {
+                'violations': [],
+                'statistics': {},
+                'enabled': False,
+                'error': str(e)
+            }

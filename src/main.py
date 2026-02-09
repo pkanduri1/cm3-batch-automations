@@ -105,9 +105,10 @@ def parse(file, mapping, format, output):
 @cli.command()
 @click.option('--file', '-f', required=True, help='File to validate')
 @click.option('--mapping', '-m', help='Mapping file for schema validation')
+@click.option('--rules', '-r', type=click.Path(exists=True), help='Business rules configuration file (JSON)')
 @click.option('--output', '-o', help='Output HTML report file')
 @click.option('--detailed/--basic', default=True, help='Include detailed field analysis')
-def validate(file, mapping, output, detailed):
+def validate(file, mapping, rules, output, detailed):
     """Validate file format and content."""
     logger = setup_logger('cm3-batch', log_to_file=False)
 
@@ -144,7 +145,7 @@ def validate(file, mapping, output, detailed):
             parser = parser_class(file)
 
         # Validate with enhanced validator
-        validator = EnhancedFileValidator(parser, mapping_config)
+        validator = EnhancedFileValidator(parser, mapping_config, rules)
         result = validator.validate(detailed=detailed)
 
         # Display console summary
@@ -189,6 +190,62 @@ def validate(file, mapping, output, detailed):
 
     except Exception as e:
         logger.error(f"Error validating file: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+
+@cli.command('convert-rules')
+@click.option('--template', '-t', required=True, type=click.Path(exists=True),
+              help='Excel or CSV template file')
+@click.option('--output', '-o', required=True, type=click.Path(),
+              help='Output JSON rules file')
+@click.option('--sheet', '-s', help='Sheet name (for Excel files)')
+def convert_rules(template, output, sheet):
+    """Convert Excel/CSV template to JSON rules configuration."""
+    logger = setup_logger('cm3-batch', log_to_file=False)
+    
+    try:
+        from src.config.rules_template_converter import RulesTemplateConverter
+        
+        converter = RulesTemplateConverter()
+        
+        # Convert based on file type
+        if template.endswith('.xlsx') or template.endswith('.xls'):
+            logger.info(f"Converting Excel template: {template}")
+            rules_config = converter.from_excel(template, sheet)
+        elif template.endswith('.csv'):
+            logger.info(f"Converting CSV template: {template}")
+            rules_config = converter.from_csv(template)
+        else:
+            logger.error("Template must be .xlsx, .xls, or .csv file")
+            sys.exit(1)
+        
+        # Save to JSON
+        converter.save(output)
+        
+        # Display summary
+        total_rules = len(rules_config['rules'])
+        enabled_rules = len([r for r in rules_config['rules'] if r.get('enabled', True)])
+        
+        click.echo(f"\n✓ Rules configuration saved to: {output}")
+        click.echo(f"  Total rules: {total_rules}")
+        click.echo(f"  Enabled rules: {enabled_rules}")
+        click.echo(f"  Disabled rules: {total_rules - enabled_rules}")
+        
+        # Show rule types breakdown
+        rule_types = {}
+        for rule in rules_config['rules']:
+            rule_type = rule.get('type', 'unknown')
+            rule_types[rule_type] = rule_types.get(rule_type, 0) + 1
+        
+        click.echo("\n  Rule types:")
+        for rule_type, count in rule_types.items():
+            click.echo(f"    - {rule_type}: {count}")
+        
+    except Exception as e:
+        logger.error(f"Error converting template: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

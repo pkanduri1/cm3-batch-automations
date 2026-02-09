@@ -22,6 +22,7 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 - **Detailed Appendix**: Validation configuration, mapping details, and affected rows summary
 - **Duplicate Detection**: Identify and report duplicate records
 - **Issue Categorization**: Errors, warnings, and info messages with field-level details
+- **Business Rule Validation**: Execute complex validation rules defined in Excel/CSV templates
 
 ### Advanced Features
 - **Configurable**: JSON-based configuration for different environments
@@ -59,6 +60,9 @@ cm3-batch reconcile -m config/mappings/customer_mapping.json
 
 # Extract data from database
 cm3-batch extract -t CUSTOMER -o output.txt -l 1000
+
+# Convert business rules template
+cm3-batch convert-rules -t config/templates/rules.xlsx -o config/rules.json
 ```
 
 ### Universal Mapping (New!)

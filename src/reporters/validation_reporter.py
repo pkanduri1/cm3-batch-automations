@@ -43,6 +43,7 @@ class ValidationReporter:
         {self._generate_field_analysis(results)}
         {self._generate_date_analysis(results)}
         {self._generate_duplicate_analysis(results)}
+        {self._generate_business_rules(results)}
         {self._generate_appendix(results)}
         {self._generate_footer()}
     </div>
@@ -408,6 +409,55 @@ class ValidationReporter:
         .config-table td:last-child {
             color: #2d3748;
         }
+        
+        .violations-table {
+            width: 100%;
+            margin-top: 15px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .violations-table th {
+            background: #f8fafc;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #718096;
+            padding: 12px 15px;
+        }
+        
+        .violations-table td {
+            padding: 12px 15px;
+            vertical-align: top;
+        }
+
+        .severity-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        
+        .severity-error {
+            background: #fff5f5;
+            color: #c53030;
+            border: 1px solid #fed7d7;
+        }
+        
+        .severity-warning {
+            background: #fffaf0;
+            color: #c05621;
+            border: 1px solid #feebc8;
+        }
+        
+        .severity-info {
+            background: #ebf8ff;
+            color: #2b6cb0;
+            border: 1px solid #bee3f8;
+        }
         """
 
     def _generate_header(self, results: Dict[str, Any]) -> str:
@@ -729,6 +779,114 @@ class ValidationReporter:
             </table>
         </div>
         """
+
+    def _generate_business_rules(self, results: Dict[str, Any]) -> str:
+        """Generate business rules validation section."""
+        rules_data = results.get('business_rules')
+        # Check if rules executed (even if disabled/failed) or just missing
+        if not rules_data or not rules_data.get('enabled') and not rules_data.get('error'):
+            return ""
+            
+        stats = rules_data.get('statistics', {})
+        violations = rules_data.get('violations', [])
+        error_msg = rules_data.get('error')
+        
+        if error_msg:
+             return f"""
+            <div class="section">
+                <h2 class="section-title">📋 Business Rule Validation</h2>
+                <div class="issue issue-error">
+                    <div class="issue-title">Execution Error</div>
+                    <div class="issue-message">{error_msg}</div>
+                </div>
+            </div>"""
+
+        # Calculate summary metrics
+        total_rules = stats.get('total_rules', 0)
+        executed_rules = stats.get('executed_rules', 0)
+        total_violations = stats.get('total_violations', 0)
+        compliance_rate = stats.get('compliance_rate', 100.0)
+        
+        # Color for compliance rate
+        compliance_color = '#38a169' if compliance_rate >= 95 else '#e53e3e' if compliance_rate < 80 else '#d69e2e'
+        
+        # Group violations by rule
+        violations_by_rule = {}
+        for v in violations:
+            rule_id = v['rule_id']
+            if rule_id not in violations_by_rule:
+                violations_by_rule[rule_id] = {
+                    'name': v['rule_name'],
+                    'severity': v['severity'],
+                    'count': 0,
+                    'samples': []
+                }
+            violations_by_rule[rule_id]['count'] += 1
+            if len(violations_by_rule[rule_id]['samples']) < 5:
+                # Format: "Row 123: Message"
+                violations_by_rule[rule_id]['samples'].append(f"Row {v['row_number']}: {v['message']}")
+
+        # Build HTML
+        html = f"""
+        <div class="section">
+            <h2 class="section-title">📋 Business Rule Validation</h2>
+            
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Rules Executed</div>
+                    <div class="metric-value">{executed_rules} <span class="metric-unit">/ {total_rules}</span></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Total Violations</div>
+                    <div class="metric-value" style="color: {'#e53e3e' if total_violations > 0 else '#38a169'}">{total_violations}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Compliance Rate</div>
+                    <div class="metric-value" style="color: {compliance_color}">{compliance_rate}%</div>
+                </div>
+            </div>
+            
+            <h3 style="margin: 25px 0 15px 0; font-size: 1.2em; color: #4a5568;">Violations by Rule</h3>
+            <table class="violations-table">
+                <thead>
+                    <tr>
+                        <th style="width: 25%">Rule Name</th>
+                        <th style="width: 10%">Severity</th>
+                        <th style="width: 10%">Count</th>
+                        <th style="width: 55%">Sample Issues</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+                
+        if not violations_by_rule:
+             html += """<tr><td colspan="4" style="text-align: center; padding: 30px; color: #718096; font-size: 1.1em;">No business rule violations found. ✅</td></tr>"""
+        else:
+            # Sort by count desc
+            sorted_rules = sorted(violations_by_rule.items(), key=lambda x: x[1]['count'], reverse=True)
+            
+            for rule_id, info in sorted_rules:
+                severity_class = f"severity-{info['severity']}"
+                samples_html = '<div style="margin-bottom: 4px;">' + '</div><div style="margin-bottom: 4px;">'.join(info['samples']) + '</div>'
+                if info['count'] > 5:
+                    samples_html += f'<div style="color: #a0aec0; font-style: italic;">... and {info["count"] - 5} more</div>'
+                    
+                html += f"""
+                    <tr>
+                        <td>
+                            <strong>{info['name']}</strong><br>
+                            <span style="font-size: 0.85em; color: #a0aec0; font-family: monospace;">{rule_id}</span>
+                        </td>
+                        <td><span class="severity-badge {severity_class}">{info['severity']}</span></td>
+                        <td><strong>{info['count']}</strong></td>
+                        <td style="font-size: 0.9em; color: #4a5568;">{samples_html}</td>
+                    </tr>"""
+
+        html += """
+                </tbody>
+            </table>
+        </div>"""
+        
+        return html
 
     def _generate_appendix(self, results: Dict[str, Any]) -> str:
         """Generate appendix section."""
