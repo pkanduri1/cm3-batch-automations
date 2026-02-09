@@ -65,7 +65,7 @@ CM3 Batch Automations is a comprehensive Python-based system for automated file 
 │  └──────────────┘  └──────────────┘  └──────────────┘      │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
 │  │   Template   │  │  Validators  │  │   Reporters  │      │
-│  │  Converter   │  │              │  │              │      │
+│  │  Converter   │  │ + Rule Engine│  │              │      │
 │  └──────────────┘  └──────────────┘  └──────────────┘      │
 └─────────────────────────────────────────────────────────────┘
                             │
@@ -241,6 +241,30 @@ rollback()
 - Compare mapping with database schema
 - Identify missing columns
 - Validate data type compatibility
+
+#### Business Rules Engine (`rule_engine.py`) (New!)
+- Execute complex business validation rules
+- Support field and cross-field validation
+- Severity-based violation reporting
+- Compliance rate calculation
+
+**Key Methods**:
+```python
+validate(df: pd.DataFrame) -> List[RuleViolation]
+get_statistics() -> Dict[str, Any]
+set_total_rows(total: int)
+```
+
+#### Field Validator (`field_validator.py`) (New!)
+- Validate individual field values
+- Support for `not_null`, `range`, `regex`, `in_list`, `length`
+- Numeric and string validation
+
+#### Cross-Field Validator (`cross_field_validator.py`) (New!)
+- Validate relationships between fields
+- Field comparisons (numeric and datetime)
+- Conditional dependencies
+- Mutually exclusive fields
 
 ---
 
@@ -573,6 +597,8 @@ CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 - ~~Additional file format support (CSV, Excel)~~ ✅
 - ~~REST API interface~~ ✅
 - ~~Universal mapping structure~~ ✅
+- ~~Business rules validation framework~~ ✅
+- ~~Source data verification with custom SQL~~ ✅
 
 ### Planned
 - [ ] WebSocket support for real-time progress
@@ -590,6 +616,7 @@ CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 ## Version History
 
+- **v1.1.0** (2026-02-09): Business Rules Validation, Source Data Verification
 - **v1.0.0** (2026-02-07): REST API with FastAPI, Universal Mapping Structure
 - **v0.9.0**: P327 mapping support, Excel template conversion
 - **v0.8.0**: Initial CLI implementation

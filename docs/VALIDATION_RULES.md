@@ -640,6 +640,89 @@ The `_validate_rule` method (lines 227-255) handles all validation logic.
 
 ---
 
+## 🆕 Business Rules Validation Framework (New!)
+
+The new business rules framework provides advanced validation capabilities beyond the basic mapping validation rules.
+
+### Key Differences
+
+| Feature | Mapping Validation | Business Rules |
+|---------|-------------------|----------------|
+| **Definition** | Inline in mapping JSON | Separate JSON/Excel file |
+| **Scope** | Field-level only | Field + Cross-field + Conditional |
+| **Reporting** | Integrated in validation report | Dedicated section in HTML report |
+| **Template Support** | No | Yes (Excel/CSV templates) |
+
+### Business Rule Types
+
+#### 1. Field Validation Rules
+Similar to mapping validation but with enhanced capabilities:
+- `not_null`, `range`, `regex`, `in_list`, `length`
+- **Plus**: Severity levels (error/warning/info)
+- **Plus**: Custom violation messages
+
+#### 2. Cross-Field Validation Rules
+Validate relationships between fields:
+- `field_comparison`: Compare two fields (e.g., `end_date > start_date`)
+- `depends_on`: Conditional requirements (e.g., "If status=ACTIVE, then balance required")
+- `mutually_exclusive`: Only one field can have a value
+
+### Example Business Rule
+
+```json
+{
+  "rule_id": "R001",
+  "rule_name": "Account Number Format",
+  "type": "field_validation",
+  "severity": "error",
+  "field": "ACCT-NUM",
+  "operator": "regex",
+  "value": "^[0-9]{10}$",
+  "message": "Account number must be exactly 10 digits"
+}
+```
+
+### Creating Rules from Excel
+
+**Template Structure:**
+| Rule ID | Rule Name | Type | Severity | Field | Operator | Value |
+|---------|-----------|------|----------|-------|----------|-------|
+| R001 | Account Format | field_validation | error | ACCT-NUM | regex | ^[0-9]{10}$ |
+| R002 | Balance Range | field_validation | warning | BALANCE | range | 0,999999 |
+
+**Convert to JSON:**
+```bash
+cm3-batch convert-rules \
+  -t config/templates/rules.xlsx \
+  -o config/rules/rules.json
+```
+
+### Using Business Rules
+
+```bash
+cm3-batch validate \
+  -f data/file.txt \
+  -m config/mappings/mapping.json \
+  -r config/rules/rules.json \
+  -o report.html
+```
+
+### When to Use Which
+
+**Use Mapping Validation Rules when:**
+- Validating basic field constraints
+- Enforcing database schema requirements
+- Simple format checks
+
+**Use Business Rules when:**
+- Complex cross-field logic
+- Business-specific validation
+- Need for severity levels
+- Template-based rule management
+- Detailed violation reporting
+
+---
+
 ## 💡 Best Practices
 
 1. **Always validate required fields** with `not_null`

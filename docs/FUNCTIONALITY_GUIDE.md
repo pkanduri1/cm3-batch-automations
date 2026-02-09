@@ -16,6 +16,8 @@ CM3 Batch Automations is a comprehensive tool for Oracle data extraction, file p
 ### 6. Mapping Reconciliation
 ### 7. REST API
 ### 8. Reporting
+### 9. Business Rules Validation (New!)
+### 10. Source Data Verification (New!)
 
 ---
 
@@ -569,7 +571,172 @@ cm3-batch compare -f1 file1.txt -f2 file2.txt -k id -o report.html
 
 ---
 
-## 9. 🛠️ System Information
+## 9. ✅ Business Rules Validation (New!)
+
+**Execute complex business logic** against file data.
+
+### Command
+```bash
+cm3-batch validate -f <file> -r <rules_config> -o <report>
+```
+
+### Options
+- `-f, --file`: File to validate (required)
+- `-r, --rules`: Business rules JSON configuration (optional)
+- `-o, --output`: HTML report output path (optional)
+
+### Features
+
+#### 1. Rule Definition
+Define rules in JSON or convert from Excel templates:
+
+**Excel Template → JSON:**
+```bash
+cm3-batch convert-rules \
+  -t config/templates/p327_rules.xlsx \
+  -o config/rules/p327_rules.json
+```
+
+#### 2. Rule Types
+
+**Field Validation:**
+- `not_null`: Field must have a value
+- `range`: Numeric range checks
+- `regex`: Pattern matching
+- `in_list`: Value must be in allowed list
+- `length`: String length constraints
+
+**Cross-Field Validation:**
+- `field_comparison`: Compare two fields (e.g., `end_date > start_date`)
+- `depends_on`: Conditional requirements
+- `mutually_exclusive`: Only one field can have a value
+
+**Example Rule:**
+```json
+{
+  "rule_id": "R001",
+  "rule_name": "Account Number Format",
+  "type": "field_validation",
+  "severity": "error",
+  "field": "ACCT-NUM",
+  "operator": "regex",
+  "value": "^[0-9]{10}$"
+}
+```
+
+#### 3. Validation Execution
+```bash
+cm3-batch validate \
+  -f data/p327_test.txt \
+  -m config/mappings/p327.json \
+  -r config/rules/p327_rules.json \
+  -o reports/validation.html
+```
+
+### Output
+
+The HTML report includes:
+- **Summary Metrics**: Total rules, violations, compliance rate
+- **Violations by Rule**: Grouped by rule ID with severity badges
+- **Detailed Violations**: Row numbers, fields, values, and expected outcomes
+
+### Implementation
+- **Engine**: `RuleEngine`
+- **Validators**: `FieldValidator`, `CrossFieldValidator`
+- **Converter**: `RulesTemplateConverter`
+- **Location**: 
+  - [`src/validators/rule_engine.py`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/src/validators/rule_engine.py)
+  - [`src/validators/field_validator.py`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/src/validators/field_validator.py)
+  - [`src/config/rules_template_converter.py`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/src/config/rules_template_converter.py)
+
+---
+
+## 10. 🔍 Source Data Verification (New!)
+
+**Validate generated files** against trusted source data using custom SQL.
+
+### Command
+```bash
+cm3-batch extract --sql-file <query.sql> -o <output>
+```
+
+### Options
+- `-t, --table`: Table name (for simple extraction)
+- `-q, --query`: Inline SQL query
+- `-s, --sql-file`: Path to SQL file
+- `-o, --output`: Output file path (required)
+- `-d, --delimiter`: Output delimiter (default: `|`)
+
+### Extraction Modes
+
+#### 1. Table Mode (Original)
+```bash
+cm3-batch extract -t CUSTOMERS -o customers.txt
+```
+
+#### 2. SQL File Mode (New!)
+```bash
+cm3-batch extract \
+  --sql-file config/queries/p327_source.sql \
+  -o trusted_p327.txt \
+  -d "|"
+```
+
+#### 3. Inline Query Mode (New!)
+```bash
+cm3-batch extract \
+  --query "SELECT a.account_number FROM accounts a WHERE a.status = 'ACTIVE'" \
+  -o active_accounts.txt
+```
+
+### Trusted Source Verification Workflow
+
+**Step 1: Define Source Logic**
+
+Create `config/queries/p327_source.sql`:
+```sql
+SELECT 
+    l.location_code AS "LOCATION-CODE",
+    a.account_number AS "ACCT-NUM",
+    c.currency_code AS "BASE-CURRENCY"
+FROM accounts a
+JOIN locations l ON a.location_id = l.id
+JOIN currencies c ON a.currency_id = c.id
+WHERE a.status = 'ACTIVE'
+  AND a.balance > 0
+ORDER BY a.account_number
+```
+
+**Step 2: Extract Trusted Source**
+```bash
+cm3-batch extract \
+  --sql-file config/queries/p327_source.sql \
+  -o trusted_p327.txt
+```
+
+**Step 3: Compare with Generated File**
+```bash
+cm3-batch compare \
+  -f1 generated_p327.txt \
+  -f2 trusted_p327.txt \
+  -k account_number \
+  -o verification_report.html
+```
+
+### Use Cases
+
+1. **Validate Filter Logic**: Ensure generated files contain only expected records
+2. **Verify Joins**: Confirm join logic produces correct results
+3. **Check Transformations**: Validate data transformations match business rules
+4. **Audit Data**: Create audit trail by comparing against source
+
+### Implementation
+- **Extractor**: `DataExtractor.extract_to_file` (enhanced)
+- **Location**: [`src/database/extractor.py`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/src/database/extractor.py)
+
+---
+
+## 🛠️ System Information
 
 **Check system configuration** and dependencies.
 

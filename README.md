@@ -31,6 +31,7 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 - **Threshold Evaluation**: Configurable pass/fail criteria
 - **CLI Interface**: Command-line tools for all operations
 - **API Interface**: RESTful API for web-based access and integration
+- **Source Data Verification**: Validate generated files against trusted source data using custom SQL queries
 
 ## Quick Start
 
