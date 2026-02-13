@@ -72,3 +72,4 @@ reports/
 # Temporary files
 *.tmp
 *.bak
+output/

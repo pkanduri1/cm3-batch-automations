@@ -1,111 +1,76 @@
-"""Generate sample P327 test data file."""
+#!/usr/bin/env python3
+from __future__ import annotations
 
-import json
-from datetime import datetime, timedelta
-import random
+import argparse
+from pathlib import Path
 
 
-def generate_sample_record(field_specs):
-    """Generate a single sample record based on field specifications."""
-    record = ""
-    
-    for field in field_specs:
-        field_name = field['name']
-        length = field['length']
-        data_type = field['data_type']
-        required = field['required']
-        
-        # Generate sample data based on type
-        if data_type == 'String':
-            if 'LOCATION' in field_name:
-                value = 'LOC001'
-            elif 'ACCT' in field_name or 'NUM' in field_name:
-                value = f"ACCT{random.randint(100000, 999999):012d}"
-            elif 'TYPE' in field_name:
-                value = random.choice(['01', '02', '03', '04'])
-            elif 'FMT' in field_name:
-                value = random.choice(['A', 'B', 'C'])
-            else:
-                value = 'TEST' + str(random.randint(1, 999))
-        
-        elif data_type == 'Numeric':
-            if 'AMT' in field_name:
-                # Generate amount with decimals
-                amount = random.uniform(0, 999999)
-                # Format based on field format if available
-                if field['format'] and 'V' in str(field['format']):
-                    # Has decimal places
-                    value = f"{amount:019.6f}".replace('.', '')
-                else:
-                    value = f"{int(amount):0{length}d}"
-            elif 'CNT' in field_name or 'COUNT' in field_name:
-                value = f"{random.randint(0, 99):0{length}d}"
-            elif 'DAYS' in field_name:
-                value = f"{random.randint(0, 365):0{length}d}"
-            else:
-                value = f"{random.randint(0, 10**length - 1):0{length}d}"
-        
-        elif data_type == 'Date':
-            # Generate random date in CCYYMMDD format
-            base_date = datetime(2024, 1, 1)
-            random_days = random.randint(0, 365)
-            date = base_date + timedelta(days=random_days)
-            value = date.strftime('%Y%m%d')
-        
+def mutate_line(line: str, seed: int) -> str:
+    # Deterministic, position-based mutation to keep fixed-width format.
+    out_chars = []
+    for idx, ch in enumerate(line):
+        n = (seed + idx * 131) & 0xFFFFFFFF
+        if ch.isdigit():
+            d = ord(ch) - ord("0")
+            out_chars.append(str((d + (n % 10)) % 10))
+        elif "A" <= ch <= "Z":
+            shift = n % 26
+            out_chars.append(chr(ord("A") + (ord(ch) - ord("A") + shift) % 26))
         else:
-            value = ' ' * length
-        
-        # Pad or truncate to exact length
-        value = str(value)[:length].ljust(length)
-        record += value
-    
-    return record
+            out_chars.append(ch)
+    return "".join(out_chars)
 
 
-def generate_test_file(config_path: str, output_path: str, num_records: int = 10):
-    """
-    Generate test file based on P327 mapping configuration.
-    
-    Args:
-        config_path: Path to JSON configuration file
-        output_path: Path to output test file
-        num_records: Number of records to generate
-    """
-    # Load configuration
-    with open(config_path, 'r') as f:
-        config = json.load(f)
-    
-    field_specs = config['fields']
-    record_length = config['total_record_length']
-    
-    print(f"Generating {num_records} test records...")
-    print(f"Record length: {record_length} characters")
-    
-    # Generate records
-    with open(output_path, 'w') as f:
-        for i in range(num_records):
-            record = generate_sample_record(field_specs)
-            
-            # Verify record length
-            if len(record) != record_length:
-                print(f"WARNING: Record {i+1} length mismatch: {len(record)} vs {record_length}")
-            
-            f.write(record + '\n')
-    
-    print(f"\nTest file generated: {output_path}")
-    print(f"Total records: {num_records}")
-    print(f"File size: {num_records * (record_length + 1)} bytes")
+def generate_files(src: Path, out_a: Path, out_b: Path, rows: int) -> None:
+    lines = src.read_text().splitlines()
+    if not lines:
+        raise SystemExit(f"No lines found in {src}")
+    line_len = len(lines[0])
+    if any(len(l) != line_len for l in lines):
+        raise SystemExit("Source file contains variable-length lines; aborting.")
+
+    def write_out(path: Path, file_id: int) -> None:
+        with path.open("w", newline="") as f:
+            for i in range(rows):
+                base = lines[i % len(lines)]
+                seed = (file_id + 1) * 1_000_003 + i * 9176
+                f.write(mutate_line(base, seed))
+                f.write("\n")
+
+    write_out(out_a, 0)
+    write_out(out_b, 1)
 
 
-if __name__ == '__main__':
-    config_path = 'config/mappings/p327_mapping.json'
-    output_path = 'data/samples/p327_test_data.txt'
-    
-    generate_test_file(config_path, output_path, num_records=10)
-    
-    # Display first record
-    print("\nFirst record preview (first 200 chars):")
-    with open(output_path, 'r') as f:
-        first_line = f.readline()
-        print(first_line[:200])
-        print(f"... (total {len(first_line.strip())} characters)")
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Generate fixed-width p327 test data files.")
+    parser.add_argument(
+        "--src",
+        type=Path,
+        required=True,
+        help="Path to p327_test_data.txt",
+    )
+    parser.add_argument(
+        "--out-a",
+        type=Path,
+        required=True,
+        help="Output path for first file",
+    )
+    parser.add_argument(
+        "--out-b",
+        type=Path,
+        required=True,
+        help="Output path for second file",
+    )
+    parser.add_argument(
+        "--rows",
+        type=int,
+        default=20000,
+        help="Number of rows per output file",
+    )
+    args = parser.parse_args()
+
+    generate_files(args.src, args.out_a, args.out_b, args.rows)
+
+
+if __name__ == "__main__":
+    main()
