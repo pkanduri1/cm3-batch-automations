@@ -23,7 +23,7 @@ def detect(file):
         from src.parsers.format_detector import FormatDetector
         
         detector = FormatDetector()
-        result = detect.detect(file)
+        result = detector.detect(file)
         
         logger.info(f"File: {file}")
         logger.info(f"Format: {result['format'].value}")

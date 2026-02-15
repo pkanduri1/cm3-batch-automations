@@ -63,6 +63,9 @@ data/samples/*.txt
 data/samples/*.dat
 data/samples/*.csv
 !data/samples/.gitkeep
+!data/samples/customers.txt
+!data/samples/customers_updated.txt
+!data/samples/transactions.txt
 
 # Reports
 reports/

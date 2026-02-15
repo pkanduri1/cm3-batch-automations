@@ -117,7 +117,8 @@ class TestFileComparator:
         results = comparator.compare(detailed=True)
         
         assert 'field_statistics' in results
-        assert results['rows_with_differences'] == 2
+        assert results['rows_with_differences'] == 1
+        assert results['field_statistics']['fields_with_differences'] == 2
         
         # Check for detailed analysis
         diff = results['differences'][0]

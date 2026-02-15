@@ -1,0 +1,11 @@
+customer_id|first_name|last_name|email|phone|account_balance|status
+1001|Alice|Johnson|alice.johnson@example.com|555-0101|1250.50|ACTIVE
+1002|Bob|Smith|bob.smith@example.com|555-0102|1080.00|ACTIVE
+1003|Carol|Davis|carol.davis@example.com|555-0103|0.00|ACTIVE
+1004|David|Lee|david.lee@example.com|555-0104|302.15|ACTIVE
+1005|Eva|Miller|eva.miller@example.com|555-0105|4500.00|ACTIVE
+1006|Frank|Brown|frank.brown@example.com|555-0106|50.75|SUSPENDED
+1007|Grace|Wilson|grace.wilson@example.com|555-0107|230.90|ACTIVE
+1008|Henry|Moore|henry.moore@example.com|555-0108|780.40|ACTIVE
+1009|Ivy|Taylor|ivy.taylor@example.com|555-0109|120.00|INACTIVE
+1010|Jack|Anderson|jack.anderson@example.com|555-0110|10099.99|VIP
