@@ -1,0 +1,9 @@
+Field Name,Data Type,Target Name,Required,Description,Default Value
+order_id,string,ORDER_ID,Y,Order identifier,
+order_date,date,ORDER_DATE,Y,Order date in YYYY-MM-DD,
+customer_id,string,CUSTOMER_ID,Y,Customer identifier,
+item_sku,string,ITEM_SKU,Y,Product SKU,
+quantity,integer,QUANTITY,Y,Ordered quantity,1
+unit_price,decimal,UNIT_PRICE,Y,Unit price,
+currency,string,CURRENCY,N,Currency code,USD
+order_status,string,ORDER_STATUS,N,Order status,PENDING

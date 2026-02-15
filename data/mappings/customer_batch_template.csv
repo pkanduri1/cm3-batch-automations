@@ -1,0 +1,9 @@
+Field Name,Data Type,Target Name,Required,Description
+customer_id,string,CUSTOMER_ID,Y,Unique customer identifier
+first_name,string,FIRST_NAME,Y,Customer first name
+last_name,string,LAST_NAME,Y,Customer last name
+email,string,EMAIL,N,Email address
+phone,string,PHONE_NUMBER,N,Phone number
+account_balance,decimal,ACCOUNT_BALANCE,Y,Current account balance
+status,string,STATUS,Y,Customer status (ACTIVE/INACTIVE/SUSPENDED)
+created_date,date,CREATED_DATE,N,Customer created date (YYYYMMDD)
