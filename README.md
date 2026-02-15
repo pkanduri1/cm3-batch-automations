@@ -8,7 +8,7 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 - **Universal Mapping Structure**: Standardized mapping format for all file types (pipe-delimited, fixed-width, CSV, TSV)
 - **Template-Based Configuration**: Create mappings from Excel/CSV templates without custom scripts
 - **File Parsing**: Support for multiple file formats with auto-detection
-- **Database Integration**: Oracle database connectivity with cx_Oracle
+- **Database Integration**: Oracle database connectivity with `oracledb` (thin mode supported)
 - **Data Validation**: Comprehensive validation with interactive HTML reports
 - **File Comparison**: Compare files and identify differences with field-level analysis
 - **HTML Reporting**: Generate detailed comparison and validation reports
@@ -64,6 +64,39 @@ cm3-batch extract -t CUSTOMER -o output.txt -l 1000
 
 # Convert business rules template
 cm3-batch convert-rules -t config/templates/rules.xlsx -o config/rules.json
+```
+
+### Business Rule Validation (Build Gate Friendly)
+
+You can run validation with business rules JSON and fail builds when violations are found:
+
+```bash
+cm3-batch validate \
+  -f data/samples/customers.txt \
+  -m config/mappings/customer_mapping.json \
+  -r config/rules/p327_business_rules.json \
+  -o reports/validation-with-rules.html \
+  --detailed
+```
+
+### On-Prem Oracle Smoke Test (No Docker Required)
+
+Set your Oracle credentials in `.env`:
+
+```bash
+ORACLE_USER=CM3INT
+ORACLE_PASSWORD=<password>
+ORACLE_DSN=<hostname>:1521/<service_name>
+```
+
+Create test objects and run parse -> validate -> load verification:
+
+```bash
+# Create test tables in CM3INT/CM3AUDIT
+sqlplus system/<sys_password>@<hostname>:1521/<service_name> @scripts/setup_cm3_test_tables.sql
+
+# Run smoke ETL
+python scripts/cm3_smoke_etl.py
 ```
 
 ### Universal Mapping (New!)
@@ -123,6 +156,8 @@ cm3-batch-automations/
 │   ├── templates/       # Mapping templates
 │   └── mappings/        # Universal mappings
 ├── data/                # Data directory
+│   └── mappings/        # CSV/Excel mapping templates for new integrations
+├── scripts/             # Utility scripts (smoke ETL, setup SQL, helpers)
 ├── uploads/             # API file uploads
 ├── logs/                # Log files
 └── docs/                # Documentation
@@ -133,8 +168,10 @@ cm3-batch-automations/
 ## Prerequisites
 
 - **Python**: 3.9 or higher
-- **Oracle Instant Client**: 19c or higher
 - **pip**: Latest version
+- **Oracle Database** access (on-prem, container, or managed)
+
+> Note: the project uses `python-oracledb` and works in **thin mode** by default (no Oracle Instant Client required for basic connectivity).
 
 ## Installation
 
@@ -163,9 +200,10 @@ source venv/bin/activate
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
+pip install -e .  # enables cm3-batch CLI command
 ```
 
-### 4. Install Oracle Instant Client
+### 4. (Optional) Install Oracle Instant Client
 
 #### Windows
 
