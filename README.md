@@ -114,6 +114,24 @@ python src/config/universal_mapping_parser.py \
   config/mappings/my_mapping.json
 ```
 
+### Standardized CSV -> Mapping JSON + Rules JSON
+
+Use standardized CSV templates:
+- `config/templates/csv/mapping_template.standard.csv`
+- `config/templates/csv/business_rules_template.standard.csv`
+
+Generate JSON artifacts from CSV in one command:
+
+```bash
+python scripts/generate_from_csv_templates.py \
+  --mapping-csv config/templates/csv/mapping_template.standard.csv \
+  --mapping-out config/mappings/customer_batch_universal.json \
+  --mapping-name customer_batch_universal \
+  --mapping-format pipe_delimited \
+  --rules-csv config/templates/csv/business_rules_template.standard.csv \
+  --rules-out config/rules/customer_business_rules.json
+```
+
 ### REST API (New!)
 
 ```bash
