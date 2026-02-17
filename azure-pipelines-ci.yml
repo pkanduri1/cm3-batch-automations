@@ -1,0 +1,59 @@
+# Azure DevOps / TFS YAML pipeline for build + unit tests
+# Usage:
+# 1) Create a pipeline in Azure DevOps Server (TFS) pointing to this file.
+# 2) Ensure your agent has Python 3.11+ available.
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+      - feature/*
+
+pr:
+  branches:
+    include:
+      - main
+      - develop
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  PYTHON_VERSION: '3.11'
+
+stages:
+  - stage: BuildAndTest
+    displayName: Build and Unit Test
+    jobs:
+      - job: UnitTests
+        displayName: Run pytest suite
+        steps:
+          - checkout: self
+            clean: true
+
+          - task: UsePythonVersion@0
+            displayName: Use Python $(PYTHON_VERSION)
+            inputs:
+              versionSpec: '$(PYTHON_VERSION)'
+              addToPath: true
+
+          - script: |
+              python -m pip install --upgrade pip
+              pip install -r requirements-dev.txt
+            displayName: Install dependencies
+
+          - script: |
+              pytest -q -o addopts='' tests/unit
+            displayName: Run unit tests
+
+          - script: |
+              sphinx-build -b html docs/sphinx docs/sphinx/_build/html
+            displayName: Build Sphinx docs
+
+          - task: PublishBuildArtifacts@1
+            displayName: Publish docs artifact
+            inputs:
+              PathtoPublish: 'docs/sphinx/_build/html'
+              ArtifactName: 'sphinx-docs'
+              publishLocation: 'Container'

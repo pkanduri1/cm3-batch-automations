@@ -1,0 +1,102 @@
+# Azure DevOps / TFS YAML pipeline for on-prem deployment
+# This expects:
+# - A variable group with deployment values (server host/user/target path)
+# - SSH service connection configured in Azure DevOps (for CopyFilesOverSSH/SSH tasks)
+# - Optional environment approvals for production
+
+trigger: none
+pr: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - name: artifactName
+    value: drop
+  # Set these in pipeline variables or variable group
+  - name: targetPath
+    value: /opt/cm3-batch-automations
+  - name: sshServiceConnection
+    value: onprem-ssh-service-connection
+
+stages:
+  - stage: Package
+    displayName: Package application
+    jobs:
+      - job: CreateArtifact
+        displayName: Create deployable artifact
+        steps:
+          - checkout: self
+            clean: true
+
+          - task: UsePythonVersion@0
+            displayName: Use Python 3.11
+            inputs:
+              versionSpec: '3.11'
+
+          - script: |
+              python -m pip install --upgrade pip
+              pip install -r requirements-dev.txt
+              pytest -q -o addopts='' tests/unit
+            displayName: Test before package
+
+          - script: |
+              mkdir -p $(Build.ArtifactStagingDirectory)/$(artifactName)
+              rsync -av --exclude '.git' --exclude '.venv' ./ $(Build.ArtifactStagingDirectory)/$(artifactName)/
+            displayName: Prepare artifact contents
+
+          - task: ArchiveFiles@2
+            displayName: Archive artifact
+            inputs:
+              rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/$(artifactName)'
+              includeRootFolder: false
+              archiveType: 'tar'
+              tarCompression: 'gz'
+              archiveFile: '$(Build.ArtifactStagingDirectory)/cm3-batch-automations.tar.gz'
+              replaceExistingArchive: true
+
+          - task: PublishBuildArtifacts@1
+            displayName: Publish deploy artifact
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)/cm3-batch-automations.tar.gz'
+              ArtifactName: '$(artifactName)'
+              publishLocation: 'Container'
+
+  - stage: DeployOnPrem
+    displayName: Deploy to on-prem server
+    dependsOn: Package
+    condition: succeeded()
+    jobs:
+      - deployment: Deploy
+        displayName: Deploy via SSH
+        environment: onprem-production
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: $(artifactName)
+
+                - task: CopyFilesOverSSH@0
+                  displayName: Copy package to server
+                  inputs:
+                    sshEndpoint: '$(sshServiceConnection)'
+                    sourceFolder: '$(Pipeline.Workspace)/$(artifactName)'
+                    contents: 'cm3-batch-automations.tar.gz'
+                    targetFolder: '/tmp/cm3-deploy'
+                    cleanTargetFolder: false
+
+                - task: SSH@0
+                  displayName: Extract and deploy
+                  inputs:
+                    sshEndpoint: '$(sshServiceConnection)'
+                    runOptions: 'inline'
+                    inline: |
+                      set -euo pipefail
+                      sudo mkdir -p $(targetPath)
+                      sudo tar -xzf /tmp/cm3-deploy/cm3-batch-automations.tar.gz -C $(targetPath)
+                      cd $(targetPath)
+                      if [ -f run_tests.sh ]; then
+                        bash run_tests.sh || true
+                      fi
+                      echo "Deployment completed at $(targetPath)"
