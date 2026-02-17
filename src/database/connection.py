@@ -4,6 +4,9 @@ import oracledb
 from typing import Optional
 import os
 
+# Backward-compatible alias for older tests/code that patch cx_Oracle.
+cx_Oracle = oracledb
+
 
 class OracleConnection:
     """Manages Oracle database connections."""
@@ -36,7 +39,7 @@ class OracleConnection:
             Oracle connection object
         """
         try:
-            self.connection = oracledb.connect(
+            self.connection = cx_Oracle.connect(
                 user=self.username,
                 password=self.password,
                 dsn=self.dsn,

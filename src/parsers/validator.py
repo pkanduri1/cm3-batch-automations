@@ -131,7 +131,8 @@ class SchemaValidator:
             required_columns: List of required column names (subset of expected)
         """
         self.expected_columns = expected_columns
-        self.required_columns = required_columns or expected_columns
+        # By default, treat all expected columns as optional unless explicitly required.
+        self.required_columns = required_columns or []
 
     def validate(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Validate DataFrame schema.

@@ -46,9 +46,13 @@ class FixedWidthParser(BaseParser):
         """
         try:
             with open(self.file_path, "r") as f:
-                lines = [f.readline() for _ in range(min(10, sum(1 for _ in f)))]
+                lines = []
+                for _, line in zip(range(10), f):
+                    lines.append(line)
+
                 if not lines:
                     return False
+
                 line_lengths = [len(line.rstrip("\n")) for line in lines]
                 return len(set(line_lengths)) <= 2
         except Exception:
