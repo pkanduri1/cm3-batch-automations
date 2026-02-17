@@ -68,12 +68,43 @@ cm3-batch reconcile -m config/mappings/customer_mapping.json
 # Validate all mappings in a directory
 cm3-batch reconcile-all -d config/mappings -o reports/reconcile_all.json
 
+# Detect reconciliation drift vs baseline
+cm3-batch reconcile-all -d config/mappings -o reports/reconcile_all_new.json \
+  --baseline reports/reconcile_all_baseline.json --fail-on-drift
+
 # Extract data from database
 cm3-batch extract -t CUSTOMER -o output.txt -l 1000
 
 # Convert business rules template
 cm3-batch convert-rules -t config/templates/rules.xlsx -o config/rules.json
 ```
+
+### Batch Automation Scripts
+
+```bash
+# 1) Convert all mapping templates from mappings/csv -> config/mappings
+./scripts/run_convert_mappings.sh
+
+# 2) Convert all rules templates from rules/csv -> config/rules
+./scripts/run_convert_rules.sh
+
+# 3) Validate all data files based on manifest mapping
+./scripts/run_validate_all.sh config/validation_manifest.csv
+
+# 4) Validate with auto-discovery fallback (if manifest missing)
+./scripts/run_validate_all.sh config/validation_manifest.csv true
+```
+
+Manifest recommendation: **CSV** (not .properties), because QA teams can edit it easily in Excel.
+
+Sample manifest columns:
+
+- `data_file` (required)
+- `mapping_file` (required)
+- `rules_file` (optional)
+- `report_file` (optional)
+- `chunked` (optional)
+- `chunk_size` (optional)
 
 ### Business Rule Validation (Build Gate Friendly)
 

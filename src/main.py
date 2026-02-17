@@ -568,8 +568,11 @@ def reconcile(mapping, output, fail_on_warnings):
               help='Directory containing mapping files (default: config/mappings)')
 @click.option('--pattern', default='*.json', help='Glob pattern for mapping files (default: *.json)')
 @click.option('--output', '-o', help='Write aggregate reconciliation report (.json recommended)')
+@click.option('--baseline', '-b', type=click.Path(exists=True),
+              help='Baseline reconcile-all JSON report to compare drift against')
 @click.option('--fail-on-warnings', is_flag=True, help='Return non-zero exit code if warnings are found')
-def reconcile_all(mappings_dir, pattern, output, fail_on_warnings):
+@click.option('--fail-on-drift', is_flag=True, help='Return non-zero exit code if new errors/warnings appear vs baseline')
+def reconcile_all(mappings_dir, pattern, output, baseline, fail_on_warnings, fail_on_drift):
     """Reconcile all mapping documents in a directory against database schema."""
     logger = setup_logger('cm3-batch', log_to_file=False)
 
@@ -653,6 +656,77 @@ def reconcile_all(mappings_dir, pattern, output, fail_on_warnings):
         click.echo(f"Total errors:    {summary['total_errors']}")
         click.echo(f"Total warnings:  {summary['total_warnings']}")
 
+        drift = None
+        if baseline:
+            with open(baseline, 'r') as f:
+                baseline_report = json.load(f)
+
+            baseline_results = {
+                r.get('mapping_file'): r
+                for r in baseline_report.get('results', [])
+                if r.get('mapping_file')
+            }
+            current_results = {
+                r.get('mapping_file'): r
+                for r in results
+                if r.get('mapping_file')
+            }
+
+            baseline_files = set(baseline_results.keys())
+            current_files = set(current_results.keys())
+
+            added_files = sorted(current_files - baseline_files)
+            removed_files = sorted(baseline_files - current_files)
+
+            changed = []
+            new_errors = 0
+            new_warnings = 0
+
+            for mf in sorted(current_files & baseline_files):
+                old = baseline_results[mf]
+                new = current_results[mf]
+                old_e = old.get('error_count', len(old.get('errors', [])))
+                old_w = old.get('warning_count', len(old.get('warnings', [])))
+                new_e = new.get('error_count', len(new.get('errors', [])))
+                new_w = new.get('warning_count', len(new.get('warnings', [])))
+
+                delta_e = new_e - old_e
+                delta_w = new_w - old_w
+                if delta_e != 0 or delta_w != 0:
+                    changed.append({
+                        'mapping_file': mf,
+                        'old_errors': old_e,
+                        'new_errors': new_e,
+                        'delta_errors': delta_e,
+                        'old_warnings': old_w,
+                        'new_warnings': new_w,
+                        'delta_warnings': delta_w,
+                    })
+                    if delta_e > 0:
+                        new_errors += delta_e
+                    if delta_w > 0:
+                        new_warnings += delta_w
+
+            drift = {
+                'baseline': baseline,
+                'added_files': added_files,
+                'removed_files': removed_files,
+                'changed': changed,
+                'new_errors': new_errors,
+                'new_warnings': new_warnings,
+            }
+
+            click.echo("\nDRIFT SUMMARY")
+            click.echo("-" * 60)
+            click.echo(f"Added mappings:   {len(added_files)}")
+            click.echo(f"Removed mappings: {len(removed_files)}")
+            click.echo(f"Changed mappings: {len(changed)}")
+            click.echo(f"New errors:       {new_errors}")
+            click.echo(f"New warnings:     {new_warnings}")
+
+        if drift is not None:
+            summary['drift'] = drift
+
         if output:
             if output.lower().endswith('.json'):
                 with open(output, 'w') as f:
@@ -662,7 +736,13 @@ def reconcile_all(mappings_dir, pattern, output, fail_on_warnings):
                     f.write(json.dumps(summary, indent=2))
             click.echo(f"\nAggregate report written to: {output}")
 
-        if summary['invalid_mappings'] > 0 or (fail_on_warnings and summary['total_warnings'] > 0):
+        has_drift_regression = bool(drift and (drift.get('new_errors', 0) > 0 or drift.get('new_warnings', 0) > 0))
+
+        if (
+            summary['invalid_mappings'] > 0
+            or (fail_on_warnings and summary['total_warnings'] > 0)
+            or (fail_on_drift and has_drift_regression)
+        ):
             sys.exit(1)
 
     except Exception as e:
