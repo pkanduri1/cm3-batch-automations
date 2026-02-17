@@ -50,14 +50,23 @@ cm3-batch detect -f data/samples/customers.txt
 # Parse file
 cm3-batch parse -f data/samples/customers.txt
 
+# Parse with chunked processing (large files)
+cm3-batch parse -f data/samples/customers.txt --use-chunked --chunk-size 50000 -o reports/parsed.csv
+
 # Validate file with HTML report
 cm3-batch validate -f data/samples/customers.txt -m config/mappings/customer_mapping.json -o reports/validation.html --detailed
+
+# Validate with chunked processing (large files)
+cm3-batch validate -f data/samples/customers.txt -m config/mappings/customer_mapping.json --use-chunked -o reports/validation.json
 
 # Compare files
 cm3-batch compare -f1 file1.txt -f2 file2.txt -k customer_id -o report.html
 
 # Validate mapping against database
 cm3-batch reconcile -m config/mappings/customer_mapping.json
+
+# Validate all mappings in a directory
+cm3-batch reconcile-all -d config/mappings -o reports/reconcile_all.json
 
 # Extract data from database
 cm3-batch extract -t CUSTOMER -o output.txt -l 1000

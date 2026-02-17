@@ -45,35 +45,75 @@ def detect(file):
 @click.option('--mapping', '-m', help='Mapping configuration file')
 @click.option('--format', '-t', help='File format (auto-detect if not specified)')
 @click.option('--output', '-o', help='Output file (default: stdout)')
-def parse(file, mapping, format, output):
+@click.option('--use-chunked', is_flag=True, help='Use chunked processing for large files')
+@click.option('--chunk-size', default=100000, help='Chunk size for large files (default: 100000)')
+def parse(file, mapping, format, output, use_chunked, chunk_size):
     """Parse file and display contents."""
     logger = setup_logger('cm3-batch', log_to_file=False)
-    
+
     try:
         from src.parsers.format_detector import FormatDetector
         from src.parsers.pipe_delimited_parser import PipeDelimitedParser
         from src.parsers.fixed_width_parser import FixedWidthParser
-        from src.config.universal_mapping_parser import UniversalMappingParser
+        from src.parsers.chunked_parser import ChunkedFileParser, ChunkedFixedWidthParser
         import json
-        
-        # If mapping provided, use it to parse
+
+        mapping_config = None
+        field_specs = []
+
+        # If mapping provided, build field specs (fixed-width)
         if mapping:
             with open(mapping, 'r') as f:
                 mapping_config = json.load(f)
-            
-            # Build field specs from mapping
-            field_specs = []
+
             current_pos = 0
             for field in mapping_config.get('fields', []):
                 field_name = field['name']
                 field_length = field['length']
                 field_specs.append((field_name, current_pos, current_pos + field_length))
                 current_pos += field_length
-            
-            # Use FixedWidthParser with field specs
+
+        # Chunked path
+        if use_chunked:
+            if mapping and field_specs:
+                parser = ChunkedFixedWidthParser(file, field_specs, chunk_size=chunk_size)
+            else:
+                delimiter = '|'
+                if format == 'pipe':
+                    delimiter = '|'
+                elif format in ('csv', 'comma'):
+                    delimiter = ','
+                parser = ChunkedFileParser(file, delimiter=delimiter, chunk_size=chunk_size)
+
+            total_rows = 0
+            preview_df = None
+
+            if output:
+                first_chunk = True
+                for chunk in parser.parse_chunks():
+                    if preview_df is None:
+                        preview_df = chunk.head(10)
+                    chunk.to_csv(output, index=False, mode='w' if first_chunk else 'a', header=first_chunk)
+                    first_chunk = False
+                    total_rows += len(chunk)
+                click.echo(f"Output written to: {output}")
+                click.echo(f"Total rows: {total_rows}")
+            else:
+                for chunk in parser.parse_chunks():
+                    if preview_df is None:
+                        preview_df = chunk.head(10)
+                    total_rows += len(chunk)
+
+                if preview_df is not None:
+                    click.echo(preview_df.to_string())
+                click.echo(f"\nTotal rows: {total_rows}")
+
+            return
+
+        # Non-chunked path (existing behavior)
+        if mapping and field_specs:
             parser = FixedWidthParser(file, field_specs)
         else:
-            # Auto-detect if format not specified
             if not format:
                 detector = FormatDetector()
                 parser_class = detector.get_parser_class(file)
@@ -86,17 +126,17 @@ def parse(file, mapping, format, output):
                 else:
                     click.echo(f"Unknown format: {format}")
                     sys.exit(1)
-        
+
         df = parser.parse()
         logger.info(f"Parsed {len(df)} rows, {len(df.columns)} columns")
-        
+
         if output:
             df.to_csv(output, index=False)
             click.echo(f"Output written to: {output}")
         else:
             click.echo(df.head(10).to_string())
             click.echo(f"\nTotal rows: {len(df)}")
-        
+
     except Exception as e:
         logger.error(f"Error parsing file: {e}")
         sys.exit(1)
@@ -108,7 +148,10 @@ def parse(file, mapping, format, output):
 @click.option('--rules', '-r', type=click.Path(exists=True), help='Business rules configuration file (JSON)')
 @click.option('--output', '-o', help='Output HTML report file')
 @click.option('--detailed/--basic', default=True, help='Include detailed field analysis')
-def validate(file, mapping, rules, output, detailed):
+@click.option('--use-chunked', is_flag=True, help='Use chunked processing for large files')
+@click.option('--chunk-size', default=100000, help='Chunk size for large files (default: 100000)')
+@click.option('--progress/--no-progress', default=True, help='Show progress bar')
+def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress):
     """Validate file format and content."""
     logger = setup_logger('cm3-batch', log_to_file=False)
 
@@ -116,22 +159,89 @@ def validate(file, mapping, rules, output, detailed):
         from src.parsers.format_detector import FormatDetector
         from src.parsers.enhanced_validator import EnhancedFileValidator
         from src.parsers.fixed_width_parser import FixedWidthParser
+        from src.parsers.chunked_validator import ChunkedFileValidator
         from src.reporters.validation_reporter import ValidationReporter
         import json
 
-        # Get parser
-        detector = FormatDetector()
-        parser_class = detector.get_parser_class(file)
-        
-        # Load mapping config if provided
         mapping_config = None
         if mapping:
             with open(mapping, 'r') as f:
                 mapping_config = json.load(f)
-        
-        # If mapping provided and it's a fixed-width file, use mapping to build column specs
+
+        # Chunked path
+        if use_chunked:
+            detector = FormatDetector()
+            parser_class = detector.get_parser_class(file)
+            delimiter = '|' if parser_class != FixedWidthParser else '|'
+
+            chunked_validator = ChunkedFileValidator(
+                file_path=file,
+                delimiter=delimiter,
+                chunk_size=chunk_size,
+            )
+
+            if mapping_config:
+                if 'fields' in mapping_config:
+                    expected_columns = [f['name'] for f in mapping_config['fields']]
+                    required_columns = [f['name'] for f in mapping_config['fields'] if f.get('required', False)]
+                elif 'mappings' in mapping_config:
+                    expected_columns = [m['source_column'] for m in mapping_config['mappings']]
+                    required_columns = [m['source_column'] for m in mapping_config['mappings'] if m.get('required', False)]
+                else:
+                    expected_columns = []
+                    required_columns = []
+
+                if expected_columns:
+                    result = chunked_validator.validate_with_schema(
+                        expected_columns=expected_columns,
+                        required_columns=required_columns if required_columns else expected_columns,
+                        show_progress=progress,
+                    )
+                else:
+                    result = chunked_validator.validate(show_progress=progress)
+            else:
+                result = chunked_validator.validate(show_progress=progress)
+
+            if result['valid']:
+                click.echo(click.style('✓ File is valid (chunked)', fg='green'))
+            else:
+                click.echo(click.style('✗ File validation failed (chunked)', fg='red'))
+
+            click.echo(f"\nTotal Rows: {result.get('total_rows', 0):,}")
+
+            if result.get('errors'):
+                click.echo(click.style(f"\nErrors ({len(result['errors'])}):", fg='red'))
+                for error in result['errors'][:5]:
+                    msg = error.get('message', str(error)) if isinstance(error, dict) else str(error)
+                    click.echo(click.style(f"  • {msg}", fg='red'))
+                if len(result['errors']) > 5:
+                    click.echo(click.style(f"  ... and {len(result['errors']) - 5} more", fg='red'))
+
+            if result.get('warnings'):
+                click.echo(click.style(f"\nWarnings ({len(result['warnings'])}):", fg='yellow'))
+                for warning in result['warnings'][:5]:
+                    msg = warning.get('message', str(warning)) if isinstance(warning, dict) else str(warning)
+                    click.echo(click.style(f"  • {msg}", fg='yellow'))
+                if len(result['warnings']) > 5:
+                    click.echo(click.style(f"  ... and {len(result['warnings']) - 5} more", fg='yellow'))
+
+            if output:
+                if output.lower().endswith('.json'):
+                    with open(output, 'w') as f:
+                        json.dump(result, f, indent=2)
+                    click.echo(f"\n✓ Chunked validation JSON report generated: {output}")
+                else:
+                    click.echo(click.style("\nChunked validation currently supports JSON output only. Use -o <file>.json", fg='yellow'))
+
+            if not result['valid']:
+                sys.exit(1)
+            return
+
+        # Non-chunked path (existing behavior)
+        detector = FormatDetector()
+        parser_class = detector.get_parser_class(file)
+
         if mapping_config and parser_class == FixedWidthParser:
-            # Build field specs from mapping
             field_specs = []
             current_pos = 0
             for field in mapping_config.get('fields', []):
@@ -139,50 +249,43 @@ def validate(file, mapping, rules, output, detailed):
                 field_length = field['length']
                 field_specs.append((field_name, current_pos, current_pos + field_length))
                 current_pos += field_length
-            
+
             parser = FixedWidthParser(file, field_specs)
         else:
             parser = parser_class(file)
 
-        # Validate with enhanced validator
         validator = EnhancedFileValidator(parser, mapping_config, rules)
         result = validator.validate(detailed=detailed)
 
-        # Display console summary
         if result['valid']:
             click.echo(click.style('✓ File is valid', fg='green'))
         else:
             click.echo(click.style('✗ File validation failed', fg='red'))
-        
-        # Display quality score
+
         quality_score = result.get('quality_metrics', {}).get('quality_score', 0)
         click.echo(f"\nData Quality Score: {quality_score}%")
-        
-        # Display summary metrics
+
         metrics = result.get('quality_metrics', {})
         if metrics:
             click.echo(f"  Total Rows: {metrics.get('total_rows', 0):,}")
             click.echo(f"  Total Columns: {metrics.get('total_columns', 0):,}")
             click.echo(f"  Completeness: {metrics.get('completeness_pct', 0)}%")
             click.echo(f"  Uniqueness: {metrics.get('uniqueness_pct', 0)}%")
-        
-        # Display errors
+
         if result['errors']:
             click.echo(click.style(f"\nErrors ({len(result['errors'])}):", fg='red'))
-            for error in result['errors'][:5]:  # Show first 5
+            for error in result['errors'][:5]:
                 click.echo(click.style(f"  • {error.get('message', '')}", fg='red'))
             if len(result['errors']) > 5:
                 click.echo(click.style(f"  ... and {len(result['errors']) - 5} more", fg='red'))
 
-        # Display warnings
         if result['warnings']:
             click.echo(click.style(f"\nWarnings ({len(result['warnings'])}):", fg='yellow'))
-            for warning in result['warnings'][:5]:  # Show first 5
+            for warning in result['warnings'][:5]:
                 click.echo(click.style(f"  • {warning.get('message', '')}", fg='yellow'))
             if len(result['warnings']) > 5:
                 click.echo(click.style(f"  ... and {len(result['warnings']) - 5} more", fg='yellow'))
-        
-        # Generate HTML report if output specified
+
         if output:
             reporter = ValidationReporter()
             reporter.generate(result, output)
@@ -398,49 +501,172 @@ def info():
 
 @cli.command()
 @click.option('--mapping', '-m', required=True, help='Mapping file to validate')
-def reconcile(mapping):
+@click.option('--output', '-o', help='Write reconciliation report to file (.json for machine-readable output)')
+@click.option('--fail-on-warnings', is_flag=True, help='Return non-zero exit code if warnings are found')
+def reconcile(mapping, output, fail_on_warnings):
     """Reconcile mapping document with database schema."""
     logger = setup_logger('cm3-batch', log_to_file=False)
-    
+
     try:
+        import json
         from src.database.connection import OracleConnection
         from src.database.reconciliation import SchemaReconciler
         from src.config.loader import ConfigLoader
         from src.config.mapping_parser import MappingParser
-        
+
         # Load mapping
         loader = ConfigLoader()
         mapping_dict = loader.load_mapping(mapping)
-        
+
         parser = MappingParser()
         mapping_doc = parser.parse(mapping_dict)
-        
+
         # Reconcile with database
         conn = OracleConnection.from_env()
         reconciler = SchemaReconciler(conn)
-        
+
         click.echo(f"\nReconciling mapping: {mapping_doc.mapping_name}")
         click.echo(f"Target table: {mapping_doc.target.get('table_name', 'N/A')}")
-        
+
         result = reconciler.reconcile_mapping(mapping_doc)
-        
+
         if result['valid']:
             click.echo(click.style('\n✓ Mapping is valid', fg='green'))
         else:
             click.echo(click.style('\n✗ Mapping validation failed', fg='red'))
             for error in result['errors']:
                 click.echo(click.style(f"  ERROR: {error}", fg='red'))
-        
+
         if result['warnings']:
             click.echo(click.style('\nWarnings:', fg='yellow'))
             for warning in result['warnings']:
                 click.echo(click.style(f"  {warning}", fg='yellow'))
-        
+
         click.echo(f"\nMapped columns: {result.get('mapped_columns', 0)}")
         click.echo(f"Database columns: {result.get('database_columns', 0)}")
-        
+
+        if output:
+            if output.lower().endswith('.json'):
+                with open(output, 'w') as f:
+                    json.dump(result, f, indent=2)
+            else:
+                report = reconciler.generate_reconciliation_report(mapping_doc)
+                with open(output, 'w') as f:
+                    f.write(report)
+            click.echo(f"Report written to: {output}")
+
+        if (not result['valid']) or (fail_on_warnings and result['warnings']):
+            sys.exit(1)
+
     except Exception as e:
         logger.error(f"Error reconciling mapping: {e}")
+        sys.exit(1)
+
+
+@cli.command('reconcile-all')
+@click.option('--mappings-dir', '-d', default='config/mappings', type=click.Path(exists=True, file_okay=False),
+              help='Directory containing mapping files (default: config/mappings)')
+@click.option('--pattern', default='*.json', help='Glob pattern for mapping files (default: *.json)')
+@click.option('--output', '-o', help='Write aggregate reconciliation report (.json recommended)')
+@click.option('--fail-on-warnings', is_flag=True, help='Return non-zero exit code if warnings are found')
+def reconcile_all(mappings_dir, pattern, output, fail_on_warnings):
+    """Reconcile all mapping documents in a directory against database schema."""
+    logger = setup_logger('cm3-batch', log_to_file=False)
+
+    try:
+        import json
+        from pathlib import Path
+        from src.database.connection import OracleConnection
+        from src.database.reconciliation import SchemaReconciler
+        from src.config.loader import ConfigLoader
+        from src.config.mapping_parser import MappingParser
+
+        loader = ConfigLoader()
+        parser = MappingParser()
+        conn = OracleConnection.from_env()
+        reconciler = SchemaReconciler(conn)
+
+        mapping_files = sorted(Path(mappings_dir).glob(pattern))
+        if not mapping_files:
+            click.echo(click.style(f"No mapping files found in {mappings_dir} matching '{pattern}'", fg='yellow'))
+            return
+
+        results = []
+        total_errors = 0
+        total_warnings = 0
+        invalid_mappings = 0
+
+        for mapping_file in mapping_files:
+            click.echo(f"\nReconciling: {mapping_file}")
+            try:
+                mapping_dict = loader.load_mapping(str(mapping_file))
+                mapping_doc = parser.parse(mapping_dict)
+                result = reconciler.reconcile_mapping(mapping_doc)
+
+                errors = result.get('error_count', len(result.get('errors', [])))
+                warnings = result.get('warning_count', len(result.get('warnings', [])))
+                total_errors += errors
+                total_warnings += warnings
+
+                if not result.get('valid', False):
+                    invalid_mappings += 1
+                    click.echo(click.style(f"  ✗ INVALID ({errors} errors, {warnings} warnings)", fg='red'))
+                else:
+                    status_color = 'yellow' if warnings else 'green'
+                    status_text = f"  ✓ VALID ({warnings} warnings)" if warnings else "  ✓ VALID"
+                    click.echo(click.style(status_text, fg=status_color))
+
+                results.append({
+                    'mapping_file': str(mapping_file),
+                    'mapping_name': mapping_doc.mapping_name,
+                    **result,
+                })
+
+            except Exception as file_error:
+                invalid_mappings += 1
+                total_errors += 1
+                click.echo(click.style(f"  ✗ FAILED to process: {file_error}", fg='red'))
+                results.append({
+                    'mapping_file': str(mapping_file),
+                    'valid': False,
+                    'errors': [f"Failed to process mapping: {file_error}"],
+                    'warnings': [],
+                    'error_count': 1,
+                    'warning_count': 0,
+                })
+
+        summary = {
+            'total_mappings': len(mapping_files),
+            'valid_mappings': len(mapping_files) - invalid_mappings,
+            'invalid_mappings': invalid_mappings,
+            'total_errors': total_errors,
+            'total_warnings': total_warnings,
+            'results': results,
+        }
+
+        click.echo("\n" + "=" * 60)
+        click.echo("RECONCILE-ALL SUMMARY")
+        click.echo("=" * 60)
+        click.echo(f"Total mappings:  {summary['total_mappings']}")
+        click.echo(f"Valid mappings:  {summary['valid_mappings']}")
+        click.echo(f"Invalid mappings:{summary['invalid_mappings']}")
+        click.echo(f"Total errors:    {summary['total_errors']}")
+        click.echo(f"Total warnings:  {summary['total_warnings']}")
+
+        if output:
+            if output.lower().endswith('.json'):
+                with open(output, 'w') as f:
+                    json.dump(summary, f, indent=2)
+            else:
+                with open(output, 'w') as f:
+                    f.write(json.dumps(summary, indent=2))
+            click.echo(f"\nAggregate report written to: {output}")
+
+        if summary['invalid_mappings'] > 0 or (fail_on_warnings and summary['total_warnings'] > 0):
+            sys.exit(1)
+
+    except Exception as e:
+        logger.error(f"Error reconciling mappings directory: {e}")
         sys.exit(1)
 
 

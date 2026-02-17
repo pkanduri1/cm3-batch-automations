@@ -39,17 +39,31 @@ class SchemaReconciler:
                 'valid': True,
                 'errors': [],
                 'warnings': ['Target is not a database, skipping reconciliation'],
+                'error_count': 0,
+                'warning_count': 1,
             }
         
         table_name = mapping.target.get('table_name')
         if not table_name:
             errors.append("No target table name specified")
-            return {'valid': False, 'errors': errors, 'warnings': warnings}
+            return {
+                'valid': False,
+                'errors': errors,
+                'warnings': warnings,
+                'error_count': len(errors),
+                'warning_count': len(warnings),
+            }
         
         # Check if table exists
         if not self._table_exists(table_name):
             errors.append(f"Target table does not exist: {table_name}")
-            return {'valid': False, 'errors': errors, 'warnings': warnings}
+            return {
+                'valid': False,
+                'errors': errors,
+                'warnings': warnings,
+                'error_count': len(errors),
+                'warning_count': len(warnings),
+            }
         
         # Get table columns
         db_columns = self._get_table_columns(table_name)
@@ -115,6 +129,8 @@ class SchemaReconciler:
             'valid': len(errors) == 0,
             'errors': errors,
             'warnings': warnings,
+            'error_count': len(errors),
+            'warning_count': len(warnings),
             'table_name': table_name,
             'mapped_columns': len(mapping.mappings),
             'database_columns': len(db_columns),
