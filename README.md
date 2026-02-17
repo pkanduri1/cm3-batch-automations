@@ -97,6 +97,12 @@ cm3-batch convert-rules -t config/templates/rules.xlsx -o config/rules.json
 
 Manifest recommendation: **CSV** (not .properties), because QA teams can edit it easily in Excel.
 
+Starter sample files checked in:
+
+- `mappings/csv/mapping_template.sample.csv`
+- `rules/csv/rules_template.sample.csv`
+- `config/validation_manifest.sample.csv`
+
 Sample manifest columns:
 
 - `data_file` (required)
