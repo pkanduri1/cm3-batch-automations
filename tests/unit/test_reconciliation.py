@@ -41,7 +41,7 @@ def test_reconcile_missing_table_returns_error():
     reconciler = SchemaReconciler(DummyConnection())
     mapping = _build_mapping()
 
-    reconciler._table_exists = lambda _table: False
+    reconciler._table_exists = lambda _table, _owner=None: False
 
     result = reconciler.reconcile_mapping(mapping)
 
@@ -54,10 +54,10 @@ def test_reconcile_type_mismatch_returns_warning():
     reconciler = SchemaReconciler(DummyConnection())
     mapping = _build_mapping()
 
-    reconciler._table_exists = lambda _table: True
-    reconciler._get_table_columns = lambda _table: ['NAME']
-    reconciler._get_required_columns = lambda _table: set()
-    reconciler._get_column_details = lambda _table: {
+    reconciler._table_exists = lambda _table, _owner=None: True
+    reconciler._get_table_columns = lambda _table, _owner=None: ['NAME']
+    reconciler._get_required_columns = lambda _table, _owner=None: set()
+    reconciler._get_column_details = lambda _table, _owner=None: {
         'NAME': {
             'data_type': 'NUMBER',
             'data_length': 10,
@@ -78,10 +78,10 @@ def test_reconcile_max_length_exceeds_db_length_warns():
     reconciler = SchemaReconciler(DummyConnection())
     mapping = _build_mapping()
 
-    reconciler._table_exists = lambda _table: True
-    reconciler._get_table_columns = lambda _table: ['NAME']
-    reconciler._get_required_columns = lambda _table: set()
-    reconciler._get_column_details = lambda _table: {
+    reconciler._table_exists = lambda _table, _owner=None: True
+    reconciler._get_table_columns = lambda _table, _owner=None: ['NAME']
+    reconciler._get_required_columns = lambda _table, _owner=None: set()
+    reconciler._get_column_details = lambda _table, _owner=None: {
         'NAME': {
             'data_type': 'VARCHAR2',
             'data_length': 20,
@@ -97,14 +97,46 @@ def test_reconcile_max_length_exceeds_db_length_warns():
     assert any('validation max_length (50) exceeds database length (20)' in w for w in result['warnings'])
 
 
+def test_reconcile_owner_qualified_table_reference_is_supported():
+    reconciler = SchemaReconciler(DummyConnection())
+    mapping = _build_mapping({'target': {'type': 'database', 'table_name': 'APP.TEST_TABLE'}})
+
+    called = {}
+
+    def _table_exists(table, owner=None):
+        called['table'] = table
+        called['owner'] = owner
+        return True
+
+    reconciler._table_exists = _table_exists
+    reconciler._get_table_columns = lambda _table, _owner=None: ['NAME']
+    reconciler._get_required_columns = lambda _table, _owner=None: set()
+    reconciler._get_column_details = lambda _table, _owner=None: {
+        'NAME': {
+            'data_type': 'VARCHAR2',
+            'data_length': 100,
+            'data_precision': None,
+            'data_scale': None,
+            'nullable': 'N',
+        }
+    }
+    reconciler._get_pk_unique_constraint_columns = lambda _table, _owner=None: []
+
+    result = reconciler.reconcile_mapping(mapping)
+
+    assert result['valid'] is True
+    assert called['table'] == 'TEST_TABLE'
+    assert called['owner'] == 'APP'
+
+
 def test_reconcile_reports_unmapped_required_columns():
     reconciler = SchemaReconciler(DummyConnection())
     mapping = _build_mapping()
 
-    reconciler._table_exists = lambda _table: True
-    reconciler._get_table_columns = lambda _table: ['NAME', 'ID']
-    reconciler._get_required_columns = lambda _table: {'NAME', 'ID'}
-    reconciler._get_column_details = lambda _table: {
+    reconciler._table_exists = lambda _table, _owner=None: True
+    reconciler._get_table_columns = lambda _table, _owner=None: ['NAME', 'ID']
+    reconciler._get_required_columns = lambda _table, _owner=None: {'NAME', 'ID'}
+    reconciler._get_column_details = lambda _table, _owner=None: {
         'NAME': {
             'data_type': 'VARCHAR2',
             'data_length': 100,
@@ -126,3 +158,27 @@ def test_reconcile_reports_unmapped_required_columns():
     assert result['valid'] is True
     assert 'ID' in result['unmapped_required']
     assert any('Required database columns not in mapping' in w for w in result['warnings'])
+
+
+def test_reconcile_warns_when_mapping_keys_do_not_match_pk_unique():
+    reconciler = SchemaReconciler(DummyConnection())
+    mapping = _build_mapping({'key_columns': ['name']})
+
+    reconciler._table_exists = lambda _table, _owner=None: True
+    reconciler._get_table_columns = lambda _table, _owner=None: ['NAME']
+    reconciler._get_required_columns = lambda _table, _owner=None: set()
+    reconciler._get_column_details = lambda _table, _owner=None: {
+        'NAME': {
+            'data_type': 'VARCHAR2',
+            'data_length': 100,
+            'data_precision': None,
+            'data_scale': None,
+            'nullable': 'N',
+        }
+    }
+    # PK/unique defined on a different column set
+    reconciler._get_pk_unique_constraint_columns = lambda _table, _owner=None: [{'ID'}]
+
+    result = reconciler.reconcile_mapping(mapping)
+
+    assert any('do not exactly match any database PK/UNIQUE constraint' in w for w in result['warnings'])

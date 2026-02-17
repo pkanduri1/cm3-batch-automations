@@ -16,6 +16,7 @@ class ColumnMapping:
     required: bool
     transformations: List[Dict[str, Any]]
     validation_rules: List[Dict[str, Any]]
+    format: Optional[str] = None
 
 
 @dataclass
@@ -70,7 +71,8 @@ class MappingParser:
                 data_type=m['data_type'],
                 required=m.get('required', False),
                 transformations=m.get('transformations', []),
-                validation_rules=m.get('validation_rules', [])
+                validation_rules=m.get('validation_rules', []),
+                format=m.get('format')
             )
             for m in mapping_dict['mappings']
         ]
