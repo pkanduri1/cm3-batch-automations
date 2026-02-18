@@ -35,11 +35,49 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 
 ## Quick Start
 
+### First-Time Setup (Beginner Friendly)
+
+If this is your first time using Python tooling, use one of these scripts:
+
+#### macOS
+
+```bash
+bash scripts/setup_mac.sh
+source .venv/bin/activate
+cm3-batch --help
+```
+
+#### Windows (PowerShell)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup_windows.ps1
+.\.venv\Scripts\Activate.ps1
+cm3-batch --help
+```
+
+#### VS Code setup (any OS)
+
+Creates `.vscode/settings.json` + `.vscode/tasks.json` with Python/test tasks.
+
+```bash
+# macOS/Linux
+bash scripts/setup_vscode.sh
+
+# Windows PowerShell
+powershell -ExecutionPolicy Bypass -File scripts/setup_vscode.ps1
+```
+
+> Tip: In shells, `\` line continuation must be the **last character** on the line (no trailing spaces).
+
 ### CLI Usage
 
 ```bash
-# Install dependencies
+# Install dependencies (if not using setup scripts)
 pip install -r requirements.txt
+pip install -e .
+
+# If cm3-batch is not found, use module form:
+# .venv/bin/python -m src.main <command>
 
 # Check system info
 cm3-batch info
