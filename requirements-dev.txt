@@ -7,3 +7,4 @@
 # Additional development tools
 ipython>=8.0.0
 jupyter>=1.0.0
+sphinx>=7.3.0

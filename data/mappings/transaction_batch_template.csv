@@ -1,0 +1,8 @@
+Field Name,Data Type,Position,Length,Target Name,Format,Required,Description
+transaction_id,string,0,13,TRANSACTION_ID,,Y,Transaction identifier
+customer_id,string,13,10,CUSTOMER_ID,,Y,Customer identifier
+transaction_date,date,23,8,TRANSACTION_DATE,YYYYMMDD,Y,Transaction date
+amount,decimal,31,10,AMOUNT,999999.99,Y,Transaction amount
+transaction_type,string,41,12,TRANSACTION_TYPE,,Y,Transaction type
+description,string,53,30,DESCRIPTION,,N,Transaction description
+source_system,string,83,10,SOURCE_SYSTEM,,N,Source system code

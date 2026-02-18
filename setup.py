@@ -36,4 +36,9 @@ setup(
             "pytest-cov>=4.0.0",
         ],
     },
+    entry_points={
+        "console_scripts": [
+            "cm3-batch=src.main:main",
+        ],
+    },
 )

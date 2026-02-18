@@ -12,17 +12,19 @@ class ChunkedFileValidator:
     """Validate large files in chunks."""
     
     def __init__(self, file_path: str, delimiter: str = '|',
-                 chunk_size: int = 100000):
+                 chunk_size: int = 100000, parser: Optional[ChunkedFileParser] = None):
         """Initialize chunked validator.
         
         Args:
             file_path: Path to file to validate
             delimiter: Field delimiter
             chunk_size: Rows per chunk
+            parser: Optional preconfigured chunked parser (e.g., fixed-width parser)
         """
         self.file_path = file_path
         self.delimiter = delimiter
         self.chunk_size = chunk_size
+        self.parser = parser
         self.logger = get_logger(__name__)
         self.memory_monitor = MemoryMonitor()
     
@@ -42,7 +44,7 @@ class ChunkedFileValidator:
         warnings = []
         
         # Validate structure first
-        parser = ChunkedFileParser(self.file_path, self.delimiter, self.chunk_size)
+        parser = self.parser or ChunkedFileParser(self.file_path, self.delimiter, self.chunk_size)
         structure_result = parser.validate_structure()
         
         if not structure_result['valid']:
@@ -219,7 +221,7 @@ class ChunkedFileValidator:
         warnings = list(basic_result.get('warnings', []))
         
         # Get actual columns from first chunk
-        parser = ChunkedFileParser(self.file_path, self.delimiter, self.chunk_size)
+        parser = self.parser or ChunkedFileParser(self.file_path, self.delimiter, self.chunk_size)
         first_chunk = parser.parse_sample(n_rows=10)
         actual_columns = set(first_chunk.columns)
         

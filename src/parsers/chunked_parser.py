@@ -230,3 +230,18 @@ class ChunkedFixedWidthParser(ChunkedFileParser):
         except Exception as e:
             self.logger.error(f"Error parsing fixed-width file: {e}")
             raise ValueError(f"Failed to parse fixed-width file: {e}")
+
+    def parse_sample(self, n_rows: int = 1000) -> pd.DataFrame:
+        """Parse sample of fixed-width file."""
+        try:
+            return pd.read_fwf(
+                self.file_path,
+                colspecs=self.colspecs,
+                names=self.names,
+                dtype=str,
+                nrows=n_rows,
+                encoding=self.encoding
+            )
+        except Exception as e:
+            self.logger.error(f"Error parsing fixed-width sample: {e}")
+            raise ValueError(f"Failed to parse fixed-width sample: {e}")

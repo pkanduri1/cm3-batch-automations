@@ -1,8 +1,8 @@
 {
   "environment": "dev",
   "database": {
-    "username": "dev_user",
-    "dsn": "localhost:1521/XEPDB1",
+    "username": "CM3INT",
+    "dsn": "localhost:1521/FREEPDB1",
     "encoding": "UTF-8"
   },
   "logging": {

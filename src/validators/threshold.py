@@ -139,7 +139,8 @@ class ThresholdEvaluator:
         Returns:
             Evaluation result
         """
-        percent = (value / total * 100) if total > 0 else 0
+        # Keep percent as ratio (0.0-1.0) to align with threshold config semantics.
+        percent = (value / total) if total > 0 else 0
         
         # Check fail conditions
         if threshold.max_value is not None and value > threshold.max_value:
@@ -147,14 +148,14 @@ class ThresholdEvaluator:
             reason = f"Value {value} exceeds max {threshold.max_value}"
         elif threshold.max_percent is not None and percent > threshold.max_percent:
             result = ThresholdResult.FAIL
-            reason = f"Percent {percent:.2f}% exceeds max {threshold.max_percent}%"
+            reason = f"Percent {percent * 100:.2f}% exceeds max {threshold.max_percent * 100:.2f}%"
         # Check warning conditions
         elif threshold.warning_value is not None and value > threshold.warning_value:
             result = ThresholdResult.WARNING
             reason = f"Value {value} exceeds warning {threshold.warning_value}"
         elif threshold.warning_percent is not None and percent > threshold.warning_percent:
             result = ThresholdResult.WARNING
-            reason = f"Percent {percent:.2f}% exceeds warning {threshold.warning_percent}%"
+            reason = f"Percent {percent * 100:.2f}% exceeds warning {threshold.warning_percent * 100:.2f}%"
         else:
             result = ThresholdResult.PASS
             reason = "Within acceptable limits"

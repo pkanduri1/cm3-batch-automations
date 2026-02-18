@@ -1,6 +1,7 @@
 """Parser for pipe-delimited files."""
 
 import pandas as pd
+from pandas.errors import EmptyDataError
 from typing import Optional, List
 from .base_parser import BaseParser
 
@@ -29,10 +30,13 @@ class PipeDelimitedParser(BaseParser):
                 self.file_path,
                 sep="|",
                 names=self.columns,
+                header=None,
                 dtype=str,
                 keep_default_na=False,
             )
             return df
+        except EmptyDataError:
+            return pd.DataFrame(columns=self.columns or [])
         except Exception as e:
             raise ValueError(f"Failed to parse pipe-delimited file: {e}")
 

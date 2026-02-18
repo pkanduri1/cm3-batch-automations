@@ -8,7 +8,7 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 - **Universal Mapping Structure**: Standardized mapping format for all file types (pipe-delimited, fixed-width, CSV, TSV)
 - **Template-Based Configuration**: Create mappings from Excel/CSV templates without custom scripts
 - **File Parsing**: Support for multiple file formats with auto-detection
-- **Database Integration**: Oracle database connectivity with cx_Oracle
+- **Database Integration**: Oracle database connectivity with `oracledb` (thin mode supported)
 - **Data Validation**: Comprehensive validation with interactive HTML reports
 - **File Comparison**: Compare files and identify differences with field-level analysis
 - **HTML Reporting**: Generate detailed comparison and validation reports
@@ -35,11 +35,66 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 
 ## Quick Start
 
+### First-Time Setup (Beginner Friendly)
+
+**Important:** Open your terminal or command prompt and navigate to the **project root directory** before running these commands.
+
+#### macOS / Linux
+
+This script checks for Python 3.11+, creates a virtual environment, installs dependencies, and sets up working directories.
+
+```bash
+# macOS
+bash scripts/setup_mac.sh
+
+# RHEL 8.9+ (with sudo access)
+bash scripts/setup_rhel.sh
+
+# Activate the virtual environment
+source .venv/bin/activate
+
+# Verify installation
+cm3-batch --help
+```
+
+#### Windows (PowerShell)
+
+Open PowerShell as Administrator (recommended) or ensure you have script execution permissions.
+
+```powershell
+# Run the setup script
+powershell -ExecutionPolicy Bypass -File scripts/setup_windows.ps1
+
+# Activate the virtual environment
+.\.venv\Scripts\Activate.ps1
+
+# Verify installation
+cm3-batch --help
+```
+
+#### VS Code Users (All OS)
+
+If you use VS Code, you can automatically configure the workspace settings (interpreters, test explorer, tasks).
+
+```bash
+# macOS/Linux
+bash scripts/setup_vscode.sh
+
+# Windows PowerShell
+powershell -ExecutionPolicy Bypass -File scripts/setup_vscode.ps1
+```
+
+> Tip: In shells, `\` line continuation must be the **last character** on the line (no trailing spaces).
+
 ### CLI Usage
 
 ```bash
-# Install dependencies
+# Install dependencies (if not using setup scripts)
 pip install -r requirements.txt
+pip install -e .
+
+# If cm3-batch is not found, use module form:
+# .venv/bin/python -m src.main <command>
 
 # Check system info
 cm3-batch info
@@ -50,8 +105,14 @@ cm3-batch detect -f data/samples/customers.txt
 # Parse file
 cm3-batch parse -f data/samples/customers.txt
 
+# Parse with chunked processing (large files)
+cm3-batch parse -f data/samples/customers.txt --use-chunked --chunk-size 50000 -o reports/parsed.csv
+
 # Validate file with HTML report
 cm3-batch validate -f data/samples/customers.txt -m config/mappings/customer_mapping.json -o reports/validation.html --detailed
+
+# Validate with chunked processing (large files)
+cm3-batch validate -f data/samples/customers.txt -m config/mappings/customer_mapping.json --use-chunked -o reports/validation.json
 
 # Compare files
 cm3-batch compare -f1 file1.txt -f2 file2.txt -k customer_id -o report.html
@@ -59,11 +120,122 @@ cm3-batch compare -f1 file1.txt -f2 file2.txt -k customer_id -o report.html
 # Validate mapping against database
 cm3-batch reconcile -m config/mappings/customer_mapping.json
 
+# Validate all mappings in a directory
+cm3-batch reconcile-all -d config/mappings -o reports/reconcile_all.json
+
+# Detect reconciliation drift vs baseline
+cm3-batch reconcile-all -d config/mappings -o reports/reconcile_all_new.json \
+  --baseline reports/reconcile_all_baseline.json --fail-on-drift
+
 # Extract data from database
 cm3-batch extract -t CUSTOMER -o output.txt -l 1000
 
 # Convert business rules template
 cm3-batch convert-rules -t config/templates/rules.xlsx -o config/rules.json
+```
+
+### Batch Automation Scripts
+
+These scripts are designed to simplify common tasks. They are located in the `scripts/` directory and should be run from the **project root directory**.
+
+#### 1. Convert Mapping Templates to JSON
+
+This script converts all CSV mapping templates from `mappings/csv/` to JSON configuration files in `config/mappings/`.
+
+**Usage:**
+
+```bash
+# Default usage (parses mappings/csv -> config/mappings)
+./scripts/run_convert_mappings.sh
+
+# Specify custom input/output directories
+./scripts/run_convert_mappings.sh "my/custom/csv_dir" "my/custom/json_dir"
+
+# Force a specific format (e.g., fixed_width or pipe_delimited) for all files
+./scripts/run_convert_mappings.sh "mappings/csv" "config/mappings" "fixed_width"
+```
+
+> **Note:** Strict mode is enabled. Malformed rows will cause conversion to fail and generate error reports in `reports/template_validation/*.errors.csv`.
+
+#### 2. Convert Business Rules to JSON
+
+This script converts all CSV business rules templates from `rules/csv/` to JSON configuration files in `config/rules/`.
+
+**Usage:**
+
+```bash
+# Default usage (parses rules/csv -> config/rules)
+./scripts/run_convert_rules.sh
+
+# Specify custom input/output directories
+./scripts/run_convert_rules.sh "my/custom/rules_csv" "my/custom/rules_json"
+```
+
+#### 3. Validate Data Files
+
+This script validates data files based on a manifest file (CSV). It supports auto-discovery of mappings if not explicitly defined in the manifest.
+
+**Usage:**
+
+```bash
+# Default usage (uses config/validation_manifest.csv)
+./scripts/run_validate_all.sh
+
+# Use a custom manifest file
+./scripts/run_validate_all.sh "path/to/my_manifest.csv"
+
+# Enable auto-discovery fallback (tries to find matching mapping if missing in manifest)
+./scripts/run_validate_all.sh "config/validation_manifest.csv" "true"
+```
+
+Manifest recommendation: **CSV** (not .properties), because QA teams can edit it easily in Excel.
+
+Starter sample files checked in:
+
+- `mappings/csv/mapping_template.sample.csv`
+- `rules/csv/rules_template.sample.csv`
+- `config/validation_manifest.sample.csv`
+
+Sample manifest columns:
+
+- `data_file` (required)
+- `mapping_file` (required)
+- `rules_file` (optional)
+- `report_file` (optional)
+- `chunked` (optional)
+- `chunk_size` (optional)
+
+### Business Rule Validation (Build Gate Friendly)
+
+You can run validation with business rules JSON and fail builds when violations are found:
+
+```bash
+cm3-batch validate \
+  -f data/samples/customers.txt \
+  -m config/mappings/customer_mapping.json \
+  -r config/rules/p327_business_rules.json \
+  -o reports/validation-with-rules.html \
+  --detailed
+```
+
+### On-Prem Oracle Smoke Test (No Docker Required)
+
+Set your Oracle credentials in `.env`:
+
+```bash
+ORACLE_USER=CM3INT
+ORACLE_PASSWORD=<password>
+ORACLE_DSN=<hostname>:1521/<service_name>
+```
+
+Create test objects and run parse -> validate -> load verification:
+
+```bash
+# Create test tables in CM3INT/CM3AUDIT
+sqlplus system/<sys_password>@<hostname>:1521/<service_name> @scripts/setup_cm3_test_tables.sql
+
+# Run smoke ETL
+python scripts/cm3_smoke_etl.py
 ```
 
 ### Universal Mapping (New!)
@@ -79,6 +251,24 @@ python src/config/template_converter.py \
 # Validate mapping
 python src/config/universal_mapping_parser.py \
   config/mappings/my_mapping.json
+```
+
+### Standardized CSV -> Mapping JSON + Rules JSON
+
+Use standardized CSV templates:
+- `config/templates/csv/mapping_template.standard.csv`
+- `config/templates/csv/business_rules_template.standard.csv`
+
+Generate JSON artifacts from CSV in one command:
+
+```bash
+python scripts/generate_from_csv_templates.py \
+  --mapping-csv config/templates/csv/mapping_template.standard.csv \
+  --mapping-out config/mappings/customer_batch_universal.json \
+  --mapping-name customer_batch_universal \
+  --mapping-format pipe_delimited \
+  --rules-csv config/templates/csv/business_rules_template.standard.csv \
+  --rules-out config/rules/customer_business_rules.json
 ```
 
 ### REST API (New!)
@@ -123,6 +313,8 @@ cm3-batch-automations/
 │   ├── templates/       # Mapping templates
 │   └── mappings/        # Universal mappings
 ├── data/                # Data directory
+│   └── mappings/        # CSV/Excel mapping templates for new integrations
+├── scripts/             # Utility scripts (smoke ETL, setup SQL, helpers)
 ├── uploads/             # API file uploads
 ├── logs/                # Log files
 └── docs/                # Documentation
@@ -133,8 +325,10 @@ cm3-batch-automations/
 ## Prerequisites
 
 - **Python**: 3.9 or higher
-- **Oracle Instant Client**: 19c or higher
 - **pip**: Latest version
+- **Oracle Database** access (on-prem, container, or managed)
+
+> Note: the project uses `python-oracledb` and works in **thin mode** by default (no Oracle Instant Client required for basic connectivity).
 
 ## Installation
 
@@ -163,9 +357,10 @@ source venv/bin/activate
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
+pip install -e .  # enables cm3-batch CLI command
 ```
 
-### 4. Install Oracle Instant Client
+### 4. (Optional) Install Oracle Instant Client
 
 #### Windows
 
