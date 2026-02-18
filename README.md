@@ -37,27 +37,41 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 
 ### First-Time Setup (Beginner Friendly)
 
-If this is your first time using Python tooling, use one of these scripts:
+**Important:** Open your terminal or command prompt and navigate to the **project root directory** before running these commands.
 
-#### macOS
+#### macOS / Linux
+
+This script checks for Python 3.11+, creates a virtual environment, installs dependencies, and sets up working directories.
 
 ```bash
+# Run the setup script
 bash scripts/setup_mac.sh
+
+# Activate the virtual environment
 source .venv/bin/activate
+
+# Verify installation
 cm3-batch --help
 ```
 
 #### Windows (PowerShell)
 
+Open PowerShell as Administrator (recommended) or ensure you have script execution permissions.
+
 ```powershell
+# Run the setup script
 powershell -ExecutionPolicy Bypass -File scripts/setup_windows.ps1
+
+# Activate the virtual environment
 .\.venv\Scripts\Activate.ps1
+
+# Verify installation
 cm3-batch --help
 ```
 
-#### VS Code setup (any OS)
+#### VS Code Users (All OS)
 
-Creates `.vscode/settings.json` + `.vscode/tasks.json` with Python/test tasks.
+If you use VS Code, you can automatically configure the workspace settings (interpreters, test explorer, tasks).
 
 ```bash
 # macOS/Linux
@@ -119,22 +133,56 @@ cm3-batch convert-rules -t config/templates/rules.xlsx -o config/rules.json
 
 ### Batch Automation Scripts
 
+These scripts are designed to simplify common tasks. They are located in the `scripts/` directory and should be run from the **project root directory**.
+
+#### 1. Convert Mapping Templates to JSON
+
+This script converts all CSV mapping templates from `mappings/csv/` to JSON configuration files in `config/mappings/`.
+
+**Usage:**
+
 ```bash
-# 1) Convert all mapping templates from mappings/csv -> config/mappings
-#    Strict mode: malformed rows fail conversion and produce row-level CSV reports
-#    under reports/template_validation/*.errors.csv
+# Default usage (parses mappings/csv -> config/mappings)
 ./scripts/run_convert_mappings.sh
 
-# 2) Convert all rules templates from rules/csv -> config/rules
-#    Strict mode: malformed rows fail conversion and produce row-level CSV reports
-#    under reports/template_validation/*.errors.csv
+# Specify custom input/output directories
+./scripts/run_convert_mappings.sh "my/custom/csv_dir" "my/custom/json_dir"
+
+# Force a specific format (e.g., fixed_width or pipe_delimited) for all files
+./scripts/run_convert_mappings.sh "mappings/csv" "config/mappings" "fixed_width"
+```
+
+> **Note:** Strict mode is enabled. Malformed rows will cause conversion to fail and generate error reports in `reports/template_validation/*.errors.csv`.
+
+#### 2. Convert Business Rules to JSON
+
+This script converts all CSV business rules templates from `rules/csv/` to JSON configuration files in `config/rules/`.
+
+**Usage:**
+
+```bash
+# Default usage (parses rules/csv -> config/rules)
 ./scripts/run_convert_rules.sh
 
-# 3) Validate all data files based on manifest mapping
-./scripts/run_validate_all.sh config/validation_manifest.csv
+# Specify custom input/output directories
+./scripts/run_convert_rules.sh "my/custom/rules_csv" "my/custom/rules_json"
+```
 
-# 4) Validate with auto-discovery fallback (if manifest missing)
-./scripts/run_validate_all.sh config/validation_manifest.csv true
+#### 3. Validate Data Files
+
+This script validates data files based on a manifest file (CSV). It supports auto-discovery of mappings if not explicitly defined in the manifest.
+
+**Usage:**
+
+```bash
+# Default usage (uses config/validation_manifest.csv)
+./scripts/run_validate_all.sh
+
+# Use a custom manifest file
+./scripts/run_validate_all.sh "path/to/my_manifest.csv"
+
+# Enable auto-discovery fallback (tries to find matching mapping if missing in manifest)
+./scripts/run_validate_all.sh "config/validation_manifest.csv" "true"
 ```
 
 Manifest recommendation: **CSV** (not .properties), because QA teams can edit it easily in Excel.
