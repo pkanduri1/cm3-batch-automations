@@ -44,8 +44,11 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 This script checks for Python 3.11+, creates a virtual environment, installs dependencies, and sets up working directories.
 
 ```bash
-# Run the setup script
+# macOS
 bash scripts/setup_mac.sh
+
+# RHEL 8.9+ (with sudo access)
+bash scripts/setup_rhel.sh
 
 # Activate the virtual environment
 source .venv/bin/activate
