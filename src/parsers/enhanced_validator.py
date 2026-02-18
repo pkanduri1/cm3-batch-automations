@@ -487,12 +487,18 @@ class EnhancedFileValidator:
                     
                     # Add warnings for invalid/future dates
                     if invalid_count > 0:
+                        expected_format = self._get_expected_date_format(col)
+                        format_hint = f" Expected format: {expected_format}." if expected_format else ""
                         self.warnings.append({
                             'severity': 'warning',
                             'category': 'data',
-                            'message': f"Field '{col}' has {invalid_count} invalid date values ({invalid_count / len(df) * 100:.2f}%)",
+                            'message': (
+                                f"Field '{col}' has {invalid_count} invalid date values "
+                                f"({invalid_count / len(df) * 100:.2f}%).{format_hint}"
+                            ),
                             'row': None,
-                            'field': col
+                            'field': col,
+                            'expected_format': expected_format
                         })
                     
                     if future_count > 0:
@@ -507,6 +513,29 @@ class EnhancedFileValidator:
                 continue
         
         return date_analysis
+
+    def _get_expected_date_format(self, field_name: str) -> Optional[str]:
+        """Get expected date format from mapping config, if provided."""
+        if not self.mapping_config:
+            return None
+
+        # Universal mapping format
+        for field in self.mapping_config.get('fields', []):
+            if field.get('name') == field_name and field.get('format'):
+                return str(field.get('format'))
+
+        # Legacy mapping format
+        for m in self.mapping_config.get('mappings', []):
+            if m.get('source_column') == field_name:
+                if m.get('format'):
+                    return str(m.get('format'))
+                for rule in m.get('validation_rules', []):
+                    if rule.get('type') == 'date_format':
+                        fmt = rule.get('parameters', {}).get('format')
+                        if fmt:
+                            return str(fmt)
+
+        return None
 
     def _detect_date_formats(self, series: pd.Series) -> List[str]:
         """Detect common date formats in the series."""

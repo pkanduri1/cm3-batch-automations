@@ -160,6 +160,7 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
         from src.parsers.enhanced_validator import EnhancedFileValidator
         from src.parsers.fixed_width_parser import FixedWidthParser
         from src.parsers.chunked_validator import ChunkedFileValidator
+        from src.parsers.chunked_parser import ChunkedFixedWidthParser
         from src.reporters.validation_reporter import ValidationReporter
         import json
 
@@ -167,17 +168,35 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
         if mapping:
             with open(mapping, 'r') as f:
                 mapping_config = json.load(f)
+            mapping_config['file_path'] = mapping
 
         # Chunked path
         if use_chunked:
             detector = FormatDetector()
             parser_class = detector.get_parser_class(file)
-            delimiter = '|' if parser_class != FixedWidthParser else '|'
+
+            chunk_parser = None
+            delimiter = '|'
+            if parser_class == FixedWidthParser and mapping_config and 'fields' in mapping_config:
+                field_specs = []
+                for field in mapping_config.get('fields', []):
+                    field_name = field['name']
+                    start = int(field['position']) - 1
+                    end = start + int(field['length'])
+                    field_specs.append((field_name, start, end))
+                chunk_parser = ChunkedFixedWidthParser(file, field_specs, chunk_size=chunk_size)
+            elif parser_class == FixedWidthParser and mapping_config and 'mappings' in mapping_config:
+                # Fallback for non-universal mappings (no fixed-width position metadata)
+                click.echo(click.style('Chunked fixed-width validation requires mapping with fields/position/length metadata.', fg='red'))
+                sys.exit(1)
+            else:
+                delimiter = '|'
 
             chunked_validator = ChunkedFileValidator(
                 file_path=file,
                 delimiter=delimiter,
                 chunk_size=chunk_size,
+                parser=chunk_parser,
             )
 
             if mapping_config:

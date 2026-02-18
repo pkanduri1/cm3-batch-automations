@@ -83,9 +83,13 @@ cm3-batch convert-rules -t config/templates/rules.xlsx -o config/rules.json
 
 ```bash
 # 1) Convert all mapping templates from mappings/csv -> config/mappings
+#    Strict mode: malformed rows fail conversion and produce row-level CSV reports
+#    under reports/template_validation/*.errors.csv
 ./scripts/run_convert_mappings.sh
 
 # 2) Convert all rules templates from rules/csv -> config/rules
+#    Strict mode: malformed rows fail conversion and produce row-level CSV reports
+#    under reports/template_validation/*.errors.csv
 ./scripts/run_convert_rules.sh
 
 # 3) Validate all data files based on manifest mapping
