@@ -82,23 +82,77 @@ class RuleEngine:
         
         return self.violations
     
+    def _apply_condition(self, rule: Dict, df: pd.DataFrame) -> pd.DataFrame:
+        """Apply optional `when` condition and return filtered DataFrame.
+
+        Supported formats:
+        - "field = VALUE"
+        - "field != VALUE"
+        - "field > VALUE", "field >= VALUE", "field < VALUE", "field <= VALUE"
+        - "field in (A,B,C)"
+        """
+        condition = rule.get('when')
+        if not condition:
+            return df
+
+        cond = condition.strip()
+
+        m_in = re.match(r'^([A-Za-z0-9_\-]+)\s+in\s*\((.+)\)$', cond, flags=re.IGNORECASE)
+        if m_in:
+            field = m_in.group(1)
+            raw_vals = m_in.group(2)
+            values = [v.strip().strip('"\'') for v in raw_vals.split(',') if v.strip()]
+            if field not in df.columns:
+                return df.iloc[0:0]
+            return df[df[field].astype(str).isin(values)]
+
+        m_cmp = re.match(r'^([A-Za-z0-9_\-]+)\s*(=|!=|>=|<=|>|<)\s*(.+)$', cond)
+        if not m_cmp:
+            return df
+
+        field, op, rhs = m_cmp.group(1), m_cmp.group(2), m_cmp.group(3).strip()
+        rhs = rhs.strip('"\'')
+
+        if field not in df.columns:
+            return df.iloc[0:0]
+
+        series = df[field]
+
+        # Try numeric compare first for numeric ops
+        if op in {'>', '>=', '<', '<='}:
+            left = pd.to_numeric(series, errors='coerce')
+            right = pd.to_numeric(pd.Series([rhs]), errors='coerce').iloc[0]
+            if pd.isna(right):
+                return df.iloc[0:0]
+            if op == '>':
+                return df[left > right]
+            if op == '>=':
+                return df[left >= right]
+            if op == '<':
+                return df[left < right]
+            return df[left <= right]
+
+        # string equality/inequality
+        left_str = series.astype(str)
+        if op == '=':
+            return df[left_str == rhs]
+        if op == '!=':
+            return df[left_str != rhs]
+
+        return df
+
     def _execute_rule(self, rule: Dict, df: pd.DataFrame) -> List[RuleViolation]:
-        """
-        Execute a single rule.
-        
-        Args:
-            rule: Rule configuration dictionary
-            df: DataFrame to validate
-            
-        Returns:
-            List of violations for this rule
-        """
+        """Execute a single rule."""
         rule_type = rule.get('type')
-        
+        scoped_df = self._apply_condition(rule, df)
+
+        if scoped_df.empty:
+            return []
+
         if rule_type == 'field_validation':
-            return self._validate_field(rule, df)
+            return self._validate_field(rule, scoped_df)
         elif rule_type == 'cross_field':
-            return self._validate_cross_field(rule, df)
+            return self._validate_cross_field(rule, scoped_df)
         else:
             raise ValueError(f"Unknown rule type: {rule_type}")
     
