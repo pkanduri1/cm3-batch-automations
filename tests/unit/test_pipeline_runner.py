@@ -58,6 +58,27 @@ def test_pipeline_runner_sqlloader_log_eval_negative():
         os.unlink(log.name)
 
 
+def test_pipeline_runner_output_validation_targets_dry_run():
+    p = _tmp_profile({
+        'source_system': 'SRC_X',
+        'stages': {
+            'ingest': {'enabled': False},
+            'sqlloader': {'enabled': False},
+            'java_batch': {'enabled': False},
+            'output_validation': {
+                'enabled': True,
+                'targets': [{'name': 'p327', 'file': 'a.txt', 'mapping': 'm.json'}]
+            }
+        }
+    })
+    try:
+        out = PipelineRunner(p).run(dry_run=True)
+        assert out['status'] == 'passed'
+        assert out['steps'][3]['status'] == 'dry_run'
+    finally:
+        os.unlink(p)
+
+
 def test_pipeline_runner_negative_missing_required_top_level():
     p = _tmp_profile({'stages': {}})
     try:
@@ -65,6 +86,6 @@ def test_pipeline_runner_negative_missing_required_top_level():
             PipelineRunner(p).run(dry_run=True)
             assert False, 'expected ValueError'
         except ValueError as e:
-            assert 'Missing required top-level keys' in str(e)
+            assert 'Missing required top-level key: source_system' in str(e)
     finally:
         os.unlink(p)

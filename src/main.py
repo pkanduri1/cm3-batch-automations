@@ -941,12 +941,13 @@ def extract(table, query, sql_file, output, limit, delimiter):
 @click.option('--dry-run/--run', default=True,
               help='Dry-run by default. Use --run to execute configured stage commands')
 @click.option('--output', '-o', help='Optional output JSON summary file')
-def run_pipeline(config_path, dry_run, output):
+@click.option('--summary-md', help='Optional output Markdown summary file')
+def run_pipeline(config_path, dry_run, output, summary_md):
     """Run source-system orchestration profile (scaffold)."""
     logger = setup_logger('cm3-batch', log_to_file=False)
     try:
-        import json
         from src.pipeline.runner import PipelineRunner
+        from src.pipeline.run_summary_reporter import write_pipeline_summary_json, write_pipeline_summary_markdown
 
         runner = PipelineRunner(config_path)
         summary = runner.run(dry_run=dry_run)
@@ -957,9 +958,12 @@ def run_pipeline(config_path, dry_run, output):
             click.echo(f"- {step.get('name')}: {step.get('status')} ({step.get('message', '')})")
 
         if output:
-            with open(output, 'w', encoding='utf-8') as f:
-                json.dump(summary, f, indent=2)
+            write_pipeline_summary_json(summary, output)
             click.echo(f"\n✓ Pipeline summary written: {output}")
+
+        if summary_md:
+            write_pipeline_summary_markdown(summary, summary_md)
+            click.echo(f"✓ Pipeline Markdown summary written: {summary_md}")
 
         if summary.get('status') == 'failed':
             sys.exit(1)

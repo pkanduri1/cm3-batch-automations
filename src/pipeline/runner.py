@@ -6,6 +6,8 @@ import json
 import subprocess
 from dataclasses import dataclass
 from .sqlloader_adapter import evaluate_sqlloader_stage
+from .output_regression_suite import run_output_regression_suite
+from .profile_validator import validate_source_profile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
@@ -40,14 +42,11 @@ class PipelineRunner:
         return self.profile
 
     def _validate_profile(self, profile: Dict[str, Any]) -> None:
-        missing = [k for k in self.REQUIRED_TOP_LEVEL if k not in profile]
-        if missing:
-            raise ValueError(f"Missing required top-level keys: {missing}")
+        issues = validate_source_profile(profile)
+        if issues:
+            raise ValueError("; ".join(issues))
 
         stages = profile.get("stages", {})
-        if not isinstance(stages, dict):
-            raise ValueError("'stages' must be an object")
-
         for key in ["ingest", "sqlloader", "java_batch", "output_validation"]:
             stages.setdefault(key, {"enabled": False})
 
@@ -71,6 +70,8 @@ class PipelineRunner:
             if dry_run:
                 if stage_name == 'sqlloader' and stage.get('log_file'):
                     msg = f"would evaluate sqlloader log: {stage.get('log_file')}"
+                elif stage_name == 'output_validation' and stage.get('targets'):
+                    msg = f"would run output regression suite for {len(stage.get('targets', []))} target(s)"
                 else:
                     msg = f"would run: {cmd}" if cmd else "enabled, no command configured"
                 results.append(StepResult(stage_name, "dry_run", msg))
@@ -82,6 +83,14 @@ class PipelineRunner:
                     results.append(StepResult(stage_name, 'passed', eval_out.get('message', ''), 0))
                     continue
                 results.append(StepResult(stage_name, 'failed', eval_out.get('message', ''), 3))
+                break
+
+            if stage_name == 'output_validation' and stage.get('targets'):
+                out = run_output_regression_suite(stage, dry_run=False)
+                if out['status'] == 'passed':
+                    results.append(StepResult(stage_name, 'passed', out.get('message', ''), 0))
+                    continue
+                results.append(StepResult(stage_name, 'failed', out.get('message', ''), 4))
                 break
 
             if not cmd:
