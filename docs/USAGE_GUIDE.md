@@ -353,6 +353,36 @@ Open the HTML report in your browser to explore:
 
 ---
 
+## Great Expectations (Checkpoint 1, BA-friendly)
+
+Run configurable, no-code/low-code data quality checks using CSV config files.
+
+### Templates
+
+- `config/templates/csv/gx_checkpoint1_targets_template.csv`
+- `config/templates/csv/gx_checkpoint1_expectations_template.csv`
+
+### Command
+
+```bash
+cm3-batch gx-checkpoint1 \
+  --targets config/gx/targets.sample.csv \
+  --expectations config/gx/expectations.sample.csv \
+  --output reports/gx_checkpoint1_summary.json
+```
+
+### What this validates
+
+- Schema and column order
+- Required field non-null
+- Key uniqueness
+- Allowed values
+- Numeric ranges
+- Row-count thresholds
+
+See `docs/GREAT_EXPECTATIONS_CHECKPOINT1.md` for full BA-oriented setup.
+
+---
 
 ## API Usage
 

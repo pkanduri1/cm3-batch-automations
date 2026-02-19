@@ -936,6 +936,44 @@ def extract(table, query, sql_file, output, limit, delimiter):
 
 
 
+@cli.command('gx-checkpoint1')
+@click.option('--targets', '-t', 'targets_csv', type=click.Path(exists=True), required=True,
+              help='CSV file listing data targets (BA-friendly).')
+@click.option('--expectations', '-e', 'expectations_csv', type=click.Path(exists=True), required=True,
+              help='CSV file listing expectations (BA-friendly).')
+@click.option('--output', '-o', 'output_json', type=click.Path(),
+              help='Optional path to write run summary JSON.')
+@click.option('--data-docs-dir', type=click.Path(),
+              help='Optional Great Expectations data docs directory.')
+def gx_checkpoint1(targets_csv, expectations_csv, output_json, data_docs_dir):
+    """Run Great Expectations Checkpoint 1 (schema/null/uniqueness/allowed values/range/row-count)."""
+    logger = setup_logger('cm3-batch', log_to_file=False)
+
+    try:
+        from src.quality.gx_checkpoint1 import run_checkpoint_1
+
+        summary = run_checkpoint_1(
+            targets_csv=targets_csv,
+            expectations_csv=expectations_csv,
+            output_json=output_json,
+            data_docs_dir=data_docs_dir,
+        )
+
+        if summary.get('success'):
+            click.echo(click.style('✓ Great Expectations Checkpoint 1 passed', fg='green'))
+        else:
+            click.echo(click.style('✗ Great Expectations Checkpoint 1 failed', fg='red'))
+            sys.exit(1)
+
+        click.echo(f"Targets run: {summary.get('targets_run', 0)}")
+        if output_json:
+            click.echo(f"Summary written to: {output_json}")
+
+    except Exception as e:
+        logger.error(f"Error running Great Expectations Checkpoint 1: {e}")
+        sys.exit(1)
+
+
 def main():
     """Main entry point."""
     cli()

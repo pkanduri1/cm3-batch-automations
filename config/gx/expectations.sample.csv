@@ -1,0 +1,7 @@
+target_id,expectation_type,column,column_list,value_set,min_value,max_value,mostly,notes,enabled
+p327_oracle_to_file,expect_table_columns_to_match_ordered_list,,ACCT-NUM|SRC-SYSTEM|CURR-CODE,,,,,Use mapping order,true
+p327_oracle_to_file,expect_column_values_to_not_be_null,ACCT-NUM,,,,,,,Primary key cannot be null,true
+p327_oracle_to_file,expect_column_values_to_be_unique,ACCT-NUM,,,,,,,Primary key should be unique,true
+p327_oracle_to_file,expect_column_values_to_be_in_set,CURR-CODE,,USD|CAD|EUR,,,,Allowed currencies,true
+p327_oracle_to_file,expect_column_values_to_be_between,BALANCE,,,0,999999999,0.99,BALANCE should be non-negative,true
+p327_oracle_to_file,expect_table_row_count_to_be_between,,,,1,5000000,,,Row count guardrail,true
