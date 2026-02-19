@@ -13,8 +13,8 @@ class TemplateConverter:
     # Expected column names in template
     REQUIRED_COLUMNS = ['Field Name', 'Data Type']
     OPTIONAL_COLUMNS = [
-        'Position', 'Length', 'Format', 'Required', 
-        'Description', 'Default Value', 'Target Name'
+        'Position', 'Length', 'Format', 'Required',
+        'Description', 'Default Value', 'Target Name', 'Valid Values'
     ]
     
     def __init__(self):
@@ -183,7 +183,21 @@ class TemplateConverter:
         field['validation_rules'] = []
         if field['required']:
             field['validation_rules'].append({"type": "not_null"})
-        
+
+        # Add allowed-values rule when provided
+        if 'Valid Values' in row and pd.notna(row['Valid Values']):
+            values_str = str(row['Valid Values']).strip()
+            if values_str:
+                # Support comma- or pipe-separated lists
+                delimiter = '|' if '|' in values_str else ','
+                valid_values = [v.strip() for v in values_str.split(delimiter) if v.strip()]
+                if valid_values:
+                    field['valid_values'] = valid_values
+                    field['validation_rules'].append({
+                        "type": "in_list",
+                        "parameters": {"values": valid_values}
+                    })
+
         return field
     
     def _normalize_data_type(self, data_type: str) -> str:
