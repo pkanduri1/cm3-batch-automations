@@ -126,6 +126,14 @@ cm3-batch parse -f data/samples/customers.txt --use-chunked --chunk-size 50000 -
 # Validate file with HTML report
 cm3-batch validate -f data/samples/customers.txt -m config/mappings/customer_mapping.json -o reports/validation.html --detailed
 
+# Strict fixed-width validation (record length + format + required fields)
+cm3-batch validate -f data/samples/p327_sample_errors.txt -m config/mappings/P327_full_in_sheet_order.json \
+  --strict-fixed-width --strict-level format --detailed -o reports/p327_sample_errors_validation.html
+
+# Optional strict split outputs (valid/invalid records)
+cm3-batch validate -f data/samples/p327_sample_errors.txt -m config/mappings/P327_full_in_sheet_order.json \
+  --strict-fixed-width --strict-output-dir reports/strict_split --basic
+
 # Validate with chunked processing (large files)
 cm3-batch validate -f data/samples/customers.txt -m config/mappings/customer_mapping.json --use-chunked -o reports/validation.json
 
@@ -210,6 +218,7 @@ Starter sample files checked in:
 - `mappings/csv/mapping_template.sample.csv`
 - `rules/csv/rules_template.sample.csv`
 - `config/validation_manifest.sample.csv`
+- `data/samples/p327_sample_errors.txt` (demonstrates strict fixed-width errors in report)
 
 Sample manifest columns:
 
