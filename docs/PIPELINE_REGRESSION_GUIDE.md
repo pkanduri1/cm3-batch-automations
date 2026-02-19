@@ -17,7 +17,10 @@ CM3 integration:
 
 ## 2) Pipeline Profile
 
-Use `config/pipeline/source_profile.sample.json` as starter.
+Use these starter profiles:
+- `config/pipeline/source_profile.sample.json` (generic)
+- `config/pipeline/source_profile.SRC_A.sample.json`
+- `config/pipeline/source_profile.SRC_B.sample.json`
 
 Key sections:
 - `source_system`: logical source key (e.g. `SRC_A`)
@@ -100,6 +103,11 @@ Recommended CI steps:
    - `reports/*_compare.html`
    - `reports/pipeline_run.json`
    - `reports/pipeline_run.md`
+
+A matrix-based GitHub Actions starter is provided:
+- `.github/workflows/pipeline-regression.yml`
+
+It runs pipeline profile dry-runs in parallel per source profile and uploads artifacts for each source.
 
 ## 7) Regression Strategy
 
