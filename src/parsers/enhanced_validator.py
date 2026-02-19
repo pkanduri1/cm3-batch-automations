@@ -208,6 +208,7 @@ class EnhancedFileValidator:
                     flen = int(f.get('length', 0))
                     required = bool(f.get('required', False))
                     fmt = f.get('format')
+                    valid_values = f.get('valid_values', [])
 
                     start = pos - 1
                     segment = line[start:start + flen] if start < len(line) else ''
@@ -251,6 +252,28 @@ class EnhancedFileValidator:
                         self.errors.append(issue)
                         if len(result['sample_issues']) < 50:
                             result['sample_issues'].append(issue)
+
+                    # Allowed-values check: optional empty is allowed, but non-empty must be valid
+                    if valid_values:
+                        actual_value = segment.strip()
+                        if actual_value and actual_value not in valid_values:
+                            row_has_error = True
+                            issue = {
+                                'severity': 'error',
+                                'category': 'strict_fixed_width',
+                                'message': (
+                                    f"Field '{name}' has invalid value at row {row_idx}. "
+                                    f"Expected one of: {valid_values}"
+                                ),
+                                'row': row_idx,
+                                'field': name,
+                                'expected_values': valid_values,
+                                'actual': actual_value,
+                                'raw_value': segment
+                            }
+                            self.errors.append(issue)
+                            if len(result['sample_issues']) < 50:
+                                result['sample_issues'].append(issue)
 
                 if row_has_error:
                     result['invalid_records'] += 1

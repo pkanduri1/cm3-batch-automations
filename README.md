@@ -88,6 +88,21 @@ powershell -ExecutionPolicy Bypass -File scripts/setup_vscode.ps1
 
 ### CLI Usage
 
+#### Full CLI command list
+
+```bash
+cm3-batch --help
+cm3-batch detect --help
+cm3-batch parse --help
+cm3-batch validate --help
+cm3-batch compare --help
+cm3-batch reconcile --help
+cm3-batch reconcile-all --help
+cm3-batch extract --help
+cm3-batch convert-rules --help
+cm3-batch info --help
+```
+
 ```bash
 # Install dependencies (if not using setup scripts)
 pip install -r requirements.txt
@@ -205,6 +220,28 @@ Sample manifest columns:
 - `chunked` (optional)
 - `chunk_size` (optional)
 
+### PowerShell versions of Bash scripts
+
+For every primary Bash automation script, a PowerShell version is available:
+
+- `scripts/run_convert_mappings.sh` → `scripts/run_convert_mappings.ps1`
+- `scripts/run_convert_rules.sh` → `scripts/run_convert_rules.ps1`
+- `scripts/run_validate_all.sh` → `scripts/run_validate_all.ps1`
+- `scripts/generate_p327_200k.sh` → `scripts/generate_p327_200k.ps1`
+- `scripts/compare_p327.sh` → `scripts/compare_p327.ps1`
+- `scripts/setup_mac.sh` → `scripts/setup_mac.ps1`
+- `scripts/setup_rhel.sh` → `scripts/setup_rhel.ps1`
+- `scripts/deploy_rhel_code_only.sh` → `scripts/deploy_rhel_code_only.ps1`
+
+Example usage:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_convert_mappings.ps1
+powershell -ExecutionPolicy Bypass -File scripts/run_convert_rules.ps1
+powershell -ExecutionPolicy Bypass -File scripts/run_validate_all.ps1 -Manifest config/validation_manifest.csv
+powershell -ExecutionPolicy Bypass -File scripts/generate_p327_200k.ps1 -TargetCount 200000
+```
+
 ### Business Rule Validation (Build Gate Friendly)
 
 You can run validation with business rules JSON and fail builds when violations are found:
@@ -258,6 +295,9 @@ python src/config/universal_mapping_parser.py \
 Use standardized CSV templates:
 - `config/templates/csv/mapping_template.standard.csv`
 - `config/templates/csv/business_rules_template.standard.csv`
+
+`mapping_template.standard.csv` now supports an optional **Valid Values** column.
+When provided, validator enforces that non-empty field values must be in that list.
 
 Generate JSON artifacts from CSV in one command:
 
