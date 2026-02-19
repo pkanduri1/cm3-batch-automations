@@ -359,6 +359,7 @@ python src/config/universal_mapping_parser.py \
 Use standardized CSV templates:
 - `config/templates/csv/mapping_template.standard.csv`
 - `config/templates/csv/business_rules_template.standard.csv`
+- `config/templates/csv/business_rules_template.ba_friendly.csv` (for BAs/testers)
 
 `mapping_template.standard.csv` now supports an optional **Valid Values** column.
 When provided, validator enforces that non-empty field values must be in that list.
