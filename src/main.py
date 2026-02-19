@@ -935,6 +935,38 @@ def extract(table, query, sql_file, output, limit, delimiter):
         sys.exit(1)
 
 
+@cli.command('run-pipeline')
+@click.option('--config', 'config_path', required=True, type=click.Path(exists=True),
+              help='Source-system pipeline profile JSON')
+@click.option('--dry-run/--run', default=True,
+              help='Dry-run by default. Use --run to execute configured stage commands')
+@click.option('--output', '-o', help='Optional output JSON summary file')
+def run_pipeline(config_path, dry_run, output):
+    """Run source-system orchestration profile (scaffold)."""
+    logger = setup_logger('cm3-batch', log_to_file=False)
+    try:
+        import json
+        from src.pipeline.runner import PipelineRunner
+
+        runner = PipelineRunner(config_path)
+        summary = runner.run(dry_run=dry_run)
+
+        click.echo(f"Source: {summary.get('source_system')}")
+        click.echo(f"Status: {summary.get('status')}")
+        for step in summary.get('steps', []):
+            click.echo(f"- {step.get('name')}: {step.get('status')} ({step.get('message', '')})")
+
+        if output:
+            with open(output, 'w', encoding='utf-8') as f:
+                json.dump(summary, f, indent=2)
+            click.echo(f"\n✓ Pipeline summary written: {output}")
+
+        if summary.get('status') == 'failed':
+            sys.exit(1)
+    except Exception as e:
+        logger.error(f"Error running pipeline profile: {e}")
+        sys.exit(1)
+
 
 def main():
     """Main entry point."""
