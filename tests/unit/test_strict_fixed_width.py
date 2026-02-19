@@ -56,6 +56,23 @@ def test_strict_result_contains_invalid_row_numbers():
         os.unlink(temp_file)
 
 
+def test_issue_code_summary_counts_strict_errors():
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        f.write('1234A\n')
+        f.write('5678Z\n')
+        temp_file = f.name
+
+    try:
+        parser = FixedWidthParser(temp_file, [('ACCOUNT', 0, 4), ('STATUS', 4, 5)])
+        validator = EnhancedFileValidator(parser, _make_mapping())
+        result = validator.validate(detailed=False, strict_fixed_width=True, strict_level='format')
+
+        summary = result.get('issue_code_summary', {})
+        assert summary.get('FW_VAL_001', 0) == 1
+    finally:
+        os.unlink(temp_file)
+
+
 def test_strict_format_checks_valid_values_for_non_empty_optional_fields():
     with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
         f.write('1234A\n')

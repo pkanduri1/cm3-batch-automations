@@ -824,6 +824,15 @@ class EnhancedFileValidator:
             ]
         }
 
+    def _build_issue_code_summary(self) -> Dict[str, int]:
+        """Build summary counts by stable issue code."""
+        counts: Dict[str, int] = {}
+        for issue in (self.errors + self.warnings + self.info):
+            code = issue.get('code') if isinstance(issue, dict) else None
+            if code:
+                counts[code] = counts.get(code, 0) + 1
+        return counts
+
     def _build_result(self, valid: bool, file_metadata: Dict[str, Any], 
                      df: Optional[pd.DataFrame], **kwargs) -> Dict[str, Any]:
         """Build comprehensive validation result."""
@@ -836,7 +845,8 @@ class EnhancedFileValidator:
             'info': self.info,
             'error_count': len(self.errors),
             'warning_count': len(self.warnings),
-            'info_count': len(self.info)
+            'info_count': len(self.info),
+            'issue_code_summary': self._build_issue_code_summary()
         }
         
         # Add optional components
