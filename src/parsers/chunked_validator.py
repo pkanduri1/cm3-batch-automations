@@ -7,13 +7,16 @@ from .chunked_parser import ChunkedFileParser
 from ..utils.progress import ProgressTracker
 from ..utils.memory_monitor import MemoryMonitor
 from ..utils.logger import get_logger
+from ..validators.rule_engine import RuleEngine
+import json
 
 
 class ChunkedFileValidator:
     """Validate large files in chunks."""
     
     def __init__(self, file_path: str, delimiter: str = '|',
-                 chunk_size: int = 100000, parser: Optional[ChunkedFileParser] = None):
+                 chunk_size: int = 100000, parser: Optional[ChunkedFileParser] = None,
+                 rules_config_path: Optional[str] = None):
         """Initialize chunked validator.
         
         Args:
@@ -28,6 +31,11 @@ class ChunkedFileValidator:
         self.parser = parser
         self.logger = get_logger(__name__)
         self.memory_monitor = MemoryMonitor()
+        self.rule_engine = None
+        if rules_config_path:
+            with open(rules_config_path, 'r', encoding='utf-8') as f:
+                rules_cfg = json.load(f)
+            self.rule_engine = RuleEngine(rules_cfg)
     
     def validate(self, show_progress: bool = True) -> Dict[str, Any]:
         """Validate file in chunks.
@@ -63,11 +71,23 @@ class ChunkedFileValidator:
         seen_rows = set()  # For duplicate detection (memory-limited)
         max_seen_rows = 100000  # Limit duplicate tracking
         
+        # Business-rule aggregation (optional)
+        business_rule_violations = []
+        business_rule_error = None
+        business_rule_stats = {
+            'total_violations': 0,
+            'violations_by_severity': {'error': 0, 'warning': 0, 'info': 0}
+        }
+
         # Parse and validate chunks
         progress = ProgressTracker(parser.count_rows(), "Validating") if show_progress else None
         
         try:
             for chunk_num, chunk in enumerate(parser.parse_chunks(), 1):
+                # Set global index so rule violations report global row numbers
+                chunk = chunk.copy()
+                chunk.index = range(total_rows, total_rows + len(chunk))
+
                 # Validate chunk
                 chunk_errors, chunk_warnings, chunk_stats = self._validate_chunk(
                     chunk, chunk_num, seen_rows, max_seen_rows
@@ -75,7 +95,33 @@ class ChunkedFileValidator:
                 
                 errors.extend(chunk_errors)
                 warnings.extend(chunk_warnings)
-                
+
+                # Execute business rules on each chunk (optional)
+                if self.rule_engine:
+                    try:
+                        chunk_violations = self.rule_engine.validate(chunk)
+                        business_rule_violations.extend([v.to_dict() for v in chunk_violations])
+                        business_rule_stats['total_violations'] += len(chunk_violations)
+                        for v in chunk_violations:
+                            sev = v.severity if v.severity in business_rule_stats['violations_by_severity'] else 'info'
+                            business_rule_stats['violations_by_severity'][sev] += 1
+                            msg = {
+                                'severity': v.severity,
+                                'category': 'business_rule',
+                                'message': v.message,
+                                'row': v.row_number,
+                                'field': v.field,
+                                'rule_id': v.rule_id,
+                                'rule_name': v.rule_name,
+                                'issue_code': v.issue_code,
+                            }
+                            if v.severity == 'error':
+                                errors.append(msg)
+                            elif v.severity == 'warning':
+                                warnings.append(msg)
+                    except Exception as e:
+                        business_rule_error = str(e)
+
                 # Update statistics
                 total_rows += len(chunk)
                 duplicate_count += chunk_stats['duplicates']
@@ -129,12 +175,30 @@ class ChunkedFileValidator:
             )
             self.memory_monitor.log_memory_usage("validation complete")
             
+            business_rules = {'enabled': False, 'violations': [], 'statistics': {}}
+            if self.rule_engine:
+                affected_rows = len({v.get('row_number') for v in business_rule_violations if isinstance(v, dict)})
+                compliance_rate = ((total_rows - affected_rows) / total_rows * 100) if total_rows else 100.0
+                stats = {
+                    **business_rule_stats,
+                    'affected_rows': affected_rows,
+                    'compliance_rate': round(compliance_rate, 2)
+                }
+                business_rules = {
+                    'enabled': business_rule_error is None,
+                    'violations': business_rule_violations,
+                    'statistics': stats,
+                }
+                if business_rule_error:
+                    business_rules['error'] = business_rule_error
+
             return {
                 'valid': len(errors) == 0,
                 'errors': errors,
                 'warnings': warnings,
                 'file_path': self.file_path,
                 'total_rows': total_rows,
+                'business_rules': business_rules,
                 'statistics': {
                     'null_counts': total_nulls,
                     'empty_string_counts': total_empty_strings,
@@ -152,7 +216,8 @@ class ChunkedFileValidator:
                 'valid': False,
                 'errors': [f"Validation failed: {str(e)}"],
                 'warnings': warnings,
-                'file_path': self.file_path
+                'file_path': self.file_path,
+                'business_rules': {'enabled': False, 'violations': [], 'statistics': {}, 'error': str(e)}
             }
     
     def _validate_chunk(self, chunk: pd.DataFrame, chunk_num: int,
@@ -263,5 +328,6 @@ class ChunkedFileValidator:
             'actual_columns': list(actual_columns),
             'missing_required': list(missing_required),
             'unexpected': list(unexpected),
-            'statistics': basic_result.get('statistics', {})
+            'statistics': basic_result.get('statistics', {}),
+            'business_rules': basic_result.get('business_rules', {'enabled': False, 'violations': [], 'statistics': {}})
         }

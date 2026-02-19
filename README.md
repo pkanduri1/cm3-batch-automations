@@ -40,7 +40,7 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 | Schema checks (expected/required columns) | ✅ | ✅ | ✅ |
 | Fixed-width exact record-length enforcement | ❌ | ✅ | ❌ |
 | Fixed-width format/valid-values strict checks | ❌ | ✅ | ❌ |
-| Business rules execution | ✅ | ✅ | ❌ (currently reported as not executed) |
+| Business rules execution | ✅ | ✅ | ✅ |
 | HTML report generation | ✅ | ✅ | ✅ |
 | Performance metadata (`elapsed_seconds`, `rows_per_second`) | Optional | Optional | ✅ |
 
@@ -54,7 +54,6 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 
 ### Known Limitations (Current)
 
-- Chunked mode does not execute business-rule engine yet; report shows explicit note.
 - Strict fixed-width checks run in non-chunked path.
 - BA `when` expressions support simple forms (`=`, `!=`, `>`, `>=`, `<`, `<=`, `in (...)`).
 

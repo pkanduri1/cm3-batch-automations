@@ -207,6 +207,7 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
                 delimiter=delimiter,
                 chunk_size=chunk_size,
                 parser=chunk_parser,
+                rules_config_path=rules,
             )
 
             if mapping_config:

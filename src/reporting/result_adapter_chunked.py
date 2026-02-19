@@ -105,10 +105,10 @@ def adapt_chunked_validation_result(result: Dict[str, Any], file_path: str, mapp
             'mapping_details': {'mapping_file': mapping},
             'affected_rows_summary': {'total_affected_rows': 0, 'affected_row_pct': 0, 'top_problematic_rows': []}
         },
-        'business_rules': {
+        'business_rules': result.get('business_rules', {
             'enabled': False,
             'violations': [],
             'statistics': {},
             'error': 'Not executed in chunked mode'
-        }
+        })
     }
