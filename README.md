@@ -33,6 +33,31 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 - **Chunked Validation HTML Reports**: Chunked mode now supports full HTML report generation
 - **Chunked Performance Metrics**: Includes elapsed time, rows/sec, chunk size in validation metadata
 
+### Validation Mode Truth Table
+
+| Capability | Standard Validate | Standard + Strict | Chunked Validate |
+|---|---:|---:|---:|
+| Schema checks (expected/required columns) | ✅ | ✅ | ✅ |
+| Fixed-width exact record-length enforcement | ❌ | ✅ | ❌ |
+| Fixed-width format/valid-values strict checks | ❌ | ✅ | ❌ |
+| Business rules execution | ✅ | ✅ | ❌ (currently reported as not executed) |
+| HTML report generation | ✅ | ✅ | ✅ |
+| Performance metadata (`elapsed_seconds`, `rows_per_second`) | Optional | Optional | ✅ |
+
+### BA-Friendly Business Rules Quick Flow
+
+1. Fill `config/templates/csv/business_rules_template.ba_friendly.csv`.
+2. Convert templates:
+   - `python scripts/bulk_convert_rules.py --input-dir rules/csv --output-dir config/rules`
+3. Run validation with rules:
+   - `python -m src.main validate -f <data-file> -m <mapping.json> -r <rules.json> -o reports/validation.html`
+
+### Known Limitations (Current)
+
+- Chunked mode does not execute business-rule engine yet; report shows explicit note.
+- Strict fixed-width checks run in non-chunked path.
+- BA `when` expressions support simple forms (`=`, `!=`, `>`, `>=`, `<`, `<=`, `in (...)`).
+
 ### Advanced Features
 - **Configurable**: JSON-based configuration for different environments
 - **Transaction Management**: Full transaction support with rollback and savepoints

@@ -359,6 +359,17 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
 
                 click.echo(f"Strict outputs written: {valid_path}, {invalid_path}")
 
+        # Ensure standard-mode run metadata is always present for downstream reports
+        appendix = result.setdefault('appendix', {}) if isinstance(result, dict) else {}
+        validation_config = appendix.setdefault('validation_config', {}) if isinstance(appendix, dict) else {}
+        if isinstance(validation_config, dict):
+            validation_config.setdefault('mode', 'standard')
+            validation_config['mapping_file'] = mapping
+            validation_config['rules_file'] = rules
+            validation_config['strict_fixed_width'] = bool(strict_fixed_width)
+            validation_config['strict_level'] = strict_level if strict_fixed_width else None
+            validation_config.setdefault('validation_timestamp', result.get('timestamp'))
+
         if result['valid']:
             click.echo(click.style('✓ File is valid', fg='green'))
         else:
