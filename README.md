@@ -68,6 +68,9 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 
 ## Quick Start
 
+For Java multi-step ETL regression orchestration, see:
+- `docs/PIPELINE_REGRESSION_GUIDE.md`
+
 ### First-Time Setup (Beginner Friendly)
 
 ### Restarting / Refreshing Virtual Environment After Code Changes

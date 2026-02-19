@@ -19,7 +19,19 @@
     },
     "output_validation": {
       "enabled": true,
-      "command": "echo Output validation placeholder"
+      "targets": [
+        {
+          "name": "p327",
+          "file": "outputs/current/SRC_A/p327.txt",
+          "mapping": "config/mappings/P327_full_in_sheet_order.json",
+          "rules": "config/rules/p327_business_rules.json",
+          "strict_fixed_width": true,
+          "strict_level": "all",
+          "report": "reports/SRC_A_p327_validation.html",
+          "baseline_file": "outputs/baseline/SRC_A/p327.txt",
+          "compare_report": "reports/SRC_A_p327_compare.html"
+        }
+      ]
     }
   }
 }
