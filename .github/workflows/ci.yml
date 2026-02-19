@@ -27,6 +27,14 @@ jobs:
         run: |
           pytest -q -o addopts='' tests/unit
 
+      - name: Integration parity tests
+        run: |
+          pytest -q -o addopts='' tests/integration
+
+      - name: Contract smoke tests
+        run: |
+          pytest -q -o addopts='' tests/unit/test_contracts_v1.py
+
       - name: Build Sphinx docs
         run: |
           sphinx-build -b html docs/sphinx docs/sphinx/_build/html
