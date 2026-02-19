@@ -35,6 +35,9 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 
 ## Quick Start
 
+For Java multi-step ETL regression orchestration, see:
+- `docs/PIPELINE_REGRESSION_GUIDE.md`
+
 ### First-Time Setup (Beginner Friendly)
 
 **Important:** Open your terminal or command prompt and navigate to the **project root directory** before running these commands.

@@ -1,0 +1,53 @@
+name: Pipeline Regression (Source Matrix)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'config/pipeline/**'
+      - 'config/mappings/**'
+      - 'config/rules/**'
+      - 'tests/**'
+      - '.github/workflows/pipeline-regression.yml'
+
+jobs:
+  source-regression:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        source_profile:
+          - config/pipeline/source_profile.SRC_A.sample.json
+          - config/pipeline/source_profile.SRC_B.sample.json
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install -e .
+
+      - name: Unit tests (pipeline modules)
+        run: |
+          pytest -q -o addopts='' tests/unit/test_pipeline_runner.py tests/unit/test_profile_validator.py tests/unit/test_sqlloader_adapter.py tests/unit/test_output_regression_suite.py tests/unit/test_run_summary_reporter.py
+
+      - name: Dry-run source pipeline profile
+        run: |
+          mkdir -p reports
+          python -m src.main run-pipeline --config "${{ matrix.source_profile }}" --dry-run -o "reports/$(basename ${{ matrix.source_profile }} .json)_dryrun.json" --summary-md "reports/$(basename ${{ matrix.source_profile }} .json)_dryrun.md"
+
+      - name: Upload pipeline dry-run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-regression-${{ matrix.source_profile }}
+          path: reports/*dryrun.*

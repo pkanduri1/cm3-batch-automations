@@ -894,6 +894,74 @@ def extract(table, query, sql_file, output, limit, delimiter):
         sys.exit(1)
 
 
+@cli.command('generate-oracle-expected')
+@click.option('--manifest', 'manifest_path', required=True, type=click.Path(exists=True),
+              help='Oracle expected-generation manifest JSON')
+@click.option('--dry-run/--run', default=True,
+              help='Dry-run by default. Use --run to execute Oracle extraction jobs')
+@click.option('--output', '-o', help='Optional output JSON summary file')
+def generate_oracle_expected(manifest_path, dry_run, output):
+    """Generate expected target files from Oracle transformation SQL (cm3int)."""
+    logger = setup_logger('cm3-batch', log_to_file=False)
+    try:
+        import json
+        from src.pipeline.oracle_expected_generator import load_oracle_manifest, generate_expected_from_oracle
+
+        manifest = load_oracle_manifest(manifest_path)
+        summary = generate_expected_from_oracle(manifest, dry_run=dry_run)
+
+        click.echo(f"Status: {summary.get('status')}")
+        for j in summary.get('jobs', []):
+            click.echo(f"- {j.get('name')}: {j.get('status')}")
+
+        if output:
+            with open(output, 'w', encoding='utf-8') as f:
+                json.dump(summary, f, indent=2)
+            click.echo(f"\n✓ Oracle expected summary written: {output}")
+
+        if summary.get('status') == 'failed':
+            sys.exit(1)
+    except Exception as e:
+        logger.error(f"Error generating oracle expected files: {e}")
+        sys.exit(1)
+
+
+@cli.command('run-pipeline')
+@click.option('--config', 'config_path', required=True, type=click.Path(exists=True),
+              help='Source-system pipeline profile JSON')
+@click.option('--dry-run/--run', default=True,
+              help='Dry-run by default. Use --run to execute configured stage commands')
+@click.option('--output', '-o', help='Optional output JSON summary file')
+@click.option('--summary-md', help='Optional output Markdown summary file')
+def run_pipeline(config_path, dry_run, output, summary_md):
+    """Run source-system orchestration profile (scaffold)."""
+    logger = setup_logger('cm3-batch', log_to_file=False)
+    try:
+        from src.pipeline.runner import PipelineRunner
+        from src.pipeline.run_summary_reporter import write_pipeline_summary_json, write_pipeline_summary_markdown
+
+        runner = PipelineRunner(config_path)
+        summary = runner.run(dry_run=dry_run)
+
+        click.echo(f"Source: {summary.get('source_system')}")
+        click.echo(f"Status: {summary.get('status')}")
+        for step in summary.get('steps', []):
+            click.echo(f"- {step.get('name')}: {step.get('status')} ({step.get('message', '')})")
+
+        if output:
+            write_pipeline_summary_json(summary, output)
+            click.echo(f"\n✓ Pipeline summary written: {output}")
+
+        if summary_md:
+            write_pipeline_summary_markdown(summary, summary_md)
+            click.echo(f"✓ Pipeline Markdown summary written: {summary_md}")
+
+        if summary.get('status') == 'failed':
+            sys.exit(1)
+    except Exception as e:
+        logger.error(f"Error running pipeline profile: {e}")
+        sys.exit(1)
+
 
 def main():
     """Main entry point."""
