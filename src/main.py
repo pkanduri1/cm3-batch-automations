@@ -322,6 +322,10 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
             reporter.generate(result, output)
             click.echo(f"\n✓ Validation report generated: {output}")
 
+        # Align exit behavior with chunked validation path and CI expectations.
+        if not result['valid']:
+            sys.exit(1)
+
     except Exception as e:
         logger.error(f"Error validating file: {e}")
         import traceback
