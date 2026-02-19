@@ -151,7 +151,9 @@ def parse(file, mapping, format, output, use_chunked, chunk_size):
 @click.option('--use-chunked', is_flag=True, help='Use chunked processing for large files')
 @click.option('--chunk-size', default=100000, help='Chunk size for large files (default: 100000)')
 @click.option('--progress/--no-progress', default=True, help='Show progress bar')
-def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress):
+@click.option('--strict-fixed-width', is_flag=True,
+              help='Strict fixed-width checks: exact record length + format validation per row')
+def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress, strict_fixed_width):
     """Validate file format and content."""
     logger = setup_logger('cm3-batch', log_to_file=False)
 
@@ -172,6 +174,8 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
 
         # Chunked path
         if use_chunked:
+            if strict_fixed_width:
+                click.echo(click.style('Note: --strict-fixed-width is applied in non-chunked validation path. Running chunked validation without strict row checks.', fg='yellow'))
             detector = FormatDetector()
             parser_class = detector.get_parser_class(file)
 
@@ -250,7 +254,60 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
                         json.dump(result, f, indent=2)
                     click.echo(f"\n✓ Chunked validation JSON report generated: {output}")
                 else:
-                    click.echo(click.style("\nChunked validation currently supports JSON output only. Use -o <file>.json", fg='yellow'))
+                    # Adapt chunked results into reporter-friendly structure
+                    file_metadata = {
+                        'file_path': file,
+                        'file_name': file.split('/')[-1],
+                        'exists': True,
+                    }
+                    quality_metrics = {
+                        'total_rows': result.get('total_rows', 0),
+                        'total_columns': len(result.get('actual_columns', [])) if result.get('actual_columns') else 0,
+                        'quality_score': 0,
+                        'completeness_pct': 0,
+                        'uniqueness_pct': 0,
+                    }
+                    html_result = {
+                        'valid': result.get('valid', False),
+                        'timestamp': result.get('timestamp'),
+                        'file_metadata': file_metadata,
+                        'errors': [
+                            {'message': e, 'severity': 'error', 'category': 'chunked'} if isinstance(e, str) else e
+                            for e in result.get('errors', [])
+                        ],
+                        'warnings': [
+                            {'message': w, 'severity': 'warning', 'category': 'chunked'} if isinstance(w, str) else w
+                            for w in result.get('warnings', [])
+                        ],
+                        'info': result.get('info', []),
+                        'error_count': len(result.get('errors', [])),
+                        'warning_count': len(result.get('warnings', [])),
+                        'info_count': len(result.get('info', [])),
+                        'quality_metrics': quality_metrics,
+                        'duplicate_analysis': {
+                            'total_rows': result.get('total_rows', 0),
+                            'unique_rows': max(result.get('total_rows', 0) - result.get('statistics', {}).get('duplicate_count', 0), 0),
+                            'duplicate_rows': result.get('statistics', {}).get('duplicate_count', 0),
+                            'duplicate_pct': 0,
+                            'top_duplicate_counts': []
+                        },
+                        'field_analysis': {},
+                        'date_analysis': {},
+                        'data_profile': {
+                            'row_count': result.get('total_rows', 0),
+                            'column_count': len(result.get('actual_columns', [])) if result.get('actual_columns') else 0,
+                            'columns': result.get('actual_columns', []),
+                        },
+                        'appendix': {
+                            'validation_config': {'mode': 'chunked'},
+                            'mapping_details': {'mapping_file': mapping},
+                            'affected_rows_summary': {'total_affected_rows': 0, 'affected_row_pct': 0, 'top_problematic_rows': []}
+                        },
+                        'business_rules': {'enabled': False, 'violations': [], 'statistics': {}}
+                    }
+                    reporter = ValidationReporter()
+                    reporter.generate(html_result, output)
+                    click.echo(f"\n✓ Chunked validation HTML report generated: {output}")
 
             if not result['valid']:
                 sys.exit(1)
@@ -274,7 +331,7 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
             parser = parser_class(file)
 
         validator = EnhancedFileValidator(parser, mapping_config, rules)
-        result = validator.validate(detailed=detailed)
+        result = validator.validate(detailed=detailed, strict_fixed_width=strict_fixed_width)
 
         if result['valid']:
             click.echo(click.style('✓ File is valid', fg='green'))

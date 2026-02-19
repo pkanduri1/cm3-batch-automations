@@ -1,6 +1,7 @@
 """Enhanced file validation with data profiling and quality metrics."""
 
 import os
+import re
 from typing import List, Dict, Any, Optional
 import pandas as pd
 import numpy as np
@@ -32,7 +33,7 @@ class EnhancedFileValidator:
         if rules_config_path:
             self.rule_engine = self._load_rule_engine(rules_config_path)
 
-    def validate(self, detailed: bool = True) -> Dict[str, Any]:
+    def validate(self, detailed: bool = True, strict_fixed_width: bool = False) -> Dict[str, Any]:
         """Perform comprehensive file validation with data profiling.
         
         Args:
@@ -62,6 +63,10 @@ class EnhancedFileValidator:
         # Parse and analyze data
         try:
             df = self.parser.parse()
+
+            strict_fixed_width_result = None
+            if strict_fixed_width:
+                strict_fixed_width_result = self._validate_strict_fixed_width()
             
             # Data quality metrics
             quality_metrics = self._calculate_quality_metrics(df)
@@ -109,8 +114,148 @@ class EnhancedFileValidator:
             date_analysis=date_analysis,
             data_profile=data_profile,
             appendix=appendix_data,
-            business_rules=business_rules_result
+            business_rules=business_rules_result,
+            strict_fixed_width=strict_fixed_width_result
         )
+
+    def _normalize_cobol_date_format(self, fmt: str) -> str:
+        """Normalize common COBOL date tokens to strptime-style formats."""
+        if not fmt:
+            return fmt
+        f = fmt.upper()
+        # Order matters
+        f = f.replace('YYYY', '%Y').replace('CCYY', '%Y')
+        f = f.replace('YY', '%y')
+        f = f.replace('MM', '%m')
+        f = f.replace('DD', '%d')
+        return f
+
+    def _format_to_regex(self, fmt: str) -> Optional[str]:
+        """Convert subset of COBOL/picture formats to regex."""
+        if not fmt:
+            return None
+        fmt = fmt.strip().upper()
+
+        if fmt in {'CCYYMMDD', 'YYYYMMDD'}:
+            return r'^\d{8}$'
+
+        # Examples: 9(5), +9(12), +9(12)V9(6)
+        m = re.fullmatch(r'\+?9\((\d+)\)(V9\((\d+)\))?', fmt)
+        if m:
+            int_digits = int(m.group(1))
+            frac_digits = int(m.group(3)) if m.group(3) else 0
+            sign = r'[+-]' if fmt.startswith('+') else ''
+            return f'^{sign}\\d{{{int_digits + frac_digits}}}$'
+
+        return None
+
+    def _validate_strict_fixed_width(self) -> Dict[str, Any]:
+        """Strict fixed-width validation: record length + per-field format checks."""
+        result = {
+            'enabled': False,
+            'total_records_checked': 0,
+            'invalid_records': 0,
+            'record_length_errors': 0,
+            'format_errors': 0,
+            'sample_issues': []
+        }
+
+        if not self.mapping_config or 'fields' not in self.mapping_config:
+            self.warnings.append({
+                'severity': 'warning',
+                'category': 'strict_fixed_width',
+                'message': 'Strict fixed-width requested but mapping has no fields metadata; skipping strict checks.',
+                'row': None,
+                'field': None
+            })
+            return result
+
+        fields = self.mapping_config.get('fields', [])
+        if not fields:
+            return result
+
+        result['enabled'] = True
+
+        expected_record_length = self.mapping_config.get('total_record_length')
+        if not expected_record_length:
+            expected_record_length = max(int(f.get('position', 1)) - 1 + int(f.get('length', 0)) for f in fields)
+
+        with open(self.parser.file_path, 'r', encoding='utf-8', errors='replace') as fh:
+            for row_idx, raw in enumerate(fh, start=1):
+                line = raw.rstrip('\n')
+                result['total_records_checked'] += 1
+                row_has_error = False
+
+                if len(line) != int(expected_record_length):
+                    result['record_length_errors'] += 1
+                    row_has_error = True
+                    issue = {
+                        'severity': 'error',
+                        'category': 'strict_fixed_width',
+                        'message': f"Record length mismatch at row {row_idx}: expected {expected_record_length}, got {len(line)}",
+                        'row': row_idx,
+                        'field': None,
+                        'expected': expected_record_length,
+                        'actual': len(line)
+                    }
+                    self.errors.append(issue)
+                    if len(result['sample_issues']) < 50:
+                        result['sample_issues'].append(issue)
+
+                for f in fields:
+                    name = f.get('name')
+                    pos = int(f.get('position', 1))
+                    flen = int(f.get('length', 0))
+                    required = bool(f.get('required', False))
+                    fmt = f.get('format')
+
+                    start = pos - 1
+                    segment = line[start:start + flen] if start < len(line) else ''
+
+                    # Preserve spaces; empty means all spaces or blank segment
+                    is_empty = (segment.strip() == '')
+                    if is_empty:
+                        if required:
+                            row_has_error = True
+                            issue = {
+                                'severity': 'error',
+                                'category': 'strict_fixed_width',
+                                'message': f"Required field '{name}' is empty at row {row_idx}",
+                                'row': row_idx,
+                                'field': name,
+                                'expected': 'non-empty value',
+                                'actual': segment,
+                                'raw_value': segment
+                            }
+                            self.errors.append(issue)
+                            if len(result['sample_issues']) < 50:
+                                result['sample_issues'].append(issue)
+                        # Non-required empty is allowed
+                        continue
+
+                    # If non-empty, format must be valid when format is provided
+                    regex = self._format_to_regex(fmt) if fmt else None
+                    if regex and not re.fullmatch(regex, segment):
+                        result['format_errors'] += 1
+                        row_has_error = True
+                        issue = {
+                            'severity': 'error',
+                            'category': 'strict_fixed_width',
+                            'message': f"Field '{name}' invalid format at row {row_idx}. Expected format: {fmt}",
+                            'row': row_idx,
+                            'field': name,
+                            'expected_format': fmt,
+                            'actual': segment,
+                            'raw_value': segment
+                        }
+                        self.errors.append(issue)
+                        if len(result['sample_issues']) < 50:
+                            result['sample_issues'].append(issue)
+
+                if row_has_error:
+                    result['invalid_records'] += 1
+
+        return result
 
     def _get_file_metadata(self) -> Dict[str, Any]:
         """Get file metadata."""
