@@ -935,6 +935,38 @@ def extract(table, query, sql_file, output, limit, delimiter):
         sys.exit(1)
 
 
+@cli.command('generate-oracle-expected')
+@click.option('--manifest', 'manifest_path', required=True, type=click.Path(exists=True),
+              help='Oracle expected-generation manifest JSON')
+@click.option('--dry-run/--run', default=True,
+              help='Dry-run by default. Use --run to execute Oracle extraction jobs')
+@click.option('--output', '-o', help='Optional output JSON summary file')
+def generate_oracle_expected(manifest_path, dry_run, output):
+    """Generate expected target files from Oracle transformation SQL (cm3int)."""
+    logger = setup_logger('cm3-batch', log_to_file=False)
+    try:
+        import json
+        from src.pipeline.oracle_expected_generator import load_oracle_manifest, generate_expected_from_oracle
+
+        manifest = load_oracle_manifest(manifest_path)
+        summary = generate_expected_from_oracle(manifest, dry_run=dry_run)
+
+        click.echo(f"Status: {summary.get('status')}")
+        for j in summary.get('jobs', []):
+            click.echo(f"- {j.get('name')}: {j.get('status')}")
+
+        if output:
+            with open(output, 'w', encoding='utf-8') as f:
+                json.dump(summary, f, indent=2)
+            click.echo(f"\n✓ Oracle expected summary written: {output}")
+
+        if summary.get('status') == 'failed':
+            sys.exit(1)
+    except Exception as e:
+        logger.error(f"Error generating oracle expected files: {e}")
+        sys.exit(1)
+
+
 @cli.command('run-pipeline')
 @click.option('--config', 'config_path', required=True, type=click.Path(exists=True),
               help='Source-system pipeline profile JSON')

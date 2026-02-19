@@ -4,6 +4,26 @@ This guide shows how to use CM3 Batch Automations as a regression framework arou
 
 ## 1) Target Architecture
 
+## 0) cm3int Sample Schema + Test Data Setup
+
+Use the provided SQL to create regression sample tables and rows in `cm3int`:
+
+- `sql/cm3int/setup_cm3int_regression_samples.sql`
+
+Example run (SQL*Plus):
+
+```bash
+sqlplus user/password@dsn @sql/cm3int/setup_cm3int_regression_samples.sql
+```
+
+This creates source-system sample tables:
+- `cm3int.src_a_accounts`, `cm3int.src_a_balances`
+- `cm3int.src_b_accounts`, `cm3int.src_b_balances`
+
+It inserts both:
+- positive rows (expected to pass)
+- negative rows (expected to fail rules/quality checks)
+
 Your process:
 1. Source sends pipe/fixed input files
 2. SQL*Loader loads source-prefixed Oracle tables
@@ -45,6 +65,33 @@ python -m src.main run-pipeline \
   --summary-md reports/pipeline_dryrun.md
 ```
 
+### Generate expected files directly from Oracle transformation SQL
+
+Use manifest:
+- `config/pipeline/oracle_expected_manifest.sample.json`
+- query files in `config/queries/cm3int/`
+
+Dry-run:
+
+```bash
+python -m src.main generate-oracle-expected \
+  --manifest config/pipeline/oracle_expected_manifest.sample.json \
+  --dry-run \
+  -o reports/oracle_expected_dryrun.json
+```
+
+Real run (requires ORACLE_USER/ORACLE_PASSWORD/ORACLE_DSN env vars):
+
+```bash
+export ORACLE_USER=...
+export ORACLE_PASSWORD=...
+export ORACLE_DSN=...
+python -m src.main generate-oracle-expected \
+  --manifest config/pipeline/oracle_expected_manifest.sample.json \
+  --run \
+  -o reports/oracle_expected_run.json
+```
+
 ### Execute pipeline stages
 
 ```bash
@@ -58,6 +105,10 @@ python -m src.main run-pipeline \
 Exit code semantics:
 - `0` => all enabled stages passed
 - `1` => one or more stages failed (CI gate fail)
+
+Regression mapping/rules added for cm3int samples:
+- `config/mappings/p327_cm3int_regression_mapping.json`
+- `config/rules/p327_cm3int_regression_rules.json`
 
 ## 4) Output Validation Target Example
 
