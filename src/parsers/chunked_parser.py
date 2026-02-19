@@ -223,7 +223,9 @@ class ChunkedFixedWidthParser(ChunkedFileParser):
                 names=self.names,
                 dtype=str,
                 chunksize=self.chunk_size,
-                encoding=self.encoding
+                encoding=self.encoding,
+                keep_default_na=False,
+                na_filter=False
             ):
                 yield chunk
                 
@@ -240,7 +242,9 @@ class ChunkedFixedWidthParser(ChunkedFileParser):
                 names=self.names,
                 dtype=str,
                 nrows=n_rows,
-                encoding=self.encoding
+                encoding=self.encoding,
+                keep_default_na=False,
+                na_filter=False
             )
         except Exception as e:
             self.logger.error(f"Error parsing fixed-width sample: {e}")

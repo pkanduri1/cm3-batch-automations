@@ -190,7 +190,8 @@ class ChunkedFileValidator:
         # Check for empty strings
         for col in chunk.columns:
             if chunk[col].dtype == 'object':
-                empty_count = (chunk[col] == '').sum()
+                # Treat blank/whitespace-only values as empty for fixed-width style files
+                empty_count = chunk[col].astype(str).str.strip().eq('').sum()
                 if empty_count > 0:
                     stats['empty_strings'][col] = int(empty_count)
         

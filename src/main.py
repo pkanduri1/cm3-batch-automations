@@ -2,6 +2,7 @@
 
 import sys
 import os
+from datetime import datetime
 import click
 from src.utils.logger import setup_logger
 
@@ -263,16 +264,55 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
                         'file_name': file.split('/')[-1],
                         'exists': True,
                     }
+                    total_rows = result.get('total_rows', 0)
+                    total_columns = len(result.get('actual_columns', [])) if result.get('actual_columns') else 0
+                    null_cells = sum(result.get('statistics', {}).get('null_counts', {}).values())
+                    total_cells = total_rows * total_columns if total_rows and total_columns else 0
+                    completeness_pct = round(((total_cells - null_cells) / total_cells * 100), 2) if total_cells else 0
+                    duplicate_rows = result.get('statistics', {}).get('duplicate_count', 0)
+                    unique_rows = max(total_rows - duplicate_rows, 0)
+                    uniqueness_pct = round((unique_rows / total_rows * 100), 2) if total_rows else 0
+                    quality_score = round((completeness_pct * 0.6 + uniqueness_pct * 0.4), 2)
+
                     quality_metrics = {
-                        'total_rows': result.get('total_rows', 0),
-                        'total_columns': len(result.get('actual_columns', [])) if result.get('actual_columns') else 0,
-                        'quality_score': 0,
-                        'completeness_pct': 0,
-                        'uniqueness_pct': 0,
+                        'total_rows': total_rows,
+                        'total_columns': total_columns,
+                        'total_cells': total_cells,
+                        'null_cells': null_cells,
+                        'completeness_pct': completeness_pct,
+                        'unique_rows': unique_rows,
+                        'duplicate_rows': duplicate_rows,
+                        'uniqueness_pct': uniqueness_pct,
+                        'quality_score': quality_score,
+                    }
+
+                    # Build lightweight field analysis from chunked stats
+                    empty_counts = result.get('statistics', {}).get('empty_string_counts', {})
+                    field_analysis = {}
+                    for col in (result.get('actual_columns') or []):
+                        empty_count = int(empty_counts.get(col, 0))
+                        fill_rate = round(((total_rows - empty_count) / total_rows * 100), 2) if total_rows else 0
+                        field_analysis[col] = {
+                            'inferred_type': 'string',
+                            'fill_rate_pct': fill_rate,
+                            'unique_count': 0,
+                        }
+
+                    date_analysis = {
+                        'chunked_mode_note': {
+                            'earliest_date': 'N/A',
+                            'latest_date': 'N/A',
+                            'date_range_days': 0,
+                            'invalid_date_count': 0,
+                            'invalid_date_pct': 0,
+                            'future_date_count': 0,
+                            'future_date_pct': 0,
+                            'detected_formats': ['Not computed in chunked mode']
+                        }
                     }
                     html_result = {
                         'valid': result.get('valid', False),
-                        'timestamp': result.get('timestamp'),
+                        'timestamp': result.get('timestamp') or datetime.now().isoformat(),
                         'file_metadata': file_metadata,
                         'errors': [
                             {'message': e, 'severity': 'error', 'category': 'chunked'} if isinstance(e, str) else e
@@ -288,25 +328,35 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
                         'info_count': len(result.get('info', [])),
                         'quality_metrics': quality_metrics,
                         'duplicate_analysis': {
-                            'total_rows': result.get('total_rows', 0),
-                            'unique_rows': max(result.get('total_rows', 0) - result.get('statistics', {}).get('duplicate_count', 0), 0),
-                            'duplicate_rows': result.get('statistics', {}).get('duplicate_count', 0),
-                            'duplicate_pct': 0,
+                            'total_rows': total_rows,
+                            'unique_rows': unique_rows,
+                            'duplicate_rows': duplicate_rows,
+                            'duplicate_pct': round((duplicate_rows / total_rows * 100), 2) if total_rows else 0,
                             'top_duplicate_counts': []
                         },
-                        'field_analysis': {},
-                        'date_analysis': {},
+                        'field_analysis': field_analysis,
+                        'date_analysis': date_analysis,
                         'data_profile': {
                             'row_count': result.get('total_rows', 0),
                             'column_count': len(result.get('actual_columns', [])) if result.get('actual_columns') else 0,
                             'columns': result.get('actual_columns', []),
                         },
                         'appendix': {
-                            'validation_config': {'mode': 'chunked'},
+                            'validation_config': {
+                                'mode': 'chunked',
+                                'mapping_file': mapping,
+                                'validation_timestamp': result.get('timestamp'),
+                                'validator_version': '1.0.0'
+                            },
                             'mapping_details': {'mapping_file': mapping},
                             'affected_rows_summary': {'total_affected_rows': 0, 'affected_row_pct': 0, 'top_problematic_rows': []}
                         },
-                        'business_rules': {'enabled': False, 'violations': [], 'statistics': {}}
+                        'business_rules': {
+                            'enabled': False,
+                            'violations': [],
+                            'statistics': {},
+                            'error': 'Not executed in chunked mode'
+                        }
                     }
                     reporter = ValidationReporter()
                     reporter.generate(html_result, output)
