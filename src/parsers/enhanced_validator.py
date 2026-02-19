@@ -33,7 +33,7 @@ class EnhancedFileValidator:
         if rules_config_path:
             self.rule_engine = self._load_rule_engine(rules_config_path)
 
-    def validate(self, detailed: bool = True, strict_fixed_width: bool = False) -> Dict[str, Any]:
+    def validate(self, detailed: bool = True, strict_fixed_width: bool = False, strict_level: str = 'all') -> Dict[str, Any]:
         """Perform comprehensive file validation with data profiling.
         
         Args:
@@ -66,7 +66,7 @@ class EnhancedFileValidator:
 
             strict_fixed_width_result = None
             if strict_fixed_width:
-                strict_fixed_width_result = self._validate_strict_fixed_width()
+                strict_fixed_width_result = self._validate_strict_fixed_width(strict_level=strict_level)
             
             # Data quality metrics
             quality_metrics = self._calculate_quality_metrics(df)
@@ -149,10 +149,11 @@ class EnhancedFileValidator:
 
         return None
 
-    def _validate_strict_fixed_width(self) -> Dict[str, Any]:
+    def _validate_strict_fixed_width(self, strict_level: str = 'all') -> Dict[str, Any]:
         """Strict fixed-width validation: record length + per-field format checks."""
         result = {
             'enabled': False,
+            'strict_level': strict_level,
             'total_records_checked': 0,
             'invalid_records': 0,
             'record_length_errors': 0,
@@ -196,7 +197,8 @@ class EnhancedFileValidator:
                         'row': row_idx,
                         'field': None,
                         'expected': expected_record_length,
-                        'actual': len(line)
+                        'actual': len(line),
+                        'code': 'FW_LEN_001'
                     }
                     self.errors.append(issue)
                     if len(result['sample_issues']) < 50:
@@ -226,7 +228,8 @@ class EnhancedFileValidator:
                                 'field': name,
                                 'expected': 'non-empty value',
                                 'actual': segment,
-                                'raw_value': segment
+                                'raw_value': segment,
+                                'code': 'FW_REQ_001'
                             }
                             self.errors.append(issue)
                             if len(result['sample_issues']) < 50:
@@ -234,46 +237,49 @@ class EnhancedFileValidator:
                         # Non-required empty is allowed
                         continue
 
-                    # If non-empty, format must be valid when format is provided
-                    regex = self._format_to_regex(fmt) if fmt else None
-                    if regex and not re.fullmatch(regex, segment):
-                        result['format_errors'] += 1
-                        row_has_error = True
-                        issue = {
-                            'severity': 'error',
-                            'category': 'strict_fixed_width',
-                            'message': f"Field '{name}' invalid format at row {row_idx}. Expected format: {fmt}",
-                            'row': row_idx,
-                            'field': name,
-                            'expected_format': fmt,
-                            'actual': segment,
-                            'raw_value': segment
-                        }
-                        self.errors.append(issue)
-                        if len(result['sample_issues']) < 50:
-                            result['sample_issues'].append(issue)
-
-                    # Allowed-values check: optional empty is allowed, but non-empty must be valid
-                    if valid_values:
-                        actual_value = segment.strip()
-                        if actual_value and actual_value not in valid_values:
+                    if strict_level in ('format', 'all'):
+                        # If non-empty, format must be valid when format is provided
+                        regex = self._format_to_regex(fmt) if fmt else None
+                        if regex and not re.fullmatch(regex, segment):
+                            result['format_errors'] += 1
                             row_has_error = True
                             issue = {
                                 'severity': 'error',
                                 'category': 'strict_fixed_width',
-                                'message': (
-                                    f"Field '{name}' has invalid value at row {row_idx}. "
-                                    f"Expected one of: {valid_values}"
-                                ),
+                                'message': f"Field '{name}' invalid format at row {row_idx}. Expected format: {fmt}",
                                 'row': row_idx,
                                 'field': name,
-                                'expected_values': valid_values,
-                                'actual': actual_value,
-                                'raw_value': segment
+                                'expected_format': fmt,
+                                'actual': segment,
+                                'raw_value': segment,
+                                'code': 'FW_FMT_001'
                             }
                             self.errors.append(issue)
                             if len(result['sample_issues']) < 50:
                                 result['sample_issues'].append(issue)
+
+                        # Allowed-values check: optional empty is allowed, but non-empty must be valid
+                        if valid_values:
+                            actual_value = segment.strip()
+                            if actual_value and actual_value not in valid_values:
+                                row_has_error = True
+                                issue = {
+                                    'severity': 'error',
+                                    'category': 'strict_fixed_width',
+                                    'message': (
+                                        f"Field '{name}' has invalid value at row {row_idx}. "
+                                        f"Expected one of: {valid_values}"
+                                    ),
+                                    'row': row_idx,
+                                    'field': name,
+                                    'expected_values': valid_values,
+                                    'actual': actual_value,
+                                    'raw_value': segment,
+                                    'code': 'FW_VAL_001'
+                                }
+                                self.errors.append(issue)
+                                if len(result['sample_issues']) < 50:
+                                    result['sample_issues'].append(issue)
 
                 if row_has_error:
                     result['invalid_records'] += 1

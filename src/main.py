@@ -153,7 +153,9 @@ def parse(file, mapping, format, output, use_chunked, chunk_size):
 @click.option('--progress/--no-progress', default=True, help='Show progress bar')
 @click.option('--strict-fixed-width', is_flag=True,
               help='Strict fixed-width checks: exact record length + format validation per row')
-def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress, strict_fixed_width):
+@click.option('--strict-level', type=click.Choice(['basic', 'format', 'all']), default='all',
+              help='Strict fixed-width level: basic=record length/required, format=add format/valid-values, all=same as format')
+def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress, strict_fixed_width, strict_level):
     """Validate file format and content."""
     logger = setup_logger('cm3-batch', log_to_file=False)
 
@@ -331,7 +333,11 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
             parser = parser_class(file)
 
         validator = EnhancedFileValidator(parser, mapping_config, rules)
-        result = validator.validate(detailed=detailed, strict_fixed_width=strict_fixed_width)
+        result = validator.validate(
+            detailed=detailed,
+            strict_fixed_width=strict_fixed_width,
+            strict_level=strict_level,
+        )
 
         if result['valid']:
             click.echo(click.style('✓ File is valid', fg='green'))
