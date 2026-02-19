@@ -340,6 +340,50 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
             strict_level=strict_level,
         )
 
+        # For strict mode, keep report/console readable by showing top 10 errors
+        # and writing full errors to CSV.
+        if strict_fixed_width and result.get('errors'):
+            from pathlib import Path
+            import csv
+
+            full_errors = result.get('errors', [])
+            if len(full_errors) > 10:
+                report_base = Path(output) if output else Path('reports/strict_validation.html')
+                errors_csv = report_base.with_suffix('')
+                errors_csv = errors_csv.parent / f"{errors_csv.name}_all_errors.csv"
+                errors_csv.parent.mkdir(parents=True, exist_ok=True)
+
+                # Normalize keys across varying issue dicts
+                keys = set()
+                for e in full_errors:
+                    if isinstance(e, dict):
+                        keys.update(e.keys())
+                fieldnames = sorted(keys) if keys else ['message']
+
+                with open(errors_csv, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.DictWriter(f, fieldnames=fieldnames)
+                    writer.writeheader()
+                    for e in full_errors:
+                        if isinstance(e, dict):
+                            writer.writerow(e)
+                        else:
+                            writer.writerow({'message': str(e)})
+
+                result['errors_file'] = str(errors_csv)
+                result['errors_truncated'] = True
+                result['errors_total'] = len(full_errors)
+                result['errors'] = full_errors[:10]
+                result['warnings'] = result.get('warnings', []) + [{
+                    'severity': 'warning',
+                    'category': 'reporting',
+                    'message': (
+                        f"Showing first 10 errors in report. Full error list written to {errors_csv}"
+                    ),
+                    'row': None,
+                    'field': None,
+                    'code': 'VAL_REPORT_TRUNCATED'
+                }]
+
         if strict_fixed_width and strict_output_dir:
             strict_result = result.get('strict_fixed_width') or {}
             if strict_result.get('enabled'):
