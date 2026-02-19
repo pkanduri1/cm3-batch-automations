@@ -1,7 +1,6 @@
 """Enhanced file validation with data profiling and quality metrics."""
 
 import os
-import re
 from typing import List, Dict, Any, Optional
 import pandas as pd
 import numpy as np
@@ -33,7 +32,7 @@ class EnhancedFileValidator:
         if rules_config_path:
             self.rule_engine = self._load_rule_engine(rules_config_path)
 
-    def validate(self, detailed: bool = True, strict_fixed_width: bool = False, strict_level: str = 'all') -> Dict[str, Any]:
+    def validate(self, detailed: bool = True) -> Dict[str, Any]:
         """Perform comprehensive file validation with data profiling.
         
         Args:
@@ -63,10 +62,6 @@ class EnhancedFileValidator:
         # Parse and analyze data
         try:
             df = self.parser.parse()
-
-            strict_fixed_width_result = None
-            if strict_fixed_width:
-                strict_fixed_width_result = self._validate_strict_fixed_width(strict_level=strict_level)
             
             # Data quality metrics
             quality_metrics = self._calculate_quality_metrics(df)
@@ -99,8 +94,7 @@ class EnhancedFileValidator:
                 'category': 'parsing',
                 'message': f"Parse error: {str(e)}",
                 'row': None,
-                'field': None,
-                'code': 'VAL_PARSE_001'
+                'field': None
             })
             return self._build_result(False, file_metadata, None)
 
@@ -115,201 +109,8 @@ class EnhancedFileValidator:
             date_analysis=date_analysis,
             data_profile=data_profile,
             appendix=appendix_data,
-            business_rules=business_rules_result,
-            strict_fixed_width=strict_fixed_width_result
+            business_rules=business_rules_result
         )
-
-    def _normalize_cobol_date_format(self, fmt: str) -> str:
-        """Normalize common COBOL date tokens to strptime-style formats."""
-        if not fmt:
-            return fmt
-        f = fmt.upper()
-        # Order matters
-        f = f.replace('YYYY', '%Y').replace('CCYY', '%Y')
-        f = f.replace('YY', '%y')
-        f = f.replace('MM', '%m')
-        f = f.replace('DD', '%d')
-        return f
-
-    def _format_to_regex(self, fmt: str) -> Optional[str]:
-        """Convert subset of COBOL/picture formats to regex.
-
-        Supported examples:
-        - CCYYMMDD / YYYYMMDD
-        - 9(5), +9(12), +9(12)V9(6)
-        - S9(7), S9(7)V9(2)
-        - X(10), XXX
-        """
-        if not fmt:
-            return None
-        fmt = fmt.strip().upper()
-
-        if fmt in {'CCYYMMDD', 'YYYYMMDD'}:
-            return r'^\d{8}$'
-
-        # Numeric with optional sign and implied decimal
-        # Examples: 9(5), +9(12), +9(12)V9(6), S9(7), S9(7)V9(2)
-        m = re.fullmatch(r'(\+|S)?9\((\d+)\)(V9\((\d+)\))?', fmt)
-        if m:
-            sign_token = m.group(1)
-            int_digits = int(m.group(2))
-            frac_digits = int(m.group(4)) if m.group(4) else 0
-            sign = r'[+-]' if sign_token in ('+', 'S') else ''
-            return f'^{sign}\\d{{{int_digits + frac_digits}}}$'
-
-        # Character picture, e.g. X(10)
-        m = re.fullmatch(r'X\((\d+)\)', fmt)
-        if m:
-            n = int(m.group(1))
-            return f'^.{{{n}}}$'
-
-        # Repeated X form, e.g. XXX
-        if re.fullmatch(r'X+', fmt):
-            return f'^.{{{len(fmt)}}}$'
-
-        return None
-
-    def _validate_strict_fixed_width(self, strict_level: str = 'all') -> Dict[str, Any]:
-        """Strict fixed-width validation: record length + per-field format checks."""
-        result = {
-            'enabled': False,
-            'strict_level': strict_level,
-            'total_records_checked': 0,
-            'invalid_records': 0,
-            'invalid_row_numbers': [],
-            'record_length_errors': 0,
-            'format_errors': 0,
-            'sample_issues': []
-        }
-
-        if not self.mapping_config or 'fields' not in self.mapping_config:
-            self.warnings.append({
-                'severity': 'warning',
-                'category': 'strict_fixed_width',
-                'message': 'Strict fixed-width requested but mapping has no fields metadata; skipping strict checks.',
-                'row': None,
-                'field': None
-            })
-            return result
-
-        fields = self.mapping_config.get('fields', [])
-        if not fields:
-            return result
-
-        result['enabled'] = True
-
-        expected_record_length = self.mapping_config.get('total_record_length')
-        if not expected_record_length:
-            expected_record_length = max(int(f.get('position', 1)) - 1 + int(f.get('length', 0)) for f in fields)
-
-        invalid_rows = set()
-
-        with open(self.parser.file_path, 'r', encoding='utf-8', errors='replace') as fh:
-            for row_idx, raw in enumerate(fh, start=1):
-                line = raw.rstrip('\n')
-                result['total_records_checked'] += 1
-                row_has_error = False
-
-                if len(line) != int(expected_record_length):
-                    result['record_length_errors'] += 1
-                    row_has_error = True
-                    issue = {
-                        'severity': 'error',
-                        'category': 'strict_fixed_width',
-                        'message': f"Record length mismatch at row {row_idx}: expected {expected_record_length}, got {len(line)}",
-                        'row': row_idx,
-                        'field': None,
-                        'expected': expected_record_length,
-                        'actual': len(line),
-                        'code': 'FW_LEN_001'
-                    }
-                    self.errors.append(issue)
-                    if len(result['sample_issues']) < 50:
-                        result['sample_issues'].append(issue)
-
-                for f in fields:
-                    name = f.get('name')
-                    pos = int(f.get('position', 1))
-                    flen = int(f.get('length', 0))
-                    required = bool(f.get('required', False))
-                    fmt = f.get('format')
-                    valid_values = f.get('valid_values', [])
-
-                    start = pos - 1
-                    segment = line[start:start + flen] if start < len(line) else ''
-
-                    # Preserve spaces; empty means all spaces or blank segment
-                    is_empty = (segment.strip() == '')
-                    if is_empty:
-                        if required:
-                            row_has_error = True
-                            issue = {
-                                'severity': 'error',
-                                'category': 'strict_fixed_width',
-                                'message': f"Required field '{name}' is empty at row {row_idx}",
-                                'row': row_idx,
-                                'field': name,
-                                'expected': 'non-empty value',
-                                'actual': segment,
-                                'raw_value': segment,
-                                'code': 'FW_REQ_001'
-                            }
-                            self.errors.append(issue)
-                            if len(result['sample_issues']) < 50:
-                                result['sample_issues'].append(issue)
-                        # Non-required empty is allowed
-                        continue
-
-                    if strict_level in ('format', 'all'):
-                        # If non-empty, format must be valid when format is provided
-                        regex = self._format_to_regex(fmt) if fmt else None
-                        if regex and not re.fullmatch(regex, segment):
-                            result['format_errors'] += 1
-                            row_has_error = True
-                            issue = {
-                                'severity': 'error',
-                                'category': 'strict_fixed_width',
-                                'message': f"Field '{name}' invalid format at row {row_idx}. Expected format: {fmt}",
-                                'row': row_idx,
-                                'field': name,
-                                'expected_format': fmt,
-                                'actual': segment,
-                                'raw_value': segment,
-                                'code': 'FW_FMT_001'
-                            }
-                            self.errors.append(issue)
-                            if len(result['sample_issues']) < 50:
-                                result['sample_issues'].append(issue)
-
-                        # Allowed-values check: optional empty is allowed, but non-empty must be valid
-                        if valid_values:
-                            actual_value = segment.strip()
-                            if actual_value and actual_value not in valid_values:
-                                row_has_error = True
-                                issue = {
-                                    'severity': 'error',
-                                    'category': 'strict_fixed_width',
-                                    'message': (
-                                        f"Field '{name}' has invalid value at row {row_idx}. "
-                                        f"Expected one of: {valid_values}"
-                                    ),
-                                    'row': row_idx,
-                                    'field': name,
-                                    'expected_values': valid_values,
-                                    'actual': actual_value,
-                                    'raw_value': segment,
-                                    'code': 'FW_VAL_001'
-                                }
-                                self.errors.append(issue)
-                                if len(result['sample_issues']) < 50:
-                                    result['sample_issues'].append(issue)
-
-                if row_has_error:
-                    result['invalid_records'] += 1
-                    invalid_rows.add(row_idx)
-
-        result['invalid_row_numbers'] = sorted(invalid_rows)
-        return result
 
     def _get_file_metadata(self) -> Dict[str, Any]:
         """Get file metadata."""
@@ -338,8 +139,7 @@ class EnhancedFileValidator:
                 'category': 'file',
                 'message': f"File not found: {self.parser.file_path}",
                 'row': None,
-                'field': None,
-                'code': 'VAL_FILE_404'
+                'field': None
             })
             return False
         return True
@@ -354,8 +154,7 @@ class EnhancedFileValidator:
                 'category': 'file',
                 'message': "File is empty",
                 'row': None,
-                'field': None,
-                'code': 'VAL_FILE_000'
+                'field': None
             })
         elif size < 10:
             self.warnings.append({
@@ -611,8 +410,7 @@ class EnhancedFileValidator:
                     'category': 'schema',
                     'message': f"Missing required field: {field}",
                     'row': None,
-                    'field': field,
-                    'code': 'VAL_SCHEMA_MISSING_FIELD'
+                    'field': field
                 })
         
         # Extra fields
@@ -624,8 +422,7 @@ class EnhancedFileValidator:
                     'category': 'schema',
                     'message': f"Unexpected field: {field}",
                     'row': None,
-                    'field': field,
-                    'code': 'VAL_SCHEMA_UNEXPECTED_FIELD'
+                    'field': field
                 })
 
     def _profile_data(self, df: pd.DataFrame) -> Dict[str, Any]:
@@ -701,8 +498,7 @@ class EnhancedFileValidator:
                             ),
                             'row': None,
                             'field': col,
-                            'expected_format': expected_format,
-                            'code': 'VAL_DATE_INVALID'
+                            'expected_format': expected_format
                         })
                     
                     if future_count > 0:
@@ -849,15 +645,6 @@ class EnhancedFileValidator:
             ]
         }
 
-    def _build_issue_code_summary(self) -> Dict[str, int]:
-        """Build summary counts by stable issue code."""
-        counts: Dict[str, int] = {}
-        for issue in (self.errors + self.warnings + self.info):
-            code = issue.get('code') if isinstance(issue, dict) else None
-            if code:
-                counts[code] = counts.get(code, 0) + 1
-        return counts
-
     def _build_result(self, valid: bool, file_metadata: Dict[str, Any], 
                      df: Optional[pd.DataFrame], **kwargs) -> Dict[str, Any]:
         """Build comprehensive validation result."""
@@ -870,8 +657,7 @@ class EnhancedFileValidator:
             'info': self.info,
             'error_count': len(self.errors),
             'warning_count': len(self.warnings),
-            'info_count': len(self.info),
-            'issue_code_summary': self._build_issue_code_summary()
+            'info_count': len(self.info)
         }
         
         # Add optional components

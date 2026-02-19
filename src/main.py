@@ -2,7 +2,6 @@
 
 import sys
 import os
-from datetime import datetime
 import click
 from src.utils.logger import setup_logger
 
@@ -152,12 +151,7 @@ def parse(file, mapping, format, output, use_chunked, chunk_size):
 @click.option('--use-chunked', is_flag=True, help='Use chunked processing for large files')
 @click.option('--chunk-size', default=100000, help='Chunk size for large files (default: 100000)')
 @click.option('--progress/--no-progress', default=True, help='Show progress bar')
-@click.option('--strict-fixed-width', is_flag=True,
-              help='Strict fixed-width checks: exact record length + format validation per row')
-@click.option('--strict-level', type=click.Choice(['basic', 'format', 'all']), default='all',
-              help='Strict fixed-width level: basic=record length/required, format=add format/valid-values, all=same as format')
-@click.option('--strict-output-dir', help='When strict fixed-width is enabled, write valid/invalid row files to this directory')
-def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress, strict_fixed_width, strict_level, strict_output_dir):
+def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress):
     """Validate file format and content."""
     logger = setup_logger('cm3-batch', log_to_file=False)
 
@@ -168,8 +162,6 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
         from src.parsers.chunked_validator import ChunkedFileValidator
         from src.parsers.chunked_parser import ChunkedFixedWidthParser
         from src.reporters.validation_reporter import ValidationReporter
-        from src.reporting.result_adapter_chunked import adapt_chunked_validation_result
-        from src.reporting.result_adapter_standard import adapt_standard_validation_result
         import json
 
         mapping_config = None
@@ -180,8 +172,6 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
 
         # Chunked path
         if use_chunked:
-            if strict_fixed_width:
-                click.echo(click.style('Note: --strict-fixed-width is applied in non-chunked validation path. Running chunked validation without strict row checks.', fg='yellow'))
             detector = FormatDetector()
             parser_class = detector.get_parser_class(file)
 
@@ -207,7 +197,6 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
                 delimiter=delimiter,
                 chunk_size=chunk_size,
                 parser=chunk_parser,
-                rules_config_path=rules,
             )
 
             if mapping_config:
@@ -261,10 +250,7 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
                         json.dump(result, f, indent=2)
                     click.echo(f"\n✓ Chunked validation JSON report generated: {output}")
                 else:
-                    reporter = ValidationReporter()
-                    html_result = adapt_chunked_validation_result(result, file_path=file, mapping=mapping)
-                    reporter.generate(html_result, output)
-                    click.echo(f"\n✓ Chunked validation HTML report generated: {output}")
+                    click.echo(click.style("\nChunked validation currently supports JSON output only. Use -o <file>.json", fg='yellow'))
 
             if not result['valid']:
                 sys.exit(1)
@@ -288,88 +274,7 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
             parser = parser_class(file)
 
         validator = EnhancedFileValidator(parser, mapping_config, rules)
-        result = validator.validate(
-            detailed=detailed,
-            strict_fixed_width=strict_fixed_width,
-            strict_level=strict_level,
-        )
-
-        # For strict mode, keep report/console readable by showing top 10 errors
-        # and writing full errors to CSV.
-        if strict_fixed_width and result.get('errors'):
-            from pathlib import Path
-            import csv
-
-            full_errors = result.get('errors', [])
-            if len(full_errors) > 10:
-                report_base = Path(output) if output else Path('reports/strict_validation.html')
-                errors_csv = report_base.with_suffix('')
-                errors_csv = errors_csv.parent / f"{errors_csv.name}_all_errors.csv"
-                errors_csv.parent.mkdir(parents=True, exist_ok=True)
-
-                # Normalize keys across varying issue dicts
-                keys = set()
-                for e in full_errors:
-                    if isinstance(e, dict):
-                        keys.update(e.keys())
-                fieldnames = sorted(keys) if keys else ['message']
-
-                with open(errors_csv, 'w', newline='', encoding='utf-8') as f:
-                    writer = csv.DictWriter(f, fieldnames=fieldnames)
-                    writer.writeheader()
-                    for e in full_errors:
-                        if isinstance(e, dict):
-                            writer.writerow(e)
-                        else:
-                            writer.writerow({'message': str(e)})
-
-                result['errors_file'] = str(errors_csv)
-                result['errors_truncated'] = True
-                result['errors_total'] = len(full_errors)
-                result['errors'] = full_errors[:10]
-                result['warnings'] = result.get('warnings', []) + [{
-                    'severity': 'warning',
-                    'category': 'reporting',
-                    'message': (
-                        f"Showing first 10 errors in report. Full error list written to {errors_csv}"
-                    ),
-                    'row': None,
-                    'field': None,
-                    'code': 'VAL_REPORT_TRUNCATED'
-                }]
-
-        if strict_fixed_width and strict_output_dir:
-            strict_result = result.get('strict_fixed_width') or {}
-            if strict_result.get('enabled'):
-                from pathlib import Path
-                out_dir = Path(strict_output_dir)
-                out_dir.mkdir(parents=True, exist_ok=True)
-
-                invalid_rows = set(strict_result.get('invalid_row_numbers', []))
-                valid_path = out_dir / 'valid_records.txt'
-                invalid_path = out_dir / 'invalid_records.txt'
-
-                with open(file, 'r', encoding='utf-8', errors='replace') as src, \
-                     open(valid_path, 'w', encoding='utf-8') as good, \
-                     open(invalid_path, 'w', encoding='utf-8') as bad:
-                    for idx, line in enumerate(src, start=1):
-                        if idx in invalid_rows:
-                            bad.write(line)
-                        else:
-                            good.write(line)
-
-                click.echo(f"Strict outputs written: {valid_path}, {invalid_path}")
-
-        # Ensure standard-mode run metadata is always present for downstream reports
-        appendix = result.setdefault('appendix', {}) if isinstance(result, dict) else {}
-        validation_config = appendix.setdefault('validation_config', {}) if isinstance(appendix, dict) else {}
-        if isinstance(validation_config, dict):
-            validation_config.setdefault('mode', 'standard')
-            validation_config['mapping_file'] = mapping
-            validation_config['rules_file'] = rules
-            validation_config['strict_fixed_width'] = bool(strict_fixed_width)
-            validation_config['strict_level'] = strict_level if strict_fixed_width else None
-            validation_config.setdefault('validation_timestamp', result.get('timestamp'))
+        result = validator.validate(detailed=detailed)
 
         if result['valid']:
             click.echo(click.style('✓ File is valid', fg='green'))
@@ -402,8 +307,7 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
 
         if output:
             reporter = ValidationReporter()
-            report_model = adapt_standard_validation_result(result)
-            reporter.generate(report_model, output)
+            reporter.generate(result, output)
             click.echo(f"\n✓ Validation report generated: {output}")
 
     except Exception as e:
