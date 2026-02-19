@@ -346,7 +346,10 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
                                 'mode': 'chunked',
                                 'mapping_file': mapping,
                                 'validation_timestamp': result.get('timestamp'),
-                                'validator_version': '1.0.0'
+                                'validator_version': '1.0.0',
+                                'chunk_size': result.get('statistics', {}).get('chunk_size'),
+                                'elapsed_seconds': result.get('statistics', {}).get('elapsed_seconds'),
+                                'rows_per_second': result.get('statistics', {}).get('rows_per_second')
                             },
                             'mapping_details': {'mapping_file': mapping},
                             'affected_rows_summary': {'total_affected_rows': 0, 'affected_row_pct': 0, 'top_problematic_rows': []}

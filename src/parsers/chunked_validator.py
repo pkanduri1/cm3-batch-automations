@@ -1,5 +1,6 @@
 """Chunked file validator for memory-efficient validation."""
 
+import time
 import pandas as pd
 from typing import Dict, Any, List, Optional
 from .chunked_parser import ChunkedFileParser
@@ -39,6 +40,7 @@ class ChunkedFileValidator:
         """
         self.logger.info(f"Starting chunked validation: {self.file_path}")
         self.memory_monitor.log_memory_usage("validation start")
+        start_time = time.time()
         
         errors = []
         warnings = []
@@ -117,9 +119,13 @@ class ChunkedFileValidator:
                     f"(limited to first {max_seen_rows:,} rows checked)"
                 )
             
+            elapsed_sec = max(time.time() - start_time, 0.000001)
+            rows_per_sec = round(total_rows / elapsed_sec, 2)
+
             self.logger.info(
                 f"Validation complete: {total_rows:,} rows validated, "
-                f"{len(errors)} errors, {len(warnings)} warnings"
+                f"{len(errors)} errors, {len(warnings)} warnings in {elapsed_sec:.2f}s "
+                f"({rows_per_sec:,.2f} rows/sec)"
             )
             self.memory_monitor.log_memory_usage("validation complete")
             
@@ -133,7 +139,10 @@ class ChunkedFileValidator:
                     'null_counts': total_nulls,
                     'empty_string_counts': total_empty_strings,
                     'duplicate_count': duplicate_count,
-                    'duplicate_check_limited': len(seen_rows) >= max_seen_rows
+                    'duplicate_check_limited': len(seen_rows) >= max_seen_rows,
+                    'elapsed_seconds': round(elapsed_sec, 4),
+                    'rows_per_second': rows_per_sec,
+                    'chunk_size': self.chunk_size
                 }
             }
             
