@@ -32,6 +32,32 @@ def test_pipeline_runner_dry_run_positive():
         os.unlink(p)
 
 
+def test_pipeline_runner_sqlloader_log_eval_negative():
+    import tempfile
+
+    log = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log')
+    log.write('10 Rows successfully loaded.\n1 Rows not loaded due to data errors.\n0 Rows not loaded because all WHEN clauses were failed.\n')
+    log.close()
+
+    p = _tmp_profile({
+        'source_system': 'SRC_X',
+        'stages': {
+            'ingest': {'enabled': False},
+            'sqlloader': {'enabled': True, 'log_file': log.name, 'max_rejected': 0, 'max_discarded': 0},
+            'java_batch': {'enabled': True, 'command': 'echo java'},
+            'output_validation': {'enabled': False}
+        }
+    })
+    try:
+        out = PipelineRunner(p).run(dry_run=False)
+        assert out['status'] == 'failed'
+        assert out['steps'][1]['name'] == 'sqlloader'
+        assert out['steps'][1]['status'] == 'failed'
+    finally:
+        os.unlink(p)
+        os.unlink(log.name)
+
+
 def test_pipeline_runner_negative_missing_required_top_level():
     p = _tmp_profile({'stages': {}})
     try:

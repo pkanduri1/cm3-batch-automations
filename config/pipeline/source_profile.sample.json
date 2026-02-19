@@ -8,6 +8,9 @@
     },
     "sqlloader": {
       "enabled": false,
+      "log_file": "logs/sqlloader_SRC_A.log",
+      "max_rejected": 0,
+      "max_discarded": 0,
       "command": "echo SQL*Loader placeholder"
     },
     "java_batch": {

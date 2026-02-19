@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from dataclasses import dataclass
+from .sqlloader_adapter import evaluate_sqlloader_stage
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
@@ -68,9 +69,20 @@ class PipelineRunner:
                 continue
 
             if dry_run:
-                msg = f"would run: {cmd}" if cmd else "enabled, no command configured"
+                if stage_name == 'sqlloader' and stage.get('log_file'):
+                    msg = f"would evaluate sqlloader log: {stage.get('log_file')}"
+                else:
+                    msg = f"would run: {cmd}" if cmd else "enabled, no command configured"
                 results.append(StepResult(stage_name, "dry_run", msg))
                 continue
+
+            if stage_name == 'sqlloader' and stage.get('log_file'):
+                eval_out = evaluate_sqlloader_stage(stage)
+                if eval_out['status'] == 'passed':
+                    results.append(StepResult(stage_name, 'passed', eval_out.get('message', ''), 0))
+                    continue
+                results.append(StepResult(stage_name, 'failed', eval_out.get('message', ''), 3))
+                break
 
             if not cmd:
                 results.append(StepResult(stage_name, "failed", "missing command", 2))
