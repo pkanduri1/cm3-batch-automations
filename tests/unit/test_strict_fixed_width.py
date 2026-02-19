@@ -18,6 +18,17 @@ def _make_mapping():
     }
 
 
+def _make_pic_mapping():
+    return {
+        'file_path': 'dummy_pic_mapping.json',
+        'fields': [
+            {'name': 'SIGNED_NUM', 'position': 1, 'length': 6, 'required': True, 'format': 'S9(5)'},
+            {'name': 'CHAR3', 'position': 7, 'length': 3, 'required': True, 'format': 'XXX'},
+        ],
+        'total_record_length': 9,
+    }
+
+
 def test_strict_basic_only_checks_length_and_required():
     # Row 2 has STATUS='Z' (invalid valid_values), but basic mode should ignore format/value checks.
     with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
@@ -102,5 +113,36 @@ def test_strict_format_allows_empty_optional_fields():
         result = validator.validate(detailed=False, strict_fixed_width=True, strict_level='format')
 
         assert result['valid'] is True
+    finally:
+        os.unlink(temp_file)
+
+
+def test_pic_formats_s9_and_xxx_supported():
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        f.write('+12345ABC\n')
+        temp_file = f.name
+
+    try:
+        parser = FixedWidthParser(temp_file, [('SIGNED_NUM', 0, 6), ('CHAR3', 6, 9)])
+        validator = EnhancedFileValidator(parser, _make_pic_mapping())
+        result = validator.validate(detailed=False, strict_fixed_width=True, strict_level='format')
+
+        assert result['valid'] is True
+    finally:
+        os.unlink(temp_file)
+
+
+def test_pic_formats_fail_on_invalid_values():
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        f.write('A12345AB1\n')
+        temp_file = f.name
+
+    try:
+        parser = FixedWidthParser(temp_file, [('SIGNED_NUM', 0, 6), ('CHAR3', 6, 9)])
+        validator = EnhancedFileValidator(parser, _make_pic_mapping())
+        result = validator.validate(detailed=False, strict_fixed_width=True, strict_level='format')
+
+        assert result['valid'] is False
+        assert any(e.get('code') == 'FW_FMT_001' for e in result['errors'])
     finally:
         os.unlink(temp_file)

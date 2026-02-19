@@ -131,7 +131,14 @@ class EnhancedFileValidator:
         return f
 
     def _format_to_regex(self, fmt: str) -> Optional[str]:
-        """Convert subset of COBOL/picture formats to regex."""
+        """Convert subset of COBOL/picture formats to regex.
+
+        Supported examples:
+        - CCYYMMDD / YYYYMMDD
+        - 9(5), +9(12), +9(12)V9(6)
+        - S9(7), S9(7)V9(2)
+        - X(10), XXX
+        """
         if not fmt:
             return None
         fmt = fmt.strip().upper()
@@ -139,13 +146,25 @@ class EnhancedFileValidator:
         if fmt in {'CCYYMMDD', 'YYYYMMDD'}:
             return r'^\d{8}$'
 
-        # Examples: 9(5), +9(12), +9(12)V9(6)
-        m = re.fullmatch(r'\+?9\((\d+)\)(V9\((\d+)\))?', fmt)
+        # Numeric with optional sign and implied decimal
+        # Examples: 9(5), +9(12), +9(12)V9(6), S9(7), S9(7)V9(2)
+        m = re.fullmatch(r'(\+|S)?9\((\d+)\)(V9\((\d+)\))?', fmt)
         if m:
-            int_digits = int(m.group(1))
-            frac_digits = int(m.group(3)) if m.group(3) else 0
-            sign = r'[+-]' if fmt.startswith('+') else ''
+            sign_token = m.group(1)
+            int_digits = int(m.group(2))
+            frac_digits = int(m.group(4)) if m.group(4) else 0
+            sign = r'[+-]' if sign_token in ('+', 'S') else ''
             return f'^{sign}\\d{{{int_digits + frac_digits}}}$'
+
+        # Character picture, e.g. X(10)
+        m = re.fullmatch(r'X\((\d+)\)', fmt)
+        if m:
+            n = int(m.group(1))
+            return f'^.{{{n}}}$'
+
+        # Repeated X form, e.g. XXX
+        if re.fullmatch(r'X+', fmt):
+            return f'^.{{{len(fmt)}}}$'
 
         return None
 
