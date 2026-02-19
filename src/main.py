@@ -179,11 +179,23 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
             delimiter = '|'
             if parser_class == FixedWidthParser and mapping_config and 'fields' in mapping_config:
                 field_specs = []
+                current_pos = 0
                 for field in mapping_config.get('fields', []):
                     field_name = field['name']
-                    start = int(field['position']) - 1
-                    end = start + int(field['length'])
+                    field_length = int(field['length'])
+
+                    # Support both styles:
+                    # 1) explicit 1-based `position`
+                    # 2) implicit cumulative positions from `length`
+                    if field.get('position') is not None:
+                        start = int(field['position']) - 1
+                    else:
+                        start = current_pos
+
+                    end = start + field_length
                     field_specs.append((field_name, start, end))
+                    current_pos = end
+
                 chunk_parser = ChunkedFixedWidthParser(file, field_specs, chunk_size=chunk_size)
             elif parser_class == FixedWidthParser and mapping_config and 'mappings' in mapping_config:
                 # Fallback for non-universal mappings (no fixed-width position metadata)
@@ -377,13 +389,14 @@ def convert_rules(template, output, sheet):
 @click.option('--file1', '-f1', required=True, help='First file')
 @click.option('--file2', '-f2', required=True, help='Second file')
 @click.option('--keys', '-k', help='Key columns (comma-separated). If not provided, compares row-by-row.')
+@click.option('--mapping', '-m', help='Mapping file (recommended for fixed-width comparison).')
 @click.option('--output', '-o', help='Output HTML report file')
 @click.option('--thresholds', '-t', help='Threshold configuration file')
 @click.option('--detailed/--basic', default=True, help='Detailed field analysis')
 @click.option('--chunk-size', default=100000, help='Chunk size for large files (default: 100000)')
 @click.option('--progress/--no-progress', default=True, help='Show progress bar')
 @click.option('--use-chunked', is_flag=True, help='Use chunked processing for large files')
-def compare(file1, file2, keys, output, thresholds, detailed, chunk_size, progress, use_chunked):
+def compare(file1, file2, keys, mapping, output, thresholds, detailed, chunk_size, progress, use_chunked):
     """Compare two files and generate report."""
     logger = setup_logger('cm3-batch', log_to_file=False)
     
@@ -427,15 +440,53 @@ def compare(file1, file2, keys, output, thresholds, detailed, chunk_size, progre
         else:
             # Parse both files (original method)
             detector = FormatDetector()
-            
+            import json
+            from src.parsers.fixed_width_parser import FixedWidthParser
+
+            mapping_config = None
+            if mapping:
+                with open(mapping, 'r') as f:
+                    mapping_config = json.load(f)
+
+            def _build_fixed_width_specs(cfg):
+                field_specs = []
+                current_pos = 0
+                for field in cfg.get('fields', []):
+                    name = field['name']
+                    length = int(field['length'])
+                    if field.get('position') is not None:
+                        start = int(field['position']) - 1
+                    else:
+                        start = current_pos
+                    end = start + length
+                    field_specs.append((name, start, end))
+                    current_pos = end
+                return field_specs
+
             parser1_class = detector.get_parser_class(file1)
-            parser1 = parser1_class(file1)
+            if parser1_class == FixedWidthParser:
+                if not (mapping_config and mapping_config.get('fields')):
+                    click.echo(click.style(
+                        "Error: fixed-width compare requires --mapping with fields/length metadata.",
+                        fg='red'))
+                    sys.exit(1)
+                parser1 = FixedWidthParser(file1, _build_fixed_width_specs(mapping_config))
+            else:
+                parser1 = parser1_class(file1)
             df1 = parser1.parse()
-            
+
             parser2_class = detector.get_parser_class(file2)
-            parser2 = parser2_class(file2)
+            if parser2_class == FixedWidthParser:
+                if not (mapping_config and mapping_config.get('fields')):
+                    click.echo(click.style(
+                        "Error: fixed-width compare requires --mapping with fields/length metadata.",
+                        fg='red'))
+                    sys.exit(1)
+                parser2 = FixedWidthParser(file2, _build_fixed_width_specs(mapping_config))
+            else:
+                parser2 = parser2_class(file2)
             df2 = parser2.parse()
-            
+
             # Compare
             comparator = FileComparator(df1, df2, key_columns)
             results = comparator.compare(detailed=detailed)
