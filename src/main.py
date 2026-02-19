@@ -155,7 +155,8 @@ def parse(file, mapping, format, output, use_chunked, chunk_size):
               help='Strict fixed-width checks: exact record length + format validation per row')
 @click.option('--strict-level', type=click.Choice(['basic', 'format', 'all']), default='all',
               help='Strict fixed-width level: basic=record length/required, format=add format/valid-values, all=same as format')
-def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress, strict_fixed_width, strict_level):
+@click.option('--strict-output-dir', help='When strict fixed-width is enabled, write valid/invalid row files to this directory')
+def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress, strict_fixed_width, strict_level, strict_output_dir):
     """Validate file format and content."""
     logger = setup_logger('cm3-batch', log_to_file=False)
 
@@ -338,6 +339,28 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
             strict_fixed_width=strict_fixed_width,
             strict_level=strict_level,
         )
+
+        if strict_fixed_width and strict_output_dir:
+            strict_result = result.get('strict_fixed_width') or {}
+            if strict_result.get('enabled'):
+                from pathlib import Path
+                out_dir = Path(strict_output_dir)
+                out_dir.mkdir(parents=True, exist_ok=True)
+
+                invalid_rows = set(strict_result.get('invalid_row_numbers', []))
+                valid_path = out_dir / 'valid_records.txt'
+                invalid_path = out_dir / 'invalid_records.txt'
+
+                with open(file, 'r', encoding='utf-8', errors='replace') as src, \
+                     open(valid_path, 'w', encoding='utf-8') as good, \
+                     open(invalid_path, 'w', encoding='utf-8') as bad:
+                    for idx, line in enumerate(src, start=1):
+                        if idx in invalid_rows:
+                            bad.write(line)
+                        else:
+                            good.write(line)
+
+                click.echo(f"Strict outputs written: {valid_path}, {invalid_path}")
 
         if result['valid']:
             click.echo(click.style('✓ File is valid', fg='green'))

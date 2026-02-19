@@ -156,6 +156,7 @@ class EnhancedFileValidator:
             'strict_level': strict_level,
             'total_records_checked': 0,
             'invalid_records': 0,
+            'invalid_row_numbers': [],
             'record_length_errors': 0,
             'format_errors': 0,
             'sample_issues': []
@@ -180,6 +181,8 @@ class EnhancedFileValidator:
         expected_record_length = self.mapping_config.get('total_record_length')
         if not expected_record_length:
             expected_record_length = max(int(f.get('position', 1)) - 1 + int(f.get('length', 0)) for f in fields)
+
+        invalid_rows = set()
 
         with open(self.parser.file_path, 'r', encoding='utf-8', errors='replace') as fh:
             for row_idx, raw in enumerate(fh, start=1):
@@ -283,7 +286,9 @@ class EnhancedFileValidator:
 
                 if row_has_error:
                     result['invalid_records'] += 1
+                    invalid_rows.add(row_idx)
 
+        result['invalid_row_numbers'] = sorted(invalid_rows)
         return result
 
     def _get_file_metadata(self) -> Dict[str, Any]:

@@ -38,6 +38,24 @@ def test_strict_basic_only_checks_length_and_required():
         os.unlink(temp_file)
 
 
+def test_strict_result_contains_invalid_row_numbers():
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        f.write('1234A\n')
+        f.write('5678Z\n')
+        temp_file = f.name
+
+    try:
+        parser = FixedWidthParser(temp_file, [('ACCOUNT', 0, 4), ('STATUS', 4, 5)])
+        validator = EnhancedFileValidator(parser, _make_mapping())
+        result = validator.validate(detailed=False, strict_fixed_width=True, strict_level='format')
+
+        strict = result['strict_fixed_width']
+        assert strict['invalid_records'] == 1
+        assert strict['invalid_row_numbers'] == [2]
+    finally:
+        os.unlink(temp_file)
+
+
 def test_strict_format_checks_valid_values_for_non_empty_optional_fields():
     with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
         f.write('1234A\n')
