@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import re
 import sys
 
 from src.config.rules_template_converter import RulesTemplateConverter
@@ -27,6 +28,19 @@ def detect_template_type(df: pd.DataFrame) -> str:
     if {'Rule ID', 'Rule Name', 'Description', 'Type', 'Severity', 'Operator'}.issubset(cols):
         return 'standard'
     return 'unknown'
+
+
+def _is_valid_rule_id(value: str) -> bool:
+    return bool(re.match(r'^[A-Za-z][A-Za-z0-9_-]{2,}$', value or ''))
+
+
+def _is_valid_when_expr(expr: str) -> bool:
+    if not expr:
+        return True
+    expr = expr.strip()
+    if re.match(r'^([A-Za-z0-9_\-]+)\s+in\s*\((.+)\)$', expr, flags=re.IGNORECASE):
+        return True
+    return bool(re.match(r'^([A-Za-z0-9_\-]+)\s*(=|!=|>=|<=|>|<)\s*(.+)$', expr))
 
 
 def validate_template_strict(template_path: Path) -> tuple[list[dict], str]:
@@ -89,6 +103,25 @@ def validate_template_strict(template_path: Path) -> tuple[list[dict], str]:
             issues.append({'row': row_no, 'field': 'Type' if template_type == 'standard' else 'Rule Type', 'issue': 'Invalid type', 'value': type_v})
         if sev_v and sev_v not in valid_severities:
             issues.append({'row': row_no, 'field': 'Severity', 'issue': 'Invalid severity', 'value': sev_v})
+
+        rid = (row.get('Rule ID') or '').strip() if pd.notna(row.get('Rule ID')) else ''
+        if rid and not _is_valid_rule_id(rid):
+            issues.append({'row': row_no, 'field': 'Rule ID', 'issue': 'Invalid Rule ID format', 'value': rid})
+
+        if template_type == 'ba_friendly':
+            expected = (row.get('Expected / Values') or '').strip() if pd.notna(row.get('Expected / Values')) else ''
+            when_expr = (row.get('Condition (optional)') or '').strip() if pd.notna(row.get('Condition (optional)')) else ''
+
+            if type_v in {'range', 'length'} and expected and '..' not in expected:
+                issues.append({'row': row_no, 'field': 'Expected / Values', 'issue': "Expected 'min..max' format", 'value': expected})
+            if type_v == 'compare fields' and expected:
+                if not re.match(r'^(>=|<=|>|<|==|!=)\s+[A-Za-z0-9_\-]+$', expected):
+                    issues.append({'row': row_no, 'field': 'Expected / Values', 'issue': "Expected '<op> <FIELD>' format", 'value': expected})
+            if type_v == 'allowed values' and expected and ',' not in expected and '|' not in expected:
+                issues.append({'row': row_no, 'field': 'Expected / Values', 'issue': 'Expected comma- or pipe-separated values', 'value': expected})
+
+            if when_expr and not _is_valid_when_expr(when_expr):
+                issues.append({'row': row_no, 'field': 'Condition (optional)', 'issue': 'Unsupported condition syntax', 'value': when_expr})
 
     return issues, template_type
 

@@ -18,6 +18,7 @@ class RuleViolation:
     value: Any
     message: str
     expected: Optional[Any] = None
+    issue_code: Optional[str] = None
     
     def to_dict(self) -> Dict:
         """Convert to dictionary."""
@@ -156,6 +157,11 @@ class RuleEngine:
         else:
             raise ValueError(f"Unknown rule type: {rule_type}")
     
+    def _build_issue_code(self, rule: Dict, category: str) -> str:
+        rid = str(rule.get('id', 'UNKNOWN')).upper().replace(' ', '_')
+        cat = category.upper().replace(' ', '_')
+        return f"BR_{rid}_{cat}"
+
     def _validate_field(self, rule: Dict, df: pd.DataFrame) -> List[RuleViolation]:
         """
         Validate individual field values.
@@ -213,7 +219,8 @@ class RuleEngine:
                 field=field,
                 value=df.loc[idx, field],
                 message=self._format_message(rule, df.loc[idx, field]),
-                expected=rule.get('value') or rule.get('values') or rule.get('pattern')
+                expected=rule.get('value') or rule.get('values') or rule.get('pattern'),
+                issue_code=self._build_issue_code(rule, 'FIELD')
             ))
         
         return violations
@@ -255,7 +262,8 @@ class RuleEngine:
                 value=f"{df.loc[idx, left_field]} vs {df.loc[idx, right_field]}",
                 message=self._format_cross_field_message(rule, df.loc[idx, left_field], 
                                                          df.loc[idx, right_field]),
-                expected=f"{left_field} {operator} {right_field}"
+                expected=f"{left_field} {operator} {right_field}",
+                issue_code=self._build_issue_code(rule, 'CROSS')
             ))
         
         return violations

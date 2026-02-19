@@ -33,6 +33,7 @@ def test_when_condition_equals_filters_rows():
     assert len(violations) == 1
     assert violations[0].rule_id == 'BRC1'
     assert violations[0].row_number == 1
+    assert violations[0].issue_code == 'BR_BRC1_FIELD'
 
 
 def test_when_condition_in_filters_rows():
@@ -63,3 +64,4 @@ def test_when_condition_in_filters_rows():
 
     assert len(violations) == 1
     assert violations[0].row_number == 1
+    assert violations[0].issue_code == 'BR_BRC2_FIELD'
