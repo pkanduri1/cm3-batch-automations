@@ -76,3 +76,5 @@ reports/
 *.tmp
 *.bak
 output/
+
+.venv312/

@@ -368,7 +368,9 @@ Run configurable, no-code/low-code data quality checks using CSV config files.
 cm3-batch gx-checkpoint1 \
   --targets config/gx/targets.sample.csv \
   --expectations config/gx/expectations.sample.csv \
-  --output reports/gx_checkpoint1_summary.json
+  --output reports/gx_checkpoint1_summary.json \
+  --csv-output reports/gx_checkpoint1_summary.csv \
+  --html-output reports/gx_checkpoint1_summary.html
 ```
 
 ### What this validates

@@ -7,6 +7,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from html import escape
 
 import pandas as pd
 
@@ -57,9 +58,13 @@ def _as_number(value: str | None) -> float | int | None:
     return float(text)
 
 
-def _load_mapping_columns(mapping_file: str) -> list[str]:
+def _load_mapping(mapping_file: str) -> dict[str, Any]:
     with open(mapping_file, "r", encoding="utf-8") as f:
-        mapping = json.load(f)
+        return json.load(f)
+
+
+def _load_mapping_columns(mapping_file: str) -> list[str]:
+    mapping = _load_mapping(mapping_file)
 
     if "fields" in mapping:
         return [f["name"] for f in mapping["fields"]]
@@ -123,6 +128,16 @@ def load_expectations_csv(path: str) -> list[ExpectationConfig]:
 
 def _read_target_data(target: TargetConfig) -> pd.DataFrame:
     header = 0 if target.has_header else None
+
+    mapping = _load_mapping(target.mapping_file) if target.mapping_file else None
+    source_format = ((mapping or {}).get("source") or {}).get("format")
+
+    if mapping and source_format == "fixed_width" and "fields" in mapping:
+        widths = [int(f["length"]) for f in mapping["fields"]]
+        names = [f["name"] for f in mapping["fields"]]
+        df = pd.read_fwf(target.data_file, widths=widths, names=names, dtype=str, header=None)
+        return df
+
     df = pd.read_csv(target.data_file, sep=target.delimiter, dtype=str, header=header)
 
     if not target.has_header:
@@ -172,10 +187,107 @@ def _apply_expectation(validator: Any, exp: ExpectationConfig) -> None:
         raise ValueError(f"Unsupported expectation_type: {et}")
 
 
+def _flatten_results_for_csv(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for target in summary.get("targets", []):
+        target_id = target.get("target_id")
+        result = target.get("result", {})
+        for r in result.get("results", []):
+            cfg = r.get("expectation_config", {})
+            kwargs = cfg.get("kwargs", {})
+            rows.append(
+                {
+                    "target_id": target_id,
+                    "run_success": target.get("success"),
+                    "expectation_type": cfg.get("type"),
+                    "column": kwargs.get("column"),
+                    "success": r.get("success"),
+                    "unexpected_count": (r.get("result") or {}).get("unexpected_count"),
+                    "element_count": (r.get("result") or {}).get("element_count"),
+                }
+            )
+    return rows
+
+
+def _write_csv_summary(summary: dict[str, Any], csv_output: str) -> None:
+    rows = _flatten_results_for_csv(summary)
+    out_path = Path(csv_output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fieldnames = [
+        "target_id",
+        "run_success",
+        "expectation_type",
+        "column",
+        "success",
+        "unexpected_count",
+        "element_count",
+    ]
+
+    with out_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
+def _write_html_summary(summary: dict[str, Any], html_output: str) -> None:
+    rows = _flatten_results_for_csv(summary)
+    out_path = Path(html_output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    body_rows = "\n".join(
+        "<tr>"
+        f"<td>{escape(str(r.get('target_id', '')))}</td>"
+        f"<td>{escape(str(r.get('expectation_type', '')))}</td>"
+        f"<td>{escape(str(r.get('column', '')))}</td>"
+        f"<td>{'✅' if r.get('success') else '❌'}</td>"
+        f"<td>{escape(str(r.get('unexpected_count', '')))}</td>"
+        f"<td>{escape(str(r.get('element_count', '')))}</td>"
+        "</tr>"
+        for r in rows
+    )
+
+    html = f"""
+<!doctype html>
+<html>
+<head>
+  <meta charset=\"utf-8\" />
+  <title>GX Checkpoint 1 Summary</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; margin: 20px; }}
+    table {{ border-collapse: collapse; width: 100%; }}
+    th, td {{ border: 1px solid #ddd; padding: 8px; }}
+    th {{ background: #f5f5f5; }}
+  </style>
+</head>
+<body>
+  <h1>Great Expectations - Checkpoint 1</h1>
+  <p><strong>Overall:</strong> {'PASS' if summary.get('success') else 'FAIL'}</p>
+  <p><strong>Targets Run:</strong> {summary.get('targets_run', 0)}</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Target</th><th>Expectation</th><th>Column</th><th>Pass</th><th>Unexpected</th><th>Element Count</th>
+      </tr>
+    </thead>
+    <tbody>
+      {body_rows}
+    </tbody>
+  </table>
+</body>
+</html>
+""".strip()
+
+    out_path.write_text(html, encoding="utf-8")
+
+
 def run_checkpoint_1(
     targets_csv: str,
     expectations_csv: str,
     output_json: str | None = None,
+    csv_output: str | None = None,
+    html_output: str | None = None,
     data_docs_dir: str | None = None,
 ) -> dict[str, Any]:
     try:
@@ -209,33 +321,25 @@ def run_checkpoint_1(
         asset = datasource.add_dataframe_asset(name=asset_name)
         batch_definition = asset.add_batch_definition_whole_dataframe(batch_def_name)
 
-        batch_request = batch_definition.build_batch_request(options={"dataframe": df})
+        try:
+            batch_request = batch_definition.build_batch_request(batch_parameters={"dataframe": df})
+        except TypeError:
+            batch_request = batch_definition.build_batch_request(options={"dataframe": df})
+        context.suites.add_or_update(gx.ExpectationSuite(name=suite_name))
         validator = context.get_validator(batch_request=batch_request, expectation_suite_name=suite_name)
 
         _add_default_expectations(validator, target, df)
         for exp in exp_by_target.get(target.target_id, []):
             _apply_expectation(validator, exp)
 
-        checkpoint = context.checkpoints.add_or_update(
-            gx.Checkpoint(
-                name=f"checkpoint1_{target.target_id}",
-                validations=[
-                    {
-                        "batch_request": batch_request,
-                        "expectation_suite_name": suite_name,
-                    }
-                ],
-            )
-        )
-
-        result = checkpoint.run()
-        success = bool(result.get("success", False))
+        result = validator.validate()
+        success = bool(getattr(result, "success", False))
         overall_success = overall_success and success
         run_results.append(
             {
                 "target_id": target.target_id,
                 "success": success,
-                "result": result.to_json_dict() if hasattr(result, "to_json_dict") else result,
+                "result": result.to_json_dict() if hasattr(result, "to_json_dict") else dict(result),
             }
         )
 
@@ -250,7 +354,15 @@ def run_checkpoint_1(
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
+    if csv_output:
+        _write_csv_summary(summary, csv_output)
+
+    if html_output:
+        _write_html_summary(summary, html_output)
+
     if data_docs_dir:
+        # For ephemeral context, build_data_docs uses GE defaults.
+        # We still call it to support users who rely on GE native docs.
         context.build_data_docs()
 
     return summary
