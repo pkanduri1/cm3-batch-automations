@@ -1,0 +1,22 @@
+{
+  "source_system": "SRC_A",
+  "description": "Sample source-system pipeline profile",
+  "stages": {
+    "ingest": {
+      "enabled": true,
+      "command": "echo Ingest validation placeholder"
+    },
+    "sqlloader": {
+      "enabled": false,
+      "command": "echo SQL*Loader placeholder"
+    },
+    "java_batch": {
+      "enabled": true,
+      "command": "echo Java batch placeholder"
+    },
+    "output_validation": {
+      "enabled": true,
+      "command": "echo Output validation placeholder"
+    }
+  }
+}
