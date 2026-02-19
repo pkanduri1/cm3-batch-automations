@@ -14,7 +14,7 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 - **HTML Reporting**: Generate detailed comparison and validation reports
 - **REST API**: FastAPI-based REST API with Swagger UI (interactive documentation)
 
-### Validation Features (New!)
+### Validation Features (Updated)
 - **Interactive Field-Level Analysis**: Search, sort, and paginate through field statistics
 - **Date Field Detection**: Automatic detection of date fields with YYYYMMDD format support
 - **Data Quality Metrics**: Overall quality score, completeness, and uniqueness tracking
@@ -23,6 +23,15 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 - **Duplicate Detection**: Identify and report duplicate records
 - **Issue Categorization**: Errors, warnings, and info messages with field-level details
 - **Business Rule Validation**: Execute complex validation rules defined in Excel/CSV templates
+- **Strict Fixed-Width Mode**: Exact record length and field-level format checks (`--strict-fixed-width`)
+- **Strict Levels**: `--strict-level basic|format|all` for progressive enforcement
+- **Optional Field Handling**: Optional fields may be empty; if populated, format/valid-value rules are enforced
+- **Valid Values Support**: Mapping CSV now supports `Valid Values` column (enforced by validator)
+- **Row-Level Error Codes**: Stable issue codes (e.g., `FW_LEN_001`, `FW_FMT_001`) for CI/reporting
+- **Top-10 Error Display + CSV Overflow**: Report shows first 10 strict errors and writes all errors to CSV
+- **Valid/Invalid Record Split Output**: `--strict-output-dir` writes `valid_records.txt` and `invalid_records.txt`
+- **Chunked Validation HTML Reports**: Chunked mode now supports full HTML report generation
+- **Chunked Performance Metrics**: Includes elapsed time, rows/sec, chunk size in validation metadata
 
 ### Advanced Features
 - **Configurable**: JSON-based configuration for different environments
@@ -36,6 +45,52 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 ## Quick Start
 
 ### First-Time Setup (Beginner Friendly)
+
+### Restarting / Refreshing Virtual Environment After Code Changes
+
+When developers change Python dependencies, entry points, or package metadata, refresh the venv:
+
+#### macOS / Linux
+
+```bash
+# from project root
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements-dev.txt
+pip install -e .
+```
+
+If environment is broken, recreate from scratch:
+
+```bash
+rm -rf .venv
+bash scripts/setup_mac.sh
+source .venv/bin/activate
+```
+
+#### Windows (PowerShell)
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+pip install --upgrade pip
+pip install -r requirements-dev.txt
+pip install -e .
+```
+
+Recreate from scratch if needed:
+
+```powershell
+Remove-Item -Recurse -Force .venv
+powershell -ExecutionPolicy Bypass -File scripts/setup_windows.ps1
+.\.venv\Scripts\Activate.ps1
+```
+
+Quick verification after refresh:
+
+```bash
+cm3-batch --help
+pytest -q -o addopts='' tests/unit
+```
 
 **Important:** Open your terminal or command prompt and navigate to the **project root directory** before running these commands.
 
