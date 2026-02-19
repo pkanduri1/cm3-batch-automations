@@ -99,7 +99,8 @@ class EnhancedFileValidator:
                 'category': 'parsing',
                 'message': f"Parse error: {str(e)}",
                 'row': None,
-                'field': None
+                'field': None,
+                'code': 'VAL_PARSE_001'
             })
             return self._build_result(False, file_metadata, None)
 
@@ -337,7 +338,8 @@ class EnhancedFileValidator:
                 'category': 'file',
                 'message': f"File not found: {self.parser.file_path}",
                 'row': None,
-                'field': None
+                'field': None,
+                'code': 'VAL_FILE_404'
             })
             return False
         return True
@@ -352,7 +354,8 @@ class EnhancedFileValidator:
                 'category': 'file',
                 'message': "File is empty",
                 'row': None,
-                'field': None
+                'field': None,
+                'code': 'VAL_FILE_000'
             })
         elif size < 10:
             self.warnings.append({
@@ -608,7 +611,8 @@ class EnhancedFileValidator:
                     'category': 'schema',
                     'message': f"Missing required field: {field}",
                     'row': None,
-                    'field': field
+                    'field': field,
+                    'code': 'VAL_SCHEMA_MISSING_FIELD'
                 })
         
         # Extra fields
@@ -620,7 +624,8 @@ class EnhancedFileValidator:
                     'category': 'schema',
                     'message': f"Unexpected field: {field}",
                     'row': None,
-                    'field': field
+                    'field': field,
+                    'code': 'VAL_SCHEMA_UNEXPECTED_FIELD'
                 })
 
     def _profile_data(self, df: pd.DataFrame) -> Dict[str, Any]:
@@ -696,7 +701,8 @@ class EnhancedFileValidator:
                             ),
                             'row': None,
                             'field': col,
-                            'expected_format': expected_format
+                            'expected_format': expected_format,
+                            'code': 'VAL_DATE_INVALID'
                         })
                     
                     if future_count > 0:
