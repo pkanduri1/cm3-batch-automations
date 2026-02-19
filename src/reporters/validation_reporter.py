@@ -1,12 +1,16 @@
 """Validation report generator for creating HTML validation reports."""
 
+import csv
 import json
 from typing import Dict, Any
 from datetime import datetime
+from pathlib import Path
 
 
 class ValidationReporter:
     """Generates HTML validation reports with charts and detailed analysis."""
+
+    WARNING_DISPLAY_LIMIT = 100
 
     def generate(self, validation_results: Dict[str, Any], output_path: str) -> None:
         """Generate HTML validation report.
@@ -16,9 +20,35 @@ class ValidationReporter:
             output_path: Path to save HTML report
         """
         html = self._generate_html(validation_results)
-        
+
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html)
+
+        # Export all warnings to CSV sidecar to keep HTML report concise.
+        self._write_warnings_csv(validation_results, output_path)
+
+    def _write_warnings_csv(self, validation_results: Dict[str, Any], output_path: str) -> None:
+        """Write all warnings to a CSV sidecar next to the HTML report."""
+        warnings = validation_results.get('warnings', [])
+        output = Path(output_path)
+        csv_path = output.with_name(f"{output.stem}_warnings.csv")
+
+        with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=['index', 'severity', 'message'])
+            writer.writeheader()
+            for idx, warning in enumerate(warnings, start=1):
+                if isinstance(warning, dict):
+                    writer.writerow({
+                        'index': idx,
+                        'severity': warning.get('severity', 'warning'),
+                        'message': warning.get('message', ''),
+                    })
+                else:
+                    writer.writerow({
+                        'index': idx,
+                        'severity': 'warning',
+                        'message': str(warning),
+                    })
 
     def _generate_html(self, results: Dict[str, Any]) -> str:
         """Generate complete HTML report."""
@@ -591,7 +621,8 @@ class ValidationReporter:
             </div>
             """)
         
-        for warning in warnings:
+        displayed_warning_count = min(len(warnings), self.WARNING_DISPLAY_LIMIT)
+        for warning in warnings[:self.WARNING_DISPLAY_LIMIT]:
             severity = warning.get('severity', 'warning')
             message = warning.get('message', '')
             issues_html.append(f"""
@@ -611,10 +642,23 @@ class ValidationReporter:
             </div>
             """)
         
+        warning_note = ""
+        if len(warnings) > self.WARNING_DISPLAY_LIMIT:
+            remaining = len(warnings) - self.WARNING_DISPLAY_LIMIT
+            warning_note = f"""
+            <div class=\"issue issue-warning\">
+                <div class=\"issue-title\">🟡 WARNING SUMMARY</div>
+                <div class=\"issue-message\">
+                    Showing first {self.WARNING_DISPLAY_LIMIT} warnings in HTML. {remaining} additional warnings were exported to the CSV sidecar file.
+                </div>
+            </div>
+            """
+
         return f"""
         <div class="section">
             <h2 class="section-title">Issues & Warnings</h2>
             {''.join(issues_html)}
+            {warning_note}
         </div>
         """
 
