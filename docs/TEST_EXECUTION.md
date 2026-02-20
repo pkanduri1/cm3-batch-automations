@@ -139,8 +139,8 @@ src/parsers/fixed_width_parser.py          45      3    93%
 src/parsers/format_detector.py             90      8    91%
 src/parsers/pipe_delimited_parser.py       35      2    94%
 src/parsers/validator.py                   80      8    90%
-src/reporters/__init__.py                   1      0   100%
-src/reporters/html_reporter.py             30      3    90%
+src/reports/renderers/__init__.py           2      0   100%
+src/reports/renderers/comparison_renderer.py 30      3    90%
 src/utils/__init__.py                       1      0   100%
 src/utils/logger.py                        40      5    88%
 src/validators/__init__.py                  5      0   100%

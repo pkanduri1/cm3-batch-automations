@@ -59,7 +59,8 @@ sequenceDiagram
 - `src/parsers/chunked_validator.py` — chunked validation
 - `src/validators/` — business and field validators
 - `src/database/` — Oracle connectivity and extraction
-- `src/reporters/` + `src/reporting/` — report rendering/adapters
+- `src/reports/` — unified report rendering/adapters/contracts
+- `src/reporters/` + `src/reporting/` — backward-compatible shims (deprecated)
 - `src/quality/gx_checkpoint1.py` — Great Expectations checkpoint integration
 
 ## Design Principles

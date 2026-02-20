@@ -356,7 +356,12 @@ cm3-batch-automations/
 │   ├── config/          # Configuration management
 │   │   ├── universal_mapping_parser.py  # Universal parser
 │   │   └── template_converter.py        # Excel/CSV converter
-│   ├── reporters/       # Report generation
+│   ├── reports/         # Unified reporting namespace
+│   │   ├── renderers/   # HTML/report renderers
+│   │   ├── adapters/    # Result adapters (standard/chunked)
+│   │   └── contracts/   # Reporting contracts/schemas
+│   ├── reporters/       # Backward-compatible shims (deprecated)
+│   ├── reporting/       # Backward-compatible shims (deprecated)
 │   └── utils/           # Utilities
 ├── tests/               # Test suite
 ├── config/              # Configuration files
