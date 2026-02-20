@@ -306,11 +306,13 @@ class ChunkedFileValidator:
             'valid': len(errors) == 0,
             'errors': errors,
             'warnings': warnings,
+            'info': basic_result.get('info', []),
             'file_path': self.file_path,
             'total_rows': basic_result.get('total_rows', 0),
             'expected_columns': expected_columns,
             'actual_columns': list(actual_columns),
             'missing_required': list(missing_required),
             'unexpected': list(unexpected),
-            'statistics': basic_result.get('statistics', {})
+            'statistics': basic_result.get('statistics', {}),
+            'business_rules': basic_result.get('business_rules', {'enabled': False, 'violations': [], 'statistics': {}}),
         }
