@@ -173,8 +173,11 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
 
         # Chunked path
         if use_chunked:
-            detector = FormatDetector()
-            parser_class = detector.get_parser_class(file)
+            if mapping_config and mapping_config.get('fields'):
+                parser_class = FixedWidthParser
+            else:
+                detector = FormatDetector()
+                parser_class = detector.get_parser_class(file)
 
             chunk_parser = None
             delimiter = '|'
@@ -205,12 +208,20 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
             else:
                 delimiter = '|'
 
+            expected_row_length = None
+            if mapping_config and mapping_config.get('fields'):
+                try:
+                    expected_row_length = sum(int(f.get('length', 0)) for f in mapping_config.get('fields', []))
+                except Exception:
+                    expected_row_length = None
+
             chunked_validator = ChunkedFileValidator(
                 file_path=file,
                 delimiter=delimiter,
                 chunk_size=chunk_size,
                 parser=chunk_parser,
                 rules_config_path=rules,
+                expected_row_length=expected_row_length,
             )
 
             if mapping_config:
@@ -276,8 +287,11 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
             return
 
         # Non-chunked path (existing behavior)
-        detector = FormatDetector()
-        parser_class = detector.get_parser_class(file)
+        if mapping_config and mapping_config.get('fields'):
+            parser_class = FixedWidthParser
+        else:
+            detector = FormatDetector()
+            parser_class = detector.get_parser_class(file)
 
         if mapping_config and parser_class == FixedWidthParser:
             field_specs = []

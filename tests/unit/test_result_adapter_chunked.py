@@ -44,3 +44,27 @@ def test_adapt_chunked_validation_result_includes_required_sections():
     assert metadata['size_bytes'] > 0
     assert metadata['size_mb'] >= 0
     assert metadata['modified_time'] != 'Unknown'
+
+
+def test_adapt_chunked_validation_result_populates_affected_rows_summary():
+    chunked_result = {
+        'valid': False,
+        'timestamp': '2026-02-18T23:00:00',
+        'total_rows': 10,
+        'actual_columns': ['a'],
+        'errors': [
+            {'message': 'bad row', 'row': 3, 'severity': 'error'},
+            {'message': 'another bad row', 'row': 5, 'severity': 'error'},
+        ],
+        'warnings': [
+            {'message': 'warn row', 'row': 3, 'severity': 'warning'}
+        ],
+        'info': [],
+        'statistics': {'null_counts': {}, 'empty_string_counts': {}, 'duplicate_count': 0},
+    }
+
+    model = adapt_chunked_validation_result(chunked_result, file_path='missing.txt', mapping=None)
+    summary = model['appendix']['affected_rows_summary']
+    assert summary['total_affected_rows'] == 2
+    assert summary['affected_row_pct'] == 20.0
+    assert summary['top_problematic_rows'] == [3, 5]

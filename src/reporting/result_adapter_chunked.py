@@ -87,6 +87,15 @@ def adapt_chunked_validation_result(result: Dict[str, Any], file_path: str, mapp
         }
     }
 
+    all_issues = []
+    for issue in (result.get('errors', []) or []) + (result.get('warnings', []) or []):
+        all_issues.append(issue)
+
+    affected_rows = sorted({
+        int(i.get('row')) for i in all_issues
+        if isinstance(i, dict) and i.get('row') is not None and str(i.get('row')).isdigit()
+    })
+
     return {
         'valid': result.get('valid', False),
         'timestamp': result.get('timestamp') or datetime.now().isoformat(),
@@ -129,7 +138,11 @@ def adapt_chunked_validation_result(result: Dict[str, Any], file_path: str, mapp
                 'rows_per_second': result.get('statistics', {}).get('rows_per_second')
             },
             'mapping_details': {'mapping_file': mapping},
-            'affected_rows_summary': {'total_affected_rows': 0, 'affected_row_pct': 0, 'top_problematic_rows': []}
+            'affected_rows_summary': {
+                'total_affected_rows': len(affected_rows),
+                'affected_row_pct': round((len(affected_rows) / total_rows * 100), 2) if total_rows else 0,
+                'top_problematic_rows': affected_rows[:20],
+            }
         },
         'business_rules': result.get('business_rules', {
             'enabled': False,
