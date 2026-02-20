@@ -2,7 +2,7 @@
 
 ## Quick Overview
 
-**Mapping files are JSON configurations** that define how to map data from source files to Oracle database tables. You already have several examples in [`config/mappings/`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/config/mappings/).
+**Mapping files are JSON configurations** that define how to map data from source files to Oracle database tables. You already have several examples in [`config/mappings/`](../config/mappings/).
 
 ---
 
@@ -369,28 +369,28 @@ cm3-batch parse -f data/your_file.txt -o output.csv
 | Item | Path |
 |------|------|
 | **Your Mappings** | `config/mappings/*.json` |
-| **Examples** | [`config/mappings/transaction_mapping.json`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/config/mappings/transaction_mapping.json) |
+| **Examples** | [`config/mappings/transaction_mapping.json`](../config/mappings/transaction_mapping.json) |
 | **Templates** | `config/templates/*.json` |
-| **Full Guide** | [`docs/UNIVERSAL_MAPPING_GUIDE.md`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/UNIVERSAL_MAPPING_GUIDE.md) |
+| **Full Guide** | [`docs/UNIVERSAL_MAPPING_GUIDE.md`](UNIVERSAL_MAPPING_GUIDE.md) |
 
 ---
 
 ## 🎓 Real Examples in Your Project
 
 ### Example 1: Transaction Mapping
-[`config/mappings/transaction_mapping.json`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/config/mappings/transaction_mapping.json)
+[`config/mappings/transaction_mapping.json`](../config/mappings/transaction_mapping.json)
 - Maps transaction file to TRANSACTION table
 - Includes validation for transaction types
 - Amount range validation
 
 ### Example 2: Customer Mapping
-[`config/mappings/customer_mapping.json`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/config/mappings/customer_mapping.json)
+[`config/mappings/customer_mapping.json`](../config/mappings/customer_mapping.json)
 - Maps customer data
 - Email validation
 - Phone number formatting
 
 ### Example 3: P327 Mapping
-[`config/mappings/p327_mapping.json`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/config/mappings/p327_mapping.json)
+[`config/mappings/p327_mapping.json`](../config/mappings/p327_mapping.json)
 - Complex fixed-width format
 - 252 fields
 - Production example
@@ -431,4 +431,4 @@ A: Yes, as long as the files have the same structure.
 4. **Reconcile**: `cm3-batch reconcile -m config/mappings/my_mapping.json`
 5. **Use it**: `cm3-batch parse -f your_file.txt`
 
-For detailed information, see the [Universal Mapping Guide](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/UNIVERSAL_MAPPING_GUIDE.md).
+For detailed information, see the [Universal Mapping Guide](UNIVERSAL_MAPPING_GUIDE.md).

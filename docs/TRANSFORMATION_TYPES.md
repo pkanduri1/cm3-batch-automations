@@ -417,7 +417,7 @@ You can apply multiple transformations in sequence. They are executed in order:
 ## 🔍 Transformation Implementation
 
 All transformations are implemented in:
-[`src/config/mapping_parser.py`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/src/config/mapping_parser.py)
+[`src/config/mapping_parser.py`](../src/config/mapping_parser.py)
 
 The `_apply_transformation` method (lines 149-185) handles all transformation logic.
 
@@ -425,8 +425,8 @@ The `_apply_transformation` method (lines 149-185) handles all transformation lo
 
 ## 📚 Related Documentation
 
-- **Mapping Quick Start**: [`docs/MAPPING_QUICKSTART.md`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/MAPPING_QUICKSTART.md)
-- **Universal Mapping Guide**: [`docs/UNIVERSAL_MAPPING_GUIDE.md`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/UNIVERSAL_MAPPING_GUIDE.md)
+- **Mapping Quick Start**: [`docs/MAPPING_QUICKSTART.md`](MAPPING_QUICKSTART.md)
+- **Universal Mapping Guide**: [`docs/UNIVERSAL_MAPPING_GUIDE.md`](UNIVERSAL_MAPPING_GUIDE.md)
 - **Validation Rules**: See mapping documentation for validation rule types
 
 ---

@@ -33,6 +33,14 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 - **API Interface**: RESTful API for web-based access and integration
 - **Source Data Verification**: Validate generated files against trusted source data using custom SQL queries
 
+## Documentation Navigation
+
+- **Canonical index**: `docs/DOCUMENTATION_INDEX.md`
+- **Functionality matrix**: `docs/FUNCTIONALITY_MATRIX.md`
+- **Architecture diagrams**: `docs/architecture.md`
+- **Hands-on usage**: `docs/USAGE_GUIDE.md`
+- **Testing**: `docs/TESTING_GUIDE.md`
+
 ## Quick Start
 
 For Java multi-step ETL regression orchestration, see:

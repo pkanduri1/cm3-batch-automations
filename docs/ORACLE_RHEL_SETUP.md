@@ -327,7 +327,7 @@ ORACLE_DSN=dbserver.company.com:1521/PROD
 ### Using Test Script
 
 ```bash
-cd /path/to/cm3-batch-automations-feature-file-format-detection
+cd /path/to/cm3-batch-automations
 source venv/bin/activate
 python test_oracle_connection.py
 ```

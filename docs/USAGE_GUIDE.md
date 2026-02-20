@@ -861,11 +861,11 @@ LOG_DIR=logs
 
 ## Additional Resources
 
-- **Universal Mapping Guide**: [docs/UNIVERSAL_MAPPING_GUIDE.md](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/UNIVERSAL_MAPPING_GUIDE.md)
-- **Testing Guide**: [docs/TESTING_GUIDE.md](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/TESTING_GUIDE.md)
-- **Deployment Options**: [docs/DEPLOYMENT_OPTIONS.md](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/DEPLOYMENT_OPTIONS.md)
-- **Architecture**: [docs/architecture.md](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/architecture.md)
-- **API Walkthrough**: [api_walkthrough.md](file:///Users/pavankanduri/.gemini/antigravity/brain/3550ba02-e58b-4642-9248-092dac86dbcc/api_walkthrough.md)
+- **Universal Mapping Guide**: [docs/UNIVERSAL_MAPPING_GUIDE.md](UNIVERSAL_MAPPING_GUIDE.md)
+- **Testing Guide**: [docs/TESTING_GUIDE.md](TESTING_GUIDE.md)
+- **Deployment Options**: [docs/DEPLOYMENT_OPTIONS.md](DEPLOYMENT_OPTIONS.md)
+- **Architecture**: [docs/architecture.md](architecture.md)
+- **API Walkthrough**: [api_walkthrough.md](API_UPLOAD_GUIDE.md)
 
 ---
 
