@@ -77,7 +77,7 @@ The universal mapping can now be used with any parser or tool in the system.
 
 ### Pipe-Delimited Format
 
-**Template**: [`config/templates/pipe_delimited_template.json`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/config/templates/pipe_delimited_template.json)
+**Template**: [`config/templates/pipe_delimited_template.json`](../config/templates/pipe_delimited_template.json)
 
 **Key Properties**:
 - `format`: `"pipe_delimited"`
@@ -104,7 +104,7 @@ The universal mapping can now be used with any parser or tool in the system.
 
 ### Fixed-Width Format
 
-**Template**: [`config/templates/fixed_width_template.json`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/config/templates/fixed_width_template.json)
+**Template**: [`config/templates/fixed_width_template.json`](../config/templates/fixed_width_template.json)
 
 **Key Properties**:
 - `format`: `"fixed_width"`
@@ -339,7 +339,7 @@ if validation['valid']:
 
 ### Method 3: Create from Scratch
 
-Use the JSON schema as reference: [`config/schemas/universal_mapping_schema.json`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/config/schemas/universal_mapping_schema.json)
+Use the JSON schema as reference: [`config/schemas/universal_mapping_schema.json`](../config/schemas/universal_mapping_schema.json)
 
 ---
 
@@ -403,5 +403,5 @@ Use the JSON schema as reference: [`config/schemas/universal_mapping_schema.json
 4. **Share templates** with your team
 
 For more examples, see:
-- [`config/templates/`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/config/templates/)
-- [`config/mappings/`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/config/mappings/)
+- [`config/templates/`](../config/templates/)
+- [`config/mappings/`](../config/mappings/)

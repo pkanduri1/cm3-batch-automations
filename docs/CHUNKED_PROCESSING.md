@@ -382,6 +382,6 @@ result = validator.validate_with_schema(
 
 ## 🚀 Next Steps
 
-- See [`docs/FUNCTIONALITY_GUIDE.md`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/FUNCTIONALITY_GUIDE.md) for all features
-- See [`docs/SCALABILITY_ANALYSIS.md`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/SCALABILITY_ANALYSIS.md) for performance details
-- See [`tests/unit/test_chunked_parser.py`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/tests/unit/test_chunked_parser.py) for code examples
+- See [`docs/FUNCTIONALITY_GUIDE.md`](FUNCTIONALITY_GUIDE.md) for all features
+- See [`docs/SCALABILITY_ANALYSIS.md`](SCALABILITY_ANALYSIS.md) for performance details
+- See [`tests/unit/test_chunked_parser.py`](../tests/unit/test_chunked_parser.py) for code examples

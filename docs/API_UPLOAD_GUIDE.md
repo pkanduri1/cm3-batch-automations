@@ -11,7 +11,7 @@ The error you're seeing (`Failed to fetch`) means the API server is **not curren
 ### Start the Server
 
 ```bash
-cd /Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection
+cd /path/to/cm3-batch-automations
 
 # Activate virtual environment
 source venv/bin/activate
@@ -322,9 +322,9 @@ uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 ## 📚 Additional Resources
 
 - **API Documentation**: http://localhost:8000/docs (when server is running)
-- **Mapping Guide**: [`docs/MAPPING_QUICKSTART.md`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/MAPPING_QUICKSTART.md)
-- **Universal Mapping Guide**: [`docs/UNIVERSAL_MAPPING_GUIDE.md`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/UNIVERSAL_MAPPING_GUIDE.md)
-- **Template Converter**: [`src/config/template_converter.py`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/src/config/template_converter.py)
+- **Mapping Guide**: [`docs/MAPPING_QUICKSTART.md`](MAPPING_QUICKSTART.md)
+- **Universal Mapping Guide**: [`docs/UNIVERSAL_MAPPING_GUIDE.md`](UNIVERSAL_MAPPING_GUIDE.md)
+- **Template Converter**: [`src/config/template_converter.py`](../src/config/template_converter.py)
 
 ---
 

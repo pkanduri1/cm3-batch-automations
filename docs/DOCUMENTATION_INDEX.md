@@ -1,0 +1,40 @@
+# Documentation Index (Canonical)
+
+This is the **single source of truth** for docs navigation.
+
+## Start Here
+- `README.md` — quick start and project overview
+- `docs/USAGE_GUIDE.md` — practical command usage
+- `docs/FUNCTIONALITY_MATRIX.md` — capability matrix (CLI/API/inputs/outputs)
+- `docs/architecture.md` — architecture and flow diagrams
+
+## Core Operational Docs
+- `docs/TESTING_GUIDE.md` — test strategy and commands
+- `docs/CICD_GUIDE.md` — CI/CD setup and behavior
+- `docs/PIPELINE_REGRESSION_GUIDE.md` — pipeline regression flows
+- `docs/GREAT_EXPECTATIONS_CHECKPOINT1.md` — BA-friendly GE usage
+
+## Data & Mapping
+- `docs/MAPPING_QUICKSTART.md`
+- `docs/UNIVERSAL_MAPPING_GUIDE.md`
+- `docs/MAPPING_SCHEMA.md`
+- `docs/VALIDATION_RULES.md`
+- `docs/TRANSFORMATION_TYPES.md`
+
+## Deployment
+- `docs/DEPLOYMENT_OPTIONS.md`
+- `docs/RHEL_DEPLOYMENT.md`
+- `docs/RPM_DEPLOYMENT.md`
+- `docs/PEX_DEPLOYMENT.md`
+
+## API
+- `docs/API_UPLOAD_GUIDE.md`
+
+## Contracts
+- `docs/contracts/business_rules_v1.md`
+- `docs/contracts/validation_result_v1.md`
+
+---
+
+## Redundancy Policy
+When two docs overlap, keep details in the canonical doc above and reduce other files to short pointers.

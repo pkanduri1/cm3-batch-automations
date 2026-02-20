@@ -626,7 +626,7 @@ When validation runs, you get a report:
 ## 🔍 Validation Implementation
 
 All validation rules are implemented in:
-[`src/config/mapping_parser.py`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/src/config/mapping_parser.py)
+[`src/config/mapping_parser.py`](../src/config/mapping_parser.py)
 
 The `_validate_rule` method (lines 227-255) handles all validation logic.
 
@@ -634,9 +634,9 @@ The `_validate_rule` method (lines 227-255) handles all validation logic.
 
 ## 📚 Related Documentation
 
-- **Transformation Types**: [`docs/TRANSFORMATION_TYPES.md`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/TRANSFORMATION_TYPES.md)
-- **Mapping Quick Start**: [`docs/MAPPING_QUICKSTART.md`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/MAPPING_QUICKSTART.md)
-- **Universal Mapping Guide**: [`docs/UNIVERSAL_MAPPING_GUIDE.md`](file:///Users/pavankanduri/google-agy/cm3-batch-automations-feature-file-format-detection/docs/UNIVERSAL_MAPPING_GUIDE.md)
+- **Transformation Types**: [`docs/TRANSFORMATION_TYPES.md`](TRANSFORMATION_TYPES.md)
+- **Mapping Quick Start**: [`docs/MAPPING_QUICKSTART.md`](MAPPING_QUICKSTART.md)
+- **Universal Mapping Guide**: [`docs/UNIVERSAL_MAPPING_GUIDE.md`](UNIVERSAL_MAPPING_GUIDE.md)
 
 ---
 
