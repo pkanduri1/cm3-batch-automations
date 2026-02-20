@@ -2,7 +2,6 @@
 
 import sys
 import os
-from datetime import datetime
 import click
 from src.utils.logger import setup_logger
 
@@ -152,12 +151,7 @@ def parse(file, mapping, format, output, use_chunked, chunk_size):
 @click.option('--use-chunked', is_flag=True, help='Use chunked processing for large files')
 @click.option('--chunk-size', default=100000, help='Chunk size for large files (default: 100000)')
 @click.option('--progress/--no-progress', default=True, help='Show progress bar')
-@click.option('--strict-fixed-width', is_flag=True,
-              help='Strict fixed-width checks: exact record length + format validation per row')
-@click.option('--strict-level', type=click.Choice(['basic', 'format', 'all']), default='all',
-              help='Strict fixed-width level: basic=record length/required, format=add format/valid-values, all=same as format')
-@click.option('--strict-output-dir', help='When strict fixed-width is enabled, write valid/invalid row files to this directory')
-def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress, strict_fixed_width, strict_level, strict_output_dir):
+def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress):
     """Validate file format and content."""
     logger = setup_logger('cm3-batch', log_to_file=False)
 
@@ -169,7 +163,6 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
         from src.parsers.chunked_parser import ChunkedFixedWidthParser
         from src.reporters.validation_reporter import ValidationReporter
         from src.reporting.result_adapter_chunked import adapt_chunked_validation_result
-        from src.reporting.result_adapter_standard import adapt_standard_validation_result
         import json
 
         mapping_config = None
@@ -180,8 +173,6 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
 
         # Chunked path
         if use_chunked:
-            if strict_fixed_width:
-                click.echo(click.style('Note: --strict-fixed-width is applied in non-chunked validation path. Running chunked validation without strict row checks.', fg='yellow'))
             detector = FormatDetector()
             parser_class = detector.get_parser_class(file)
 
@@ -189,11 +180,23 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
             delimiter = '|'
             if parser_class == FixedWidthParser and mapping_config and 'fields' in mapping_config:
                 field_specs = []
+                current_pos = 0
                 for field in mapping_config.get('fields', []):
                     field_name = field['name']
-                    start = int(field['position']) - 1
-                    end = start + int(field['length'])
+                    field_length = int(field['length'])
+
+                    # Support both styles:
+                    # 1) explicit 1-based `position`
+                    # 2) implicit cumulative positions from `length`
+                    if field.get('position') is not None:
+                        start = int(field['position']) - 1
+                    else:
+                        start = current_pos
+
+                    end = start + field_length
                     field_specs.append((field_name, start, end))
+                    current_pos = end
+
                 chunk_parser = ChunkedFixedWidthParser(file, field_specs, chunk_size=chunk_size)
             elif parser_class == FixedWidthParser and mapping_config and 'mappings' in mapping_config:
                 # Fallback for non-universal mappings (no fixed-width position metadata)
@@ -260,11 +263,13 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
                     with open(output, 'w') as f:
                         json.dump(result, f, indent=2)
                     click.echo(f"\n✓ Chunked validation JSON report generated: {output}")
-                else:
+                elif output.lower().endswith('.html') or output.lower().endswith('.htm'):
                     reporter = ValidationReporter()
-                    html_result = adapt_chunked_validation_result(result, file_path=file, mapping=mapping)
-                    reporter.generate(html_result, output)
+                    adapted = adapt_chunked_validation_result(result, file_path=file, mapping=mapping)
+                    reporter.generate(adapted, output)
                     click.echo(f"\n✓ Chunked validation HTML report generated: {output}")
+                else:
+                    click.echo(click.style("\nUnsupported output type for chunked validation. Use .json or .html", fg='yellow'))
 
             if not result['valid']:
                 sys.exit(1)
@@ -288,88 +293,7 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
             parser = parser_class(file)
 
         validator = EnhancedFileValidator(parser, mapping_config, rules)
-        result = validator.validate(
-            detailed=detailed,
-            strict_fixed_width=strict_fixed_width,
-            strict_level=strict_level,
-        )
-
-        # For strict mode, keep report/console readable by showing top 10 errors
-        # and writing full errors to CSV.
-        if strict_fixed_width and result.get('errors'):
-            from pathlib import Path
-            import csv
-
-            full_errors = result.get('errors', [])
-            if len(full_errors) > 10:
-                report_base = Path(output) if output else Path('reports/strict_validation.html')
-                errors_csv = report_base.with_suffix('')
-                errors_csv = errors_csv.parent / f"{errors_csv.name}_all_errors.csv"
-                errors_csv.parent.mkdir(parents=True, exist_ok=True)
-
-                # Normalize keys across varying issue dicts
-                keys = set()
-                for e in full_errors:
-                    if isinstance(e, dict):
-                        keys.update(e.keys())
-                fieldnames = sorted(keys) if keys else ['message']
-
-                with open(errors_csv, 'w', newline='', encoding='utf-8') as f:
-                    writer = csv.DictWriter(f, fieldnames=fieldnames)
-                    writer.writeheader()
-                    for e in full_errors:
-                        if isinstance(e, dict):
-                            writer.writerow(e)
-                        else:
-                            writer.writerow({'message': str(e)})
-
-                result['errors_file'] = str(errors_csv)
-                result['errors_truncated'] = True
-                result['errors_total'] = len(full_errors)
-                result['errors'] = full_errors[:10]
-                result['warnings'] = result.get('warnings', []) + [{
-                    'severity': 'warning',
-                    'category': 'reporting',
-                    'message': (
-                        f"Showing first 10 errors in report. Full error list written to {errors_csv}"
-                    ),
-                    'row': None,
-                    'field': None,
-                    'code': 'VAL_REPORT_TRUNCATED'
-                }]
-
-        if strict_fixed_width and strict_output_dir:
-            strict_result = result.get('strict_fixed_width') or {}
-            if strict_result.get('enabled'):
-                from pathlib import Path
-                out_dir = Path(strict_output_dir)
-                out_dir.mkdir(parents=True, exist_ok=True)
-
-                invalid_rows = set(strict_result.get('invalid_row_numbers', []))
-                valid_path = out_dir / 'valid_records.txt'
-                invalid_path = out_dir / 'invalid_records.txt'
-
-                with open(file, 'r', encoding='utf-8', errors='replace') as src, \
-                     open(valid_path, 'w', encoding='utf-8') as good, \
-                     open(invalid_path, 'w', encoding='utf-8') as bad:
-                    for idx, line in enumerate(src, start=1):
-                        if idx in invalid_rows:
-                            bad.write(line)
-                        else:
-                            good.write(line)
-
-                click.echo(f"Strict outputs written: {valid_path}, {invalid_path}")
-
-        # Ensure standard-mode run metadata is always present for downstream reports
-        appendix = result.setdefault('appendix', {}) if isinstance(result, dict) else {}
-        validation_config = appendix.setdefault('validation_config', {}) if isinstance(appendix, dict) else {}
-        if isinstance(validation_config, dict):
-            validation_config.setdefault('mode', 'standard')
-            validation_config['mapping_file'] = mapping
-            validation_config['rules_file'] = rules
-            validation_config['strict_fixed_width'] = bool(strict_fixed_width)
-            validation_config['strict_level'] = strict_level if strict_fixed_width else None
-            validation_config.setdefault('validation_timestamp', result.get('timestamp'))
+        result = validator.validate(detailed=detailed)
 
         if result['valid']:
             click.echo(click.style('✓ File is valid', fg='green'))
@@ -402,9 +326,12 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
 
         if output:
             reporter = ValidationReporter()
-            report_model = adapt_standard_validation_result(result)
-            reporter.generate(report_model, output)
+            reporter.generate(result, output)
             click.echo(f"\n✓ Validation report generated: {output}")
+
+        # Align exit behavior with chunked validation path and CI expectations.
+        if not result['valid']:
+            sys.exit(1)
 
     except Exception as e:
         logger.error(f"Error validating file: {e}")
@@ -473,13 +400,14 @@ def convert_rules(template, output, sheet):
 @click.option('--file1', '-f1', required=True, help='First file')
 @click.option('--file2', '-f2', required=True, help='Second file')
 @click.option('--keys', '-k', help='Key columns (comma-separated). If not provided, compares row-by-row.')
+@click.option('--mapping', '-m', help='Mapping file (recommended for fixed-width comparison).')
 @click.option('--output', '-o', help='Output HTML report file')
 @click.option('--thresholds', '-t', help='Threshold configuration file')
 @click.option('--detailed/--basic', default=True, help='Detailed field analysis')
 @click.option('--chunk-size', default=100000, help='Chunk size for large files (default: 100000)')
 @click.option('--progress/--no-progress', default=True, help='Show progress bar')
 @click.option('--use-chunked', is_flag=True, help='Use chunked processing for large files')
-def compare(file1, file2, keys, output, thresholds, detailed, chunk_size, progress, use_chunked):
+def compare(file1, file2, keys, mapping, output, thresholds, detailed, chunk_size, progress, use_chunked):
     """Compare two files and generate report."""
     logger = setup_logger('cm3-batch', log_to_file=False)
     
@@ -523,15 +451,53 @@ def compare(file1, file2, keys, output, thresholds, detailed, chunk_size, progre
         else:
             # Parse both files (original method)
             detector = FormatDetector()
-            
+            import json
+            from src.parsers.fixed_width_parser import FixedWidthParser
+
+            mapping_config = None
+            if mapping:
+                with open(mapping, 'r') as f:
+                    mapping_config = json.load(f)
+
+            def _build_fixed_width_specs(cfg):
+                field_specs = []
+                current_pos = 0
+                for field in cfg.get('fields', []):
+                    name = field['name']
+                    length = int(field['length'])
+                    if field.get('position') is not None:
+                        start = int(field['position']) - 1
+                    else:
+                        start = current_pos
+                    end = start + length
+                    field_specs.append((name, start, end))
+                    current_pos = end
+                return field_specs
+
             parser1_class = detector.get_parser_class(file1)
-            parser1 = parser1_class(file1)
+            if parser1_class == FixedWidthParser:
+                if not (mapping_config and mapping_config.get('fields')):
+                    click.echo(click.style(
+                        "Error: fixed-width compare requires --mapping with fields/length metadata.",
+                        fg='red'))
+                    sys.exit(1)
+                parser1 = FixedWidthParser(file1, _build_fixed_width_specs(mapping_config))
+            else:
+                parser1 = parser1_class(file1)
             df1 = parser1.parse()
-            
+
             parser2_class = detector.get_parser_class(file2)
-            parser2 = parser2_class(file2)
+            if parser2_class == FixedWidthParser:
+                if not (mapping_config and mapping_config.get('fields')):
+                    click.echo(click.style(
+                        "Error: fixed-width compare requires --mapping with fields/length metadata.",
+                        fg='red'))
+                    sys.exit(1)
+                parser2 = FixedWidthParser(file2, _build_fixed_width_specs(mapping_config))
+            else:
+                parser2 = parser2_class(file2)
             df2 = parser2.parse()
-            
+
             # Compare
             comparator = FileComparator(df1, df2, key_columns)
             results = comparator.compare(detailed=detailed)
@@ -935,6 +901,38 @@ def extract(table, query, sql_file, output, limit, delimiter):
         sys.exit(1)
 
 
+@cli.command('generate-oracle-expected')
+@click.option('--manifest', 'manifest_path', required=True, type=click.Path(exists=True),
+              help='Oracle expected-generation manifest JSON')
+@click.option('--dry-run/--run', default=True,
+              help='Dry-run by default. Use --run to execute Oracle extraction jobs')
+@click.option('--output', '-o', help='Optional output JSON summary file')
+def generate_oracle_expected(manifest_path, dry_run, output):
+    """Generate expected target files from Oracle transformation SQL (cm3int)."""
+    logger = setup_logger('cm3-batch', log_to_file=False)
+    try:
+        import json
+        from src.pipeline.oracle_expected_generator import load_oracle_manifest, generate_expected_from_oracle
+
+        manifest = load_oracle_manifest(manifest_path)
+        summary = generate_expected_from_oracle(manifest, dry_run=dry_run)
+
+        click.echo(f"Status: {summary.get('status')}")
+        for j in summary.get('jobs', []):
+            click.echo(f"- {j.get('name')}: {j.get('status')}")
+
+        if output:
+            with open(output, 'w', encoding='utf-8') as f:
+                json.dump(summary, f, indent=2)
+            click.echo(f"\n✓ Oracle expected summary written: {output}")
+
+        if summary.get('status') == 'failed':
+            sys.exit(1)
+    except Exception as e:
+        logger.error(f"Error generating oracle expected files: {e}")
+        sys.exit(1)
+
+
 @cli.command('run-pipeline')
 @click.option('--config', 'config_path', required=True, type=click.Path(exists=True),
               help='Source-system pipeline profile JSON')
@@ -969,6 +967,54 @@ def run_pipeline(config_path, dry_run, output, summary_md):
             sys.exit(1)
     except Exception as e:
         logger.error(f"Error running pipeline profile: {e}")
+        sys.exit(1)
+
+
+@cli.command('gx-checkpoint1')
+@click.option('--targets', '-t', 'targets_csv', type=click.Path(exists=True), required=True,
+              help='CSV file listing data targets (BA-friendly).')
+@click.option('--expectations', '-e', 'expectations_csv', type=click.Path(exists=True), required=True,
+              help='CSV file listing expectations (BA-friendly).')
+@click.option('--output', '-o', 'output_json', type=click.Path(),
+              help='Optional path to write run summary JSON.')
+@click.option('--csv-output', type=click.Path(),
+              help='Optional path to write flattened expectation results CSV.')
+@click.option('--html-output', type=click.Path(),
+              help='Optional path to write human-readable HTML summary.')
+@click.option('--data-docs-dir', type=click.Path(),
+              help='Optional Great Expectations data docs directory.')
+def gx_checkpoint1(targets_csv, expectations_csv, output_json, csv_output, html_output, data_docs_dir):
+    """Run Great Expectations Checkpoint 1 (schema/null/uniqueness/allowed values/range/row-count)."""
+    logger = setup_logger('cm3-batch', log_to_file=False)
+
+    try:
+        from src.quality.gx_checkpoint1 import run_checkpoint_1
+
+        summary = run_checkpoint_1(
+            targets_csv=targets_csv,
+            expectations_csv=expectations_csv,
+            output_json=output_json,
+            csv_output=csv_output,
+            html_output=html_output,
+            data_docs_dir=data_docs_dir,
+        )
+
+        if summary.get('success'):
+            click.echo(click.style('✓ Great Expectations Checkpoint 1 passed', fg='green'))
+        else:
+            click.echo(click.style('✗ Great Expectations Checkpoint 1 failed', fg='red'))
+            sys.exit(1)
+
+        click.echo(f"Targets run: {summary.get('targets_run', 0)}")
+        if output_json:
+            click.echo(f"JSON summary written to: {output_json}")
+        if csv_output:
+            click.echo(f"CSV summary written to: {csv_output}")
+        if html_output:
+            click.echo(f"HTML summary written to: {html_output}")
+
+    except Exception as e:
+        logger.error(f"Error running Great Expectations Checkpoint 1: {e}")
         sys.exit(1)
 
 

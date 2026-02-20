@@ -427,6 +427,24 @@ pytest tests/api --cov=src.api --cov-report=html
 pytest tests/api/test_api_mappings.py::test_upload_template -v
 ```
 
+## Great Expectations Regression Checks (Checkpoint 1)
+
+For BA-configurable regression checks without Python coding, use:
+
+```bash
+cm3-batch gx-checkpoint1 \
+  --targets config/gx/targets.sample.csv \
+  --expectations config/gx/expectations.sample.csv \
+  --output reports/gx_checkpoint1_summary.json
+```
+
+Behavior:
+- Returns non-zero exit code on failed expectations (CI-friendly)
+- Supports schema/order, non-null, uniqueness, allowed set, ranges, row count
+- Driven by CSV templates in `config/templates/csv/`
+
+See: `docs/GREAT_EXPECTATIONS_CHECKPOINT1.md`.
+
 ## CI/CD Integration
 
 ### GitLab CI Example

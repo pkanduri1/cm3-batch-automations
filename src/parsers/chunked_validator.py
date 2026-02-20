@@ -1,5 +1,6 @@
 """Chunked file validator for memory-efficient validation."""
 
+import json
 import time
 import pandas as pd
 from typing import Dict, Any, List, Optional
@@ -8,7 +9,6 @@ from ..utils.progress import ProgressTracker
 from ..utils.memory_monitor import MemoryMonitor
 from ..utils.logger import get_logger
 from ..validators.rule_engine import RuleEngine
-import json
 
 
 class ChunkedFileValidator:
@@ -31,11 +31,16 @@ class ChunkedFileValidator:
         self.parser = parser
         self.logger = get_logger(__name__)
         self.memory_monitor = MemoryMonitor()
-        self.rule_engine = None
+        self.rule_engine: Optional[RuleEngine] = None
+        self._total_rows_for_rules = 0
+
         if rules_config_path:
-            with open(rules_config_path, 'r', encoding='utf-8') as f:
-                rules_cfg = json.load(f)
-            self.rule_engine = RuleEngine(rules_cfg)
+            try:
+                with open(rules_config_path, 'r') as f:
+                    rules_cfg = json.load(f)
+                self.rule_engine = RuleEngine(rules_cfg)
+            except Exception as e:
+                self.logger.warning(f"Failed to load business rules: {e}")
     
     def validate(self, show_progress: bool = True) -> Dict[str, Any]:
         """Validate file in chunks.
@@ -48,10 +53,11 @@ class ChunkedFileValidator:
         """
         self.logger.info(f"Starting chunked validation: {self.file_path}")
         self.memory_monitor.log_memory_usage("validation start")
-        start_time = time.time()
-        
+        start_ts = time.time()
+
         errors = []
         warnings = []
+        info = []
         
         # Validate structure first
         parser = self.parser or ChunkedFileParser(self.file_path, self.delimiter, self.chunk_size)
@@ -70,24 +76,14 @@ class ChunkedFileValidator:
         duplicate_count = 0
         seen_rows = set()  # For duplicate detection (memory-limited)
         max_seen_rows = 100000  # Limit duplicate tracking
-        
-        # Business-rule aggregation (optional)
-        business_rule_violations = []
-        business_rule_error = None
-        business_rule_stats = {
-            'total_violations': 0,
-            'violations_by_severity': {'error': 0, 'warning': 0, 'info': 0}
-        }
 
+        business_violations: list[dict] = []
+        
         # Parse and validate chunks
         progress = ProgressTracker(parser.count_rows(), "Validating") if show_progress else None
         
         try:
             for chunk_num, chunk in enumerate(parser.parse_chunks(), 1):
-                # Set global index so rule violations report global row numbers
-                chunk = chunk.copy()
-                chunk.index = range(total_rows, total_rows + len(chunk))
-
                 # Validate chunk
                 chunk_errors, chunk_warnings, chunk_stats = self._validate_chunk(
                     chunk, chunk_num, seen_rows, max_seen_rows
@@ -95,36 +91,33 @@ class ChunkedFileValidator:
                 
                 errors.extend(chunk_errors)
                 warnings.extend(chunk_warnings)
-
-                # Execute business rules on each chunk (optional)
-                if self.rule_engine:
-                    try:
-                        chunk_violations = self.rule_engine.validate(chunk)
-                        business_rule_violations.extend([v.to_dict() for v in chunk_violations])
-                        business_rule_stats['total_violations'] += len(chunk_violations)
-                        for v in chunk_violations:
-                            sev = v.severity if v.severity in business_rule_stats['violations_by_severity'] else 'info'
-                            business_rule_stats['violations_by_severity'][sev] += 1
-                            msg = {
-                                'severity': v.severity,
-                                'category': 'business_rule',
-                                'message': v.message,
-                                'row': v.row_number,
-                                'field': v.field,
-                                'rule_id': v.rule_id,
-                                'rule_name': v.rule_name,
-                                'issue_code': v.issue_code,
-                            }
-                            if v.severity == 'error':
-                                errors.append(msg)
-                            elif v.severity == 'warning':
-                                warnings.append(msg)
-                    except Exception as e:
-                        business_rule_error = str(e)
-
+                
                 # Update statistics
                 total_rows += len(chunk)
                 duplicate_count += chunk_stats['duplicates']
+
+                # Optional business-rule validation
+                if self.rule_engine is not None:
+                    self.rule_engine.set_total_rows(total_rows)
+                    violations = self.rule_engine.validate(chunk)
+                    for v in violations:
+                        vdict = v.to_dict()
+                        business_violations.append(vdict)
+                        issue = {
+                            'severity': v.severity,
+                            'category': 'business_rule',
+                            'message': v.message,
+                            'row': v.row_number,
+                            'field': v.field,
+                            'rule_id': v.rule_id,
+                            'rule_name': v.rule_name,
+                        }
+                        if v.severity == 'error':
+                            errors.append(issue)
+                        elif v.severity == 'warning':
+                            warnings.append(issue)
+                        else:
+                            info.append(issue)
                 
                 # Aggregate null counts
                 for col, count in chunk_stats['nulls'].items():
@@ -165,48 +158,41 @@ class ChunkedFileValidator:
                     f"(limited to first {max_seen_rows:,} rows checked)"
                 )
             
-            elapsed_sec = max(time.time() - start_time, 0.000001)
-            rows_per_sec = round(total_rows / elapsed_sec, 2)
-
             self.logger.info(
                 f"Validation complete: {total_rows:,} rows validated, "
-                f"{len(errors)} errors, {len(warnings)} warnings in {elapsed_sec:.2f}s "
-                f"({rows_per_sec:,.2f} rows/sec)"
+                f"{len(errors)} errors, {len(warnings)} warnings"
             )
             self.memory_monitor.log_memory_usage("validation complete")
             
-            business_rules = {'enabled': False, 'violations': [], 'statistics': {}}
-            if self.rule_engine:
-                affected_rows = len({v.get('row_number') for v in business_rule_violations if isinstance(v, dict)})
-                compliance_rate = ((total_rows - affected_rows) / total_rows * 100) if total_rows else 100.0
-                stats = {
-                    **business_rule_stats,
-                    'affected_rows': affected_rows,
-                    'compliance_rate': round(compliance_rate, 2)
-                }
-                business_rules = {
-                    'enabled': business_rule_error is None,
-                    'violations': business_rule_violations,
-                    'statistics': stats,
-                }
-                if business_rule_error:
-                    business_rules['error'] = business_rule_error
+            elapsed = max(time.time() - start_ts, 0.0)
+            rows_per_second = (total_rows / elapsed) if elapsed > 0 else 0.0
+
+            business_stats = {
+                'total_rules': len(self.rule_engine.rules) if self.rule_engine else 0,
+                'enabled_rules': len(self.rule_engine.enabled_rules) if self.rule_engine else 0,
+                'total_violations': len(business_violations),
+            }
 
             return {
                 'valid': len(errors) == 0,
                 'errors': errors,
                 'warnings': warnings,
+                'info': info,
                 'file_path': self.file_path,
                 'total_rows': total_rows,
-                'business_rules': business_rules,
                 'statistics': {
                     'null_counts': total_nulls,
                     'empty_string_counts': total_empty_strings,
                     'duplicate_count': duplicate_count,
                     'duplicate_check_limited': len(seen_rows) >= max_seen_rows,
-                    'elapsed_seconds': round(elapsed_sec, 4),
-                    'rows_per_second': rows_per_sec,
-                    'chunk_size': self.chunk_size
+                    'elapsed_seconds': round(elapsed, 6),
+                    'rows_per_second': round(rows_per_second, 2),
+                    'chunk_size': self.chunk_size,
+                },
+                'business_rules': {
+                    'enabled': self.rule_engine is not None,
+                    'violations': business_violations,
+                    'statistics': business_stats,
                 }
             }
             
@@ -216,8 +202,7 @@ class ChunkedFileValidator:
                 'valid': False,
                 'errors': [f"Validation failed: {str(e)}"],
                 'warnings': warnings,
-                'file_path': self.file_path,
-                'business_rules': {'enabled': False, 'violations': [], 'statistics': {}, 'error': str(e)}
+                'file_path': self.file_path
             }
     
     def _validate_chunk(self, chunk: pd.DataFrame, chunk_num: int,
@@ -264,8 +249,7 @@ class ChunkedFileValidator:
         # Check for empty strings
         for col in chunk.columns:
             if chunk[col].dtype == 'object':
-                # Treat blank/whitespace-only values as empty for fixed-width style files
-                empty_count = chunk[col].astype(str).str.strip().eq('').sum()
+                empty_count = (chunk[col] == '').sum()
                 if empty_count > 0:
                     stats['empty_strings'][col] = int(empty_count)
         
@@ -322,6 +306,7 @@ class ChunkedFileValidator:
             'valid': len(errors) == 0,
             'errors': errors,
             'warnings': warnings,
+            'info': basic_result.get('info', []),
             'file_path': self.file_path,
             'total_rows': basic_result.get('total_rows', 0),
             'expected_columns': expected_columns,
@@ -329,5 +314,5 @@ class ChunkedFileValidator:
             'missing_required': list(missing_required),
             'unexpected': list(unexpected),
             'statistics': basic_result.get('statistics', {}),
-            'business_rules': basic_result.get('business_rules', {'enabled': False, 'violations': [], 'statistics': {}})
+            'business_rules': basic_result.get('business_rules', {'enabled': False, 'violations': [], 'statistics': {}}),
         }

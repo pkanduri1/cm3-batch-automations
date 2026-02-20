@@ -14,7 +14,7 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 - **HTML Reporting**: Generate detailed comparison and validation reports
 - **REST API**: FastAPI-based REST API with Swagger UI (interactive documentation)
 
-### Validation Features (Updated)
+### Validation Features (New!)
 - **Interactive Field-Level Analysis**: Search, sort, and paginate through field statistics
 - **Date Field Detection**: Automatic detection of date fields with YYYYMMDD format support
 - **Data Quality Metrics**: Overall quality score, completeness, and uniqueness tracking
@@ -23,39 +23,6 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 - **Duplicate Detection**: Identify and report duplicate records
 - **Issue Categorization**: Errors, warnings, and info messages with field-level details
 - **Business Rule Validation**: Execute complex validation rules defined in Excel/CSV templates
-- **Strict Fixed-Width Mode**: Exact record length and field-level format checks (`--strict-fixed-width`)
-- **Strict Levels**: `--strict-level basic|format|all` for progressive enforcement
-- **Optional Field Handling**: Optional fields may be empty; if populated, format/valid-value rules are enforced
-- **Valid Values Support**: Mapping CSV now supports `Valid Values` column (enforced by validator)
-- **Row-Level Error Codes**: Stable issue codes (e.g., `FW_LEN_001`, `FW_FMT_001`) for CI/reporting
-- **Top-10 Error Display + CSV Overflow**: Report shows first 10 strict errors and writes all errors to CSV
-- **Valid/Invalid Record Split Output**: `--strict-output-dir` writes `valid_records.txt` and `invalid_records.txt`
-- **Chunked Validation HTML Reports**: Chunked mode now supports full HTML report generation
-- **Chunked Performance Metrics**: Includes elapsed time, rows/sec, chunk size in validation metadata
-
-### Validation Mode Truth Table
-
-| Capability | Standard Validate | Standard + Strict | Chunked Validate |
-|---|---:|---:|---:|
-| Schema checks (expected/required columns) | ✅ | ✅ | ✅ |
-| Fixed-width exact record-length enforcement | ❌ | ✅ | ❌ |
-| Fixed-width format/valid-values strict checks | ❌ | ✅ | ❌ |
-| Business rules execution | ✅ | ✅ | ✅ |
-| HTML report generation | ✅ | ✅ | ✅ |
-| Performance metadata (`elapsed_seconds`, `rows_per_second`) | Optional | Optional | ✅ |
-
-### BA-Friendly Business Rules Quick Flow
-
-1. Fill `config/templates/csv/business_rules_template.ba_friendly.csv`.
-2. Convert templates:
-   - `python scripts/bulk_convert_rules.py --input-dir rules/csv --output-dir config/rules`
-3. Run validation with rules:
-   - `python -m src.main validate -f <data-file> -m <mapping.json> -r <rules.json> -o reports/validation.html`
-
-### Known Limitations (Current)
-
-- Strict fixed-width checks run in non-chunked path.
-- BA `when` expressions support simple forms (`=`, `!=`, `>`, `>=`, `<`, `<=`, `in (...)`).
 
 ### Advanced Features
 - **Configurable**: JSON-based configuration for different environments
@@ -72,52 +39,6 @@ For Java multi-step ETL regression orchestration, see:
 - `docs/PIPELINE_REGRESSION_GUIDE.md`
 
 ### First-Time Setup (Beginner Friendly)
-
-### Restarting / Refreshing Virtual Environment After Code Changes
-
-When developers change Python dependencies, entry points, or package metadata, refresh the venv:
-
-#### macOS / Linux
-
-```bash
-# from project root
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements-dev.txt
-pip install -e .
-```
-
-If environment is broken, recreate from scratch:
-
-```bash
-rm -rf .venv
-bash scripts/setup_mac.sh
-source .venv/bin/activate
-```
-
-#### Windows (PowerShell)
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-pip install --upgrade pip
-pip install -r requirements-dev.txt
-pip install -e .
-```
-
-Recreate from scratch if needed:
-
-```powershell
-Remove-Item -Recurse -Force .venv
-powershell -ExecutionPolicy Bypass -File scripts/setup_windows.ps1
-.\.venv\Scripts\Activate.ps1
-```
-
-Quick verification after refresh:
-
-```bash
-cm3-batch --help
-pytest -q -o addopts='' tests/unit
-```
 
 **Important:** Open your terminal or command prompt and navigate to the **project root directory** before running these commands.
 
@@ -170,21 +91,6 @@ powershell -ExecutionPolicy Bypass -File scripts/setup_vscode.ps1
 
 ### CLI Usage
 
-#### Full CLI command list
-
-```bash
-cm3-batch --help
-cm3-batch detect --help
-cm3-batch parse --help
-cm3-batch validate --help
-cm3-batch compare --help
-cm3-batch reconcile --help
-cm3-batch reconcile-all --help
-cm3-batch extract --help
-cm3-batch convert-rules --help
-cm3-batch info --help
-```
-
 ```bash
 # Install dependencies (if not using setup scripts)
 pip install -r requirements.txt
@@ -207,14 +113,6 @@ cm3-batch parse -f data/samples/customers.txt --use-chunked --chunk-size 50000 -
 
 # Validate file with HTML report
 cm3-batch validate -f data/samples/customers.txt -m config/mappings/customer_mapping.json -o reports/validation.html --detailed
-
-# Strict fixed-width validation (record length + format + required fields)
-cm3-batch validate -f data/samples/p327_sample_errors.txt -m config/mappings/P327_full_in_sheet_order.json \
-  --strict-fixed-width --strict-level format --detailed -o reports/p327_sample_errors_validation.html
-
-# Optional strict split outputs (valid/invalid records)
-cm3-batch validate -f data/samples/p327_sample_errors.txt -m config/mappings/P327_full_in_sheet_order.json \
-  --strict-fixed-width --strict-output-dir reports/strict_split --basic
 
 # Validate with chunked processing (large files)
 cm3-batch validate -f data/samples/customers.txt -m config/mappings/customer_mapping.json --use-chunked -o reports/validation.json
@@ -300,7 +198,6 @@ Starter sample files checked in:
 - `mappings/csv/mapping_template.sample.csv`
 - `rules/csv/rules_template.sample.csv`
 - `config/validation_manifest.sample.csv`
-- `data/samples/p327_sample_errors.txt` (demonstrates strict fixed-width errors in report)
 
 Sample manifest columns:
 
@@ -310,28 +207,6 @@ Sample manifest columns:
 - `report_file` (optional)
 - `chunked` (optional)
 - `chunk_size` (optional)
-
-### PowerShell versions of Bash scripts
-
-For every primary Bash automation script, a PowerShell version is available:
-
-- `scripts/run_convert_mappings.sh` → `scripts/run_convert_mappings.ps1`
-- `scripts/run_convert_rules.sh` → `scripts/run_convert_rules.ps1`
-- `scripts/run_validate_all.sh` → `scripts/run_validate_all.ps1`
-- `scripts/generate_p327_200k.sh` → `scripts/generate_p327_200k.ps1`
-- `scripts/compare_p327.sh` → `scripts/compare_p327.ps1`
-- `scripts/setup_mac.sh` → `scripts/setup_mac.ps1`
-- `scripts/setup_rhel.sh` → `scripts/setup_rhel.ps1`
-- `scripts/deploy_rhel_code_only.sh` → `scripts/deploy_rhel_code_only.ps1`
-
-Example usage:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/run_convert_mappings.ps1
-powershell -ExecutionPolicy Bypass -File scripts/run_convert_rules.ps1
-powershell -ExecutionPolicy Bypass -File scripts/run_validate_all.ps1 -Manifest config/validation_manifest.csv
-powershell -ExecutionPolicy Bypass -File scripts/generate_p327_200k.ps1 -TargetCount 200000
-```
 
 ### Business Rule Validation (Build Gate Friendly)
 
@@ -386,10 +261,6 @@ python src/config/universal_mapping_parser.py \
 Use standardized CSV templates:
 - `config/templates/csv/mapping_template.standard.csv`
 - `config/templates/csv/business_rules_template.standard.csv`
-- `config/templates/csv/business_rules_template.ba_friendly.csv` (for BAs/testers)
-
-`mapping_template.standard.csv` now supports an optional **Valid Values** column.
-When provided, validator enforces that non-empty field values must be in that list.
 
 Generate JSON artifacts from CSV in one command:
 
