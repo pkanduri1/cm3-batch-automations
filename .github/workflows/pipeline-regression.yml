@@ -17,9 +17,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        source_profile:
-          - config/pipeline/source_profile.SRC_A.sample.json
-          - config/pipeline/source_profile.SRC_B.sample.json
+        include:
+          - source_profile: config/pipeline/source_profile.SRC_A.sample.json
+            source_name: SRC_A
+          - source_profile: config/pipeline/source_profile.SRC_B.sample.json
+            source_name: SRC_B
 
     steps:
       - name: Checkout
@@ -49,5 +51,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pipeline-regression-${{ matrix.source_profile }}
+          name: pipeline-regression-${{ matrix.source_name }}
           path: reports/*dryrun.*
