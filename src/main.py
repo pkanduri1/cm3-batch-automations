@@ -162,6 +162,7 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
         from src.parsers.chunked_validator import ChunkedFileValidator
         from src.parsers.chunked_parser import ChunkedFixedWidthParser
         from src.reporters.validation_reporter import ValidationReporter
+        from src.reporting.result_adapter_chunked import adapt_chunked_validation_result
         import json
 
         mapping_config = None
@@ -197,6 +198,7 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
                 delimiter=delimiter,
                 chunk_size=chunk_size,
                 parser=chunk_parser,
+                rules_config_path=rules,
             )
 
             if mapping_config:
@@ -249,8 +251,13 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
                     with open(output, 'w') as f:
                         json.dump(result, f, indent=2)
                     click.echo(f"\n✓ Chunked validation JSON report generated: {output}")
+                elif output.lower().endswith('.html') or output.lower().endswith('.htm'):
+                    reporter = ValidationReporter()
+                    adapted = adapt_chunked_validation_result(result, file_path=file, mapping=mapping)
+                    reporter.generate(adapted, output)
+                    click.echo(f"\n✓ Chunked validation HTML report generated: {output}")
                 else:
-                    click.echo(click.style("\nChunked validation currently supports JSON output only. Use -o <file>.json", fg='yellow'))
+                    click.echo(click.style("\nUnsupported output type for chunked validation. Use .json or .html", fg='yellow'))
 
             if not result['valid']:
                 sys.exit(1)
