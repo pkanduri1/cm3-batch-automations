@@ -2,7 +2,7 @@
 
 ## Current State
 - Full suite passing: **136 tests passed**
-- Scoped coverage (API + comparators + reports): **85.16%**
+- Phase-2 scoped coverage (API + commands + comparators + reports): **81.02%**
 - Coverage gate target: **80%** (`pytest.ini --cov-fail-under=80`) ✅
 
 ## Goal
@@ -48,14 +48,13 @@ Raise coverage in **high-impact execution paths first**, then widen to API and r
 - End state reaches (or exceeds) 80%, or gate policy is explicitly re-scoped by module with documented rationale.
 
 ## Coverage Gate Scope (Implemented)
-To keep the 80% gate meaningful during architecture transition, coverage is currently scoped to actively maintained/runtime-critical modules:
+To keep the 80% gate meaningful during architecture transition, coverage is currently scoped to high-impact runtime surfaces:
 - `src/api`
 - `src/commands`
 - `src/comparators`
-- `src/parsers`
-- `src/pipeline`
 - `src/reports`
-- `src/validators/rule_engine.py`
-- `src/validators/threshold.py`
 
-Deferred legacy/auxiliary surfaces (to be uplifted in later phases) include broad monolithic orchestration and lower-priority modules that are being refactored or replaced.
+Deferred for later uplift phases:
+- `src/parsers/*` (large legacy validation engine remains under active refactor)
+- `src/pipeline/*` (orchestration paths validated by workflow/integration runs)
+- broader `src/validators/*` legacy validators not in current runtime-critical path
