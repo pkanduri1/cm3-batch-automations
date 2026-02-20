@@ -32,7 +32,9 @@ class EnhancedFileValidator:
         if rules_config_path:
             self.rule_engine = self._load_rule_engine(rules_config_path)
 
-    def validate(self, detailed: bool = True) -> Dict[str, Any]:
+    def validate(self, detailed: bool = True,
+                 strict_fixed_width: bool = False,
+                 strict_level: str = 'all') -> Dict[str, Any]:
         """Perform comprehensive file validation with data profiling.
         
         Args:
@@ -79,6 +81,11 @@ class EnhancedFileValidator:
             if self.mapping_config:
                 self._validate_schema(df)
             
+            # Optional strict fixed-width validation
+            strict_result = None
+            if strict_fixed_width:
+                strict_result = self._validate_strict_fixed_width(df, strict_level=strict_level)
+
             # Data profiling
             data_profile = self._profile_data(df) if detailed else {}
             
@@ -109,7 +116,9 @@ class EnhancedFileValidator:
             date_analysis=date_analysis,
             data_profile=data_profile,
             appendix=appendix_data,
-            business_rules=business_rules_result
+            business_rules=business_rules_result,
+            strict_fixed_width=strict_result,
+            issue_code_summary=self._build_issue_code_summary()
         )
 
     def _get_file_metadata(self) -> Dict[str, Any]:
@@ -408,6 +417,7 @@ class EnhancedFileValidator:
                 self.errors.append({
                     'severity': 'error',
                     'category': 'schema',
+                    'code': 'VAL_SCHEMA_MISSING_FIELD',
                     'message': f"Missing required field: {field}",
                     'row': None,
                     'field': field
@@ -645,6 +655,109 @@ class EnhancedFileValidator:
             ]
         }
 
+    def _validate_strict_fixed_width(self, df: pd.DataFrame, strict_level: str = 'all') -> Dict[str, Any]:
+        """Strict fixed-width validation for required/format/valid_values checks."""
+        strict_level = (strict_level or 'all').lower()
+        if strict_level == 'all':
+            strict_level = 'format'
+
+        mapping_fields = (self.mapping_config or {}).get('fields', [])
+        invalid_row_numbers = set()
+        format_errors = 0
+
+        for _, field in enumerate(mapping_fields):
+            name = field.get('name')
+            if name not in df.columns:
+                continue
+
+            col = df[name]
+            required = bool(field.get('required', False))
+
+            # Required checks (basic + format)
+            if required:
+                mask_required = col.isna() | (col.astype(str).str.strip() == '')
+                for idx in df[mask_required].index:
+                    invalid_row_numbers.add(int(idx) + 1)
+                    self.errors.append({
+                        'severity': 'error',
+                        'category': 'strict_fixed_width',
+                        'code': 'FW_REQ_001',
+                        'message': f"Required field '{name}' is empty",
+                        'row': int(idx) + 1,
+                        'field': name,
+                    })
+
+            if strict_level not in {'format'}:
+                continue
+
+            non_empty = col[~(col.isna() | (col.astype(str).str.strip() == ''))].astype(str)
+
+            # valid_values checks (FW_VAL_001)
+            valid_values = field.get('valid_values')
+            if valid_values:
+                allowed = {str(v) for v in valid_values}
+                bad_mask = ~non_empty.isin(allowed)
+                for idx in non_empty[bad_mask].index:
+                    invalid_row_numbers.add(int(idx) + 1)
+                    format_errors += 1
+                    self.errors.append({
+                        'severity': 'error',
+                        'category': 'strict_fixed_width',
+                        'code': 'FW_VAL_001',
+                        'message': f"Field '{name}' has invalid value '{df.loc[idx, name]}'",
+                        'row': int(idx) + 1,
+                        'field': name,
+                    })
+
+            # format checks (FW_FMT_001)
+            fmt = str(field.get('format') or '').upper()
+            if fmt:
+                import re
+
+                def _is_valid(v: str) -> bool:
+                    v = str(v)
+                    if fmt == 'XXX':
+                        return bool(re.fullmatch(r'[A-Za-z]{3}', v))
+                    m_s9 = re.fullmatch(r'S9\((\d+)\)', fmt)
+                    if m_s9:
+                        n = int(m_s9.group(1))
+                        return bool(re.fullmatch(rf'[+-]?\d{{{n}}}', v))
+                    m_9 = re.fullmatch(r'9\((\d+)\)', fmt)
+                    if m_9:
+                        n = int(m_9.group(1))
+                        return bool(re.fullmatch(rf'\d{{{n}}}', v))
+                    return True
+
+                bad_mask = ~non_empty.apply(_is_valid)
+                for idx in non_empty[bad_mask].index:
+                    invalid_row_numbers.add(int(idx) + 1)
+                    format_errors += 1
+                    self.errors.append({
+                        'severity': 'error',
+                        'category': 'strict_fixed_width',
+                        'code': 'FW_FMT_001',
+                        'message': f"Field '{name}' has invalid format for value '{df.loc[idx, name]}'",
+                        'row': int(idx) + 1,
+                        'field': name,
+                    })
+
+        invalid_rows_sorted = sorted(invalid_row_numbers)
+        return {
+            'enabled': True,
+            'strict_level': strict_level,
+            'invalid_records': len(invalid_rows_sorted),
+            'invalid_row_numbers': invalid_rows_sorted,
+            'format_errors': format_errors,
+        }
+
+    def _build_issue_code_summary(self) -> Dict[str, int]:
+        summary: Dict[str, int] = {}
+        for issue in self.errors + self.warnings + self.info:
+            code = issue.get('code') if isinstance(issue, dict) else None
+            if code:
+                summary[code] = summary.get(code, 0) + 1
+        return summary
+
     def _build_result(self, valid: bool, file_metadata: Dict[str, Any], 
                      df: Optional[pd.DataFrame], **kwargs) -> Dict[str, Any]:
         """Build comprehensive validation result."""
@@ -662,6 +775,9 @@ class EnhancedFileValidator:
         
         # Add optional components
         result.update(kwargs)
+
+        if 'issue_code_summary' not in result:
+            result['issue_code_summary'] = self._build_issue_code_summary()
         
         return result
     
