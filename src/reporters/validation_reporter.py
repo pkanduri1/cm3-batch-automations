@@ -10,6 +10,7 @@ from pathlib import Path
 class ValidationReporter:
     """Generates HTML validation reports with charts and detailed analysis."""
 
+    ERROR_DISPLAY_LIMIT = 10
     WARNING_DISPLAY_LIMIT = 100
 
     def generate(self, validation_results: Dict[str, Any], output_path: str) -> None:
@@ -24,12 +25,51 @@ class ValidationReporter:
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html)
 
-        # Export all warnings to CSV sidecar to keep HTML report concise.
+        # Export full issue lists to CSV sidecars to keep HTML report concise.
+        self._write_errors_csv(validation_results, output_path)
         self._write_warnings_csv(validation_results, output_path)
+
+    def _sort_issues(self, issues):
+        """Sort issues by row (numeric), then field, then code/severity."""
+        def _key(item):
+            if not isinstance(item, dict):
+                return (1, float('inf'), '', '', '')
+            row = item.get('row')
+            row_missing = 1 if row is None else 0
+            row_num = int(row) if isinstance(row, int) or (isinstance(row, str) and str(row).isdigit()) else float('inf')
+            field = str(item.get('field') or '')
+            code = str(item.get('code') or '')
+            severity = str(item.get('severity') or '')
+            return (row_missing, row_num, field, code, severity)
+
+        return sorted(issues, key=_key)
+
+    def _write_errors_csv(self, validation_results: Dict[str, Any], output_path: str) -> None:
+        """Write all errors to a CSV sidecar next to the HTML report."""
+        errors = self._sort_issues(validation_results.get('errors', []))
+        output = Path(output_path)
+        csv_path = output.with_name(f"{output.stem}_errors.csv")
+
+        with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=['index', 'severity', 'message'])
+            writer.writeheader()
+            for idx, error in enumerate(errors, start=1):
+                if isinstance(error, dict):
+                    writer.writerow({
+                        'index': idx,
+                        'severity': error.get('severity', 'error'),
+                        'message': error.get('message', ''),
+                    })
+                else:
+                    writer.writerow({
+                        'index': idx,
+                        'severity': 'error',
+                        'message': str(error),
+                    })
 
     def _write_warnings_csv(self, validation_results: Dict[str, Any], output_path: str) -> None:
         """Write all warnings to a CSV sidecar next to the HTML report."""
-        warnings = validation_results.get('warnings', [])
+        warnings = self._sort_issues(validation_results.get('warnings', []))
         output = Path(output_path)
         csv_path = output.with_name(f"{output.stem}_warnings.csv")
 
@@ -596,11 +636,11 @@ class ValidationReporter:
         """
 
     def _generate_issues(self, results: Dict[str, Any]) -> str:
-        """Generate issues and warnings section."""
-        errors = results.get('errors', [])
-        warnings = results.get('warnings', [])
-        info = results.get('info', [])
-        
+        """Generate issues and warnings section with collapsible groups."""
+        errors = self._sort_issues(results.get('errors', []))
+        warnings = self._sort_issues(results.get('warnings', []))
+        info = self._sort_issues(results.get('info', []))
+
         if not errors and not warnings and not info:
             return """
             <div class="section">
@@ -608,40 +648,90 @@ class ValidationReporter:
                 <p style="color: #48bb78; font-size: 1.2em;">✓ No issues found!</p>
             </div>
             """
-        
-        issues_html = []
-        
-        for error in errors:
-            severity = error.get('severity', 'error')
-            message = error.get('message', '')
-            issues_html.append(f"""
-            <div class="issue issue-{severity}">
-                <div class="issue-title">🔴 {severity.upper()}</div>
-                <div class="issue-message">{message}</div>
+
+        def _render_items(items, icon):
+            html = []
+            for item in items:
+                severity = item.get('severity', 'info') if isinstance(item, dict) else 'info'
+                message = item.get('message', '') if isinstance(item, dict) else str(item)
+                html.append(f"""
+                <div class="issue issue-{severity}">
+                    <div class="issue-title">{icon} {severity.upper()}</div>
+                    <div class="issue-message">{message}</div>
+                </div>
+                """)
+            return ''.join(html)
+
+        # Affected rows summary (moved from appendix to this section)
+        appendix = results.get('appendix', {})
+        affected_rows = appendix.get('affected_rows', {}) if isinstance(appendix, dict) else {}
+        total_affected = affected_rows.get('total_affected_rows', 0)
+        affected_pct = affected_rows.get('affected_row_pct', 0)
+        top_problematic = affected_rows.get('top_problematic_rows', [])
+
+        problematic_rows_html = ""
+        if top_problematic:
+            problematic_rows = []
+            for row_info in top_problematic[:10]:
+                row_num = row_info.get('row_number', 0)
+                issue_count = row_info.get('issue_count', 0)
+                issues = row_info.get('issues', [])
+
+                issues_list = ''.join(f'<li>{issue}</li>' for issue in issues[:5])
+                if len(issues) > 5:
+                    issues_list += f'<li><em>... and {len(issues) - 5} more issues</em></li>'
+
+                problematic_rows.append(f"""
+                <tr>
+                    <td>{row_num:,}</td>
+                    <td>{issue_count}</td>
+                    <td><ul style="margin: 0; padding-left: 20px;">{issues_list}</ul></td>
+                </tr>
+                """)
+
+            problematic_rows_html = f"""
+            <details>
+                <summary>Top 10 Most Problematic Rows</summary>
+                <table style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Row #</th>
+                            <th>Issue Count</th>
+                            <th>Issues</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {''.join(problematic_rows)}
+                    </tbody>
+                </table>
+            </details>
+            """
+
+        affected_rows_html = f"""
+        <details>
+            <summary>Affected Rows Summary</summary>
+            <p style="margin: 15px 0;">
+                Total rows with issues: <strong>{total_affected:,} ({affected_pct}%)</strong>
+            </p>
+            {problematic_rows_html}
+        </details>
+        """
+
+        error_items = errors[:self.ERROR_DISPLAY_LIMIT]
+        warning_items = warnings[:self.WARNING_DISPLAY_LIMIT]
+
+        error_note = ""
+        if len(errors) > self.ERROR_DISPLAY_LIMIT:
+            remaining = len(errors) - self.ERROR_DISPLAY_LIMIT
+            error_note = f"""
+            <div class=\"issue issue-error\">
+                <div class=\"issue-title\">🔴 ERROR SUMMARY</div>
+                <div class=\"issue-message\">
+                    Showing first {self.ERROR_DISPLAY_LIMIT} errors in HTML. {remaining} additional errors were exported to the CSV sidecar file.
+                </div>
             </div>
-            """)
-        
-        displayed_warning_count = min(len(warnings), self.WARNING_DISPLAY_LIMIT)
-        for warning in warnings[:self.WARNING_DISPLAY_LIMIT]:
-            severity = warning.get('severity', 'warning')
-            message = warning.get('message', '')
-            issues_html.append(f"""
-            <div class="issue issue-{severity}">
-                <div class="issue-title">🟡 {severity.upper()}</div>
-                <div class="issue-message">{message}</div>
-            </div>
-            """)
-        
-        for item in info:
-            severity = item.get('severity', 'info')
-            message = item.get('message', '')
-            issues_html.append(f"""
-            <div class="issue issue-{severity}">
-                <div class="issue-title">🔵 {severity.upper()}</div>
-                <div class="issue-message">{message}</div>
-            </div>
-            """)
-        
+            """
+
         warning_note = ""
         if len(warnings) > self.WARNING_DISPLAY_LIMIT:
             remaining = len(warnings) - self.WARNING_DISPLAY_LIMIT
@@ -657,8 +747,24 @@ class ValidationReporter:
         return f"""
         <div class="section">
             <h2 class="section-title">Issues & Warnings</h2>
-            {''.join(issues_html)}
-            {warning_note}
+            {affected_rows_html}
+
+            <details open>
+                <summary>Errors ({len(errors)})</summary>
+                {_render_items(error_items, '🔴')}
+                {error_note}
+            </details>
+
+            <details>
+                <summary>Warnings ({len(warnings)})</summary>
+                {_render_items(warning_items, '🟡')}
+                {warning_note}
+            </details>
+
+            <details>
+                <summary>Info ({len(info)})</summary>
+                {_render_items(info, '🔵')}
+            </details>
         </div>
         """
 
@@ -676,6 +782,9 @@ class ValidationReporter:
             inferred_type = analysis.get('inferred_type', 'unknown')
             fill_rate = analysis.get('fill_rate_pct', 0)
             unique_count = analysis.get('unique_count', 0)
+
+            field_name_str = str(field_name)
+            field_name_search = field_name_str.lower()
             
             badge_class = {
                 'numeric': 'badge-numeric',
@@ -684,8 +793,8 @@ class ValidationReporter:
             }.get(inferred_type, '')
             
             rows.append(f"""
-            <tr data-field-name="{field_name.lower()}" data-type="{inferred_type}" data-fill-rate="{fill_rate}" data-unique-count="{unique_count}">
-                <td><strong>{field_name}</strong></td>
+            <tr data-field-name="{field_name_search}" data-type="{inferred_type}" data-fill-rate="{fill_rate}" data-unique-count="{unique_count}">
+                <td><strong>{field_name_str}</strong></td>
                 <td><span class="badge {badge_class}">{inferred_type}</span></td>
                 <td>{fill_rate}%</td>
                 <td>{unique_count:,}</td>
@@ -941,7 +1050,7 @@ class ValidationReporter:
         
         validation_config = appendix.get('validation_config', {})
         mapping_details = appendix.get('mapping_details')
-        affected_rows = appendix.get('affected_rows', {})
+        # affected_rows summary moved to Issues & Warnings section
         
         # Validation Configuration
         config_html = f"""
@@ -1004,63 +1113,13 @@ class ValidationReporter:
             </details>
             """
         
-        # Affected Rows Summary
-        total_affected = affected_rows.get('total_affected_rows', 0)
-        affected_pct = affected_rows.get('affected_row_pct', 0)
-        top_problematic = affected_rows.get('top_problematic_rows', [])
-        
-        problematic_rows_html = ""
-        if top_problematic:
-            problematic_rows = []
-            for row_info in top_problematic[:10]:
-                row_num = row_info.get('row_number', 0)
-                issue_count = row_info.get('issue_count', 0)
-                issues = row_info.get('issues', [])
-                
-                issues_list = ''.join(f'<li>{issue}</li>' for issue in issues[:5])
-                if len(issues) > 5:
-                    issues_list += f'<li><em>... and {len(issues) - 5} more issues</em></li>'
-                
-                problematic_rows.append(f"""
-                <tr>
-                    <td>{row_num:,}</td>
-                    <td>{issue_count}</td>
-                    <td><ul style="margin: 0; padding-left: 20px;">{issues_list}</ul></td>
-                </tr>
-                """)
-            
-            problematic_rows_html = f"""
-            <details>
-                <summary>Top 10 Most Problematic Rows</summary>
-                <table style="margin-top: 15px;">
-                    <thead>
-                        <tr>
-                            <th>Row #</th>
-                            <th>Issue Count</th>
-                            <th>Issues</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {''.join(problematic_rows)}
-                    </tbody>
-                </table>
-            </details>
-            """
-        
-        affected_rows_html = f"""
-        <h3>Affected Rows Summary</h3>
-        <p style="margin: 15px 0;">
-            Total rows with issues: <strong>{total_affected:,} ({affected_pct}%)</strong>
-        </p>
-        {problematic_rows_html}
-        """
+        # Affected rows summary moved to Issues & Warnings section.
         
         return f"""
         <div class="section">
             <h2 class="section-title">📋 Appendix</h2>
             {config_html}
             {mapping_html}
-            {affected_rows_html}
         </div>
         """
 

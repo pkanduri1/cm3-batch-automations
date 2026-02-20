@@ -209,6 +209,36 @@ This script validates data files based on a manifest file (CSV). It supports aut
 ./scripts/run_validate_all.sh "config/validation_manifest.csv" "true"
 ```
 
+#### 4. Run Regression Workflow (Parse → Validate → Compare)
+
+This script runs an end-to-end regression workflow from a JSON config and writes a summary JSON.
+
+**Usage (Bash):**
+
+```bash
+# Use sample config
+./scripts/run_regression_workflow.sh
+
+# Custom config + summary output
+./scripts/run_regression_workflow.sh \
+  config/pipeline/regression_workflow.sample.json \
+  reports/regression_workflow/my_summary.json
+```
+
+**Usage (PowerShell):**
+
+```powershell
+# Use sample config
+./scripts/run_regression_workflow.ps1
+
+# Custom config + summary output
+./scripts/run_regression_workflow.ps1 `
+  -Config config/pipeline/regression_workflow.sample.json `
+  -SummaryOut reports/regression_workflow/my_summary.json
+```
+
+Config template: `config/pipeline/regression_workflow.sample.json`
+
 Manifest recommendation: **CSV** (not .properties), because QA teams can edit it easily in Excel.
 
 Starter sample files checked in:
