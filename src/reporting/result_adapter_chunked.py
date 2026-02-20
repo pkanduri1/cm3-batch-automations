@@ -3,15 +3,41 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, Any
 
 
 def adapt_chunked_validation_result(result: Dict[str, Any], file_path: str, mapping: str | None = None) -> Dict[str, Any]:
     """Convert chunked validator result into ValidationReporter-compatible model."""
+    p = Path(file_path)
+    exists = p.exists()
+
+    if exists:
+        stat = p.stat()
+        size_bytes = int(stat.st_size)
+        size_mb = round(stat.st_size / (1024 * 1024), 2)
+        modified_time = datetime.fromtimestamp(stat.st_mtime).isoformat()
+    else:
+        size_bytes = 0
+        size_mb = 0.0
+        modified_time = 'Unknown'
+
+    suffix = p.suffix.lower()
+    if suffix == '.csv':
+        file_format = 'csv'
+    elif suffix in {'.txt', '.dat'}:
+        file_format = 'fixedwidth'
+    else:
+        file_format = 'unknown'
+
     file_metadata = {
-        'file_path': file_path,
-        'file_name': file_path.split('/')[-1],
-        'exists': True,
+        'file_path': str(p),
+        'file_name': p.name,
+        'exists': exists,
+        'size_bytes': size_bytes,
+        'size_mb': size_mb,
+        'format': file_format,
+        'modified_time': modified_time,
     }
 
     total_rows = result.get('total_rows', 0)
