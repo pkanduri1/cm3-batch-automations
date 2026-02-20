@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Dict, Any, List
 
 
-def _run(cmd: str) -> tuple[int, str]:
-    p = subprocess.run(cmd, shell=True, text=True, capture_output=True)
+def _run(cmd: List[str]) -> tuple[int, str]:
+    p = subprocess.run(cmd, text=True, capture_output=True)
     text = (p.stdout or "") + ("\n" + p.stderr if p.stderr else "")
     return p.returncode, text.strip()
 
@@ -54,20 +54,20 @@ def run_output_regression_suite(config: Dict[str, Any], dry_run: bool = True) ->
         strict = bool(t.get("strict_fixed_width", False))
         strict_level = t.get("strict_level", "all")
 
-        cmd = f"python -m src.main validate -f '{file_path}' -m '{mapping}' -o '{report}'"
+        cmd = ["python", "-m", "src.main", "validate", "-f", str(file_path), "-m", str(mapping), "-o", str(report)]
         if rules:
-            cmd += f" -r '{rules}'"
+            cmd.extend(["-r", str(rules)])
         if strict:
-            cmd += f" --strict-fixed-width --strict-level {strict_level}"
+            cmd.extend(["--strict-fixed-width", "--strict-level", str(strict_level)])
 
         if dry_run:
-            item = {"name": name, "status": "dry_run", "validate_command": cmd}
+            item = {"name": name, "status": "dry_run", "validate_command": " ".join(cmd)}
         else:
             rc, out = _run(cmd)
             item = {
                 "name": name,
                 "status": "passed" if rc == 0 else "failed",
-                "validate_command": cmd,
+                "validate_command": " ".join(cmd),
                 "validate_exit_code": rc,
                 "validate_output": out,
             }
@@ -77,16 +77,25 @@ def run_output_regression_suite(config: Dict[str, Any], dry_run: bool = True) ->
         baseline = t.get("baseline_file")
         if baseline:
             compare_report = t.get("compare_report", f"reports/{name}_compare.html")
-            compare_cmd = (
-                f"python -m src.main compare -f1 '{baseline}' -f2 '{file_path}' -o '{compare_report}'"
-            )
+            compare_cmd = [
+                "python",
+                "-m",
+                "src.main",
+                "compare",
+                "-f1",
+                str(baseline),
+                "-f2",
+                str(file_path),
+                "-o",
+                str(compare_report),
+            ]
             if dry_run:
                 item["compare_status"] = "dry_run"
-                item["compare_command"] = compare_cmd
+                item["compare_command"] = " ".join(compare_cmd)
             else:
                 rc2, out2 = _run(compare_cmd)
                 item["compare_status"] = "passed" if rc2 == 0 else "failed"
-                item["compare_command"] = compare_cmd
+                item["compare_command"] = " ".join(compare_cmd)
                 item["compare_exit_code"] = rc2
                 item["compare_output"] = out2
                 if rc2 != 0:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 from dataclasses import dataclass
 from .sqlloader_adapter import evaluate_sqlloader_stage
@@ -97,7 +98,8 @@ class PipelineRunner:
                 results.append(StepResult(stage_name, "failed", "missing command", 2))
                 break
 
-            proc = subprocess.run(cmd, shell=True, text=True, capture_output=True)
+            cmd_args = cmd if isinstance(cmd, list) else shlex.split(str(cmd))
+            proc = subprocess.run(cmd_args, text=True, capture_output=True)
             if proc.returncode == 0:
                 results.append(StepResult(stage_name, "passed", proc.stdout.strip(), 0))
             else:
