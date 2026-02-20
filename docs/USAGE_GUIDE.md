@@ -43,6 +43,9 @@ cm3-batch parse -f data/samples/customers.txt
 
 # Compare files
 cm3-batch compare -f1 file1.txt -f2 file2.txt -k customer_id
+
+# Parse/validate/compare with chunked processing for large files
+cm3-batch parse -f data/samples/customers.txt --use-chunked --chunk-size 50000 -o reports/parsed.csv
 ```
 
 ---
@@ -82,6 +85,16 @@ cm3-batch parse -f data/samples/p327_test_data.txt \
 - `-o, --output`: Output file path
 - `--format`: Output format (csv, json, excel)
 
+#### Chunk-based parsing (large files)
+
+```bash
+cm3-batch parse -f data/samples/p327_test_data.txt \
+  -m config/mappings/p327_universal.json \
+  --use-chunked \
+  --chunk-size 50000 \
+  -o reports/p327_parsed_chunked.csv
+```
+
 ### 3. File Comparison
 
 Compare two files and generate a report:
@@ -98,10 +111,24 @@ cm3-batch compare \
 **Options:**
 - `-f1, --file1`: First file to compare
 - `-f2, --file2`: Second file to compare
-- `-k, --key-columns`: Key columns for matching (comma-separated)
+- `-k, --keys`: Key columns for matching (comma-separated)
 - `-m, --mapping`: Mapping configuration
 - `-o, --output`: Output report path
 - `--detailed`: Include field-level differences
+
+#### Chunk-based comparison (large files)
+
+```bash
+cm3-batch compare \
+  -f1 data/samples/file1.txt \
+  -f2 data/samples/file2.txt \
+  -k ACCT-NUM \
+  --use-chunked \
+  --chunk-size 50000 \
+  -o reports/comparison_chunked.html
+```
+
+> Chunked comparison requires key columns (`-k/--keys`). Row-by-row mode is not supported in chunked compare.
 
 ### 4. Database Operations
 
@@ -238,8 +265,21 @@ cm3-batch validate \
 - `-f, --file`: Input file to validate
 - `-m, --mapping`: Mapping configuration file
 - `-r, --rules`: Business rules configuration file (JSON)
-- `-o, --output`: Output HTML report path
+- `-o, --output`: Output HTML or JSON report path
 - `--detailed`: Enable detailed analysis (recommended)
+
+#### Chunk-based validation (large files)
+
+```bash
+cm3-batch validate \
+  -f data/samples/p327_test_data.txt \
+  -m config/mappings/p327_universal.json \
+  --use-chunked \
+  --chunk-size 50000 \
+  -o reports/validation_report_chunked.json
+```
+
+> Chunked validation supports `--use-chunked` and `--chunk-size` and is recommended for very large files.
 
 #### Validation Report Features
 

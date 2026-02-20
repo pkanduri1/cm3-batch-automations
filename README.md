@@ -128,6 +128,9 @@ cm3-batch validate -f data/samples/customers.txt -m config/mappings/customer_map
 # Compare files
 cm3-batch compare -f1 file1.txt -f2 file2.txt -k customer_id -o report.html
 
+# Compare with chunked processing (requires keys)
+cm3-batch compare -f1 file1.txt -f2 file2.txt -k customer_id --use-chunked --chunk-size 50000 -o report.html
+
 # Validate mapping against database
 cm3-batch reconcile -m config/mappings/customer_mapping.json
 
@@ -144,6 +147,13 @@ cm3-batch extract -t CUSTOMER -o output.txt -l 1000
 # Convert business rules template
 cm3-batch convert-rules -t config/templates/rules.xlsx -o config/rules.json
 ```
+
+Chunk-based processing is supported by these CLI commands:
+- `parse` (`--use-chunked`, `--chunk-size`)
+- `validate` (`--use-chunked`, `--chunk-size`)
+- `compare` (`--use-chunked`, `--chunk-size`, **requires** `-k/--keys`)
+
+For deeper tuning/performance guidance, see `docs/CHUNKED_PROCESSING.md`.
 
 ### Batch Automation Scripts
 
