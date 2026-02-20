@@ -46,6 +46,9 @@ cm3-batch compare -f1 file1.txt -f2 file2.txt -k customer_id
 
 # Parse/validate/compare with chunked processing for large files
 cm3-batch parse -f data/samples/customers.txt --use-chunked --chunk-size 50000 -o reports/parsed.csv
+
+# End-to-end regression workflow (config-driven)
+./scripts/run_regression_workflow.sh config/pipeline/regression_workflow.sample.json
 ```
 
 ---
