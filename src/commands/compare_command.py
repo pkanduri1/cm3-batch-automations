@@ -11,7 +11,7 @@ def run_compare_command(file1, file2, keys, mapping, output, thresholds, detaile
         from src.parsers.format_detector import FormatDetector
         from src.comparators.file_comparator import FileComparator
         from src.comparators.chunked_comparator import ChunkedFileComparator
-        from src.reporters.html_reporter import HTMLReporter
+        from src.reports.renderers.comparison_renderer import HTMLReporter
         from src.validators.threshold import ThresholdEvaluator, ThresholdConfig
         from src.config.loader import ConfigLoader
         

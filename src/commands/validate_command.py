@@ -26,8 +26,8 @@ def run_validate_command(file, mapping, rules, output, detailed, use_chunked, ch
     from src.parsers.fixed_width_parser import FixedWidthParser
     from src.parsers.chunked_validator import ChunkedFileValidator
     from src.parsers.chunked_parser import ChunkedFixedWidthParser
-    from src.reporters.validation_reporter import ValidationReporter
-    from src.reporting.result_adapter_chunked import adapt_chunked_validation_result
+    from src.reports.renderers.validation_renderer import ValidationReporter
+    from src.reports.adapters.result_adapter_chunked import adapt_chunked_validation_result
 
     mapping_config = None
     if mapping:

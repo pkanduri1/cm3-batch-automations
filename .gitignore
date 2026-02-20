@@ -68,7 +68,7 @@ data/samples/*.csv
 !data/samples/transactions.txt
 
 # Reports
-reports/
+/reports/
 *.html
 !docs/*.html
 
