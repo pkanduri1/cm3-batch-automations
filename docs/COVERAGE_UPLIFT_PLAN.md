@@ -1,10 +1,9 @@
 # Coverage Uplift Plan
 
 ## Current State
-- Full suite passing: **129 tests passed**
-- Scoped active-module coverage: **~73%**
-- Phase-1 gate target: **70%** (`pytest.ini --cov-fail-under=70`)
-- Phase-2 target: **80%** after additional legacy/module uplift
+- Full suite passing: **136 tests passed**
+- Scoped coverage (API + comparators + reports): **85.16%**
+- Coverage gate target: **80%** (`pytest.ini --cov-fail-under=80`) ✅
 
 ## Goal
 Raise coverage in **high-impact execution paths first**, then widen to API and reporting surfaces.
