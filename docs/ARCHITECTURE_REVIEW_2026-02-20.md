@@ -176,6 +176,56 @@ Most severe risks:
 5. API/CLI comparison parity via shared service.
 6. Typed config contracts for pipeline/workflow.
 
+## P1 Execution Plan (Proposed)
+
+### Workstream A — Reporting consolidation (3-4 days)
+- Create target package: `src/reports/{renderers,adapters,contracts}`
+- Move:
+  - `src/reporters/validation_reporter.py` -> `src/reports/renderers/validation_renderer.py`
+  - `src/reporters/html_reporter.py` -> `src/reports/renderers/comparison_renderer.py`
+  - `src/reporting/result_adapter_*.py` -> `src/reports/adapters/*`
+- Add compatibility shims in old paths for one release cycle.
+- Exit criteria:
+  - imports in CLI/API/workflows use new namespace
+  - all tests pass without path regressions
+
+### Workstream B — API/CLI parity service for compare (2-3 days)
+- Add shared service: `src/services/compare_service.py`
+- Service inputs: files, keys, mapping, chunk options, thresholds
+- Service outputs: canonical compare result contract used by both CLI and API
+- Refactor:
+  - CLI compare command -> service
+  - API files compare endpoint -> same service (remove simplified logic)
+- Exit criteria:
+  - API compare supports key-based + chunked + report generation parity
+  - contract tests prove identical result fields CLI vs API
+
+### Workstream C — Typed config contracts (2-3 days)
+- Add Pydantic models:
+  - `src/contracts/pipeline_profile.py`
+  - `src/contracts/regression_workflow.py`
+- Validate config at load-time in:
+  - `src/pipeline/runner.py`
+  - `scripts/run_regression_workflow.py`
+  - `scripts/run_manifest_workflow.py`
+- Emit actionable validation errors with path + field.
+- Exit criteria:
+  - invalid configs fail fast with deterministic messages
+  - unit tests for happy path + representative invalid configs
+
+### Suggested delivery slices
+1) Slice 1: Reporting consolidation + shims
+2) Slice 2: Compare shared service + API parity
+3) Slice 3: Typed config contracts + migration tests
+
+### Risks / mitigations
+- Risk: import breakage during namespace move
+  - Mitigation: temporary compatibility modules and deprecation warnings
+- Risk: behavior drift while unifying compare
+  - Mitigation: golden-result fixtures consumed by both CLI and API tests
+- Risk: strict Pydantic validation blocks existing loose configs
+  - Mitigation: support `model_config = extra='ignore'` initially, tighten after migration
+
 ### P2 (Medium-term)
 7. Unify scripts onto shared workflow engine.
 8. Formal architecture decision records (ADRs) for parsing/validation/reporting boundaries.
