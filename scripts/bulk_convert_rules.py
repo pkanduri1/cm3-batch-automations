@@ -19,16 +19,25 @@ def load_template_df(template_path: Path) -> pd.DataFrame:
     return pd.read_excel(template_path, dtype=str)
 
 
-def validate_template_strict(template_path: Path) -> list[dict]:
-    """Return row-level validation errors for strict rules conversion."""
+def validate_template_strict(template_path: Path) -> tuple[list[dict], str]:
+    """Return row-level validation errors and detected template kind.
+
+    Returns:
+        (issues, kind) where kind is one of: ba_friendly, standard
+    """
     df = load_template_df(template_path)
     df.columns = [c.strip() for c in df.columns]
 
-    required_columns = ['Rule ID', 'Rule Name', 'Description', 'Type', 'Severity', 'Operator']
-    valid_types = {'field_validation', 'cross_field'}
-    valid_severities = {'error', 'warning', 'info'}
+    ba_required = ['Rule ID', 'Rule Name', 'Field', 'Rule Type', 'Severity', 'Expected / Values', 'Enabled']
+    std_required = ['Rule ID', 'Rule Name', 'Description', 'Type', 'Severity', 'Operator']
 
     issues: list[dict] = []
+
+    is_ba = all(c in df.columns for c in ba_required)
+    kind = 'ba_friendly' if is_ba else 'standard'
+
+    required_columns = ba_required if is_ba else std_required
+    valid_severities = {'error', 'warning', 'info'}
 
     missing_headers = [c for c in required_columns if c not in df.columns]
     if missing_headers:
@@ -38,7 +47,7 @@ def validate_template_strict(template_path: Path) -> list[dict]:
             'issue': f'Missing required headers: {missing_headers}',
             'value': ''
         })
-        return issues
+        return issues, kind
 
     # duplicate Rule ID check
     dup_ids = df['Rule ID'].dropna().astype(str).str.strip()
@@ -49,20 +58,33 @@ def validate_template_strict(template_path: Path) -> list[dict]:
     for idx, row in df.iterrows():
         row_no = idx + 2
 
+        rid = (row.get('Rule ID') or '').strip() if pd.notna(row.get('Rule ID')) else ''
+        if rid and not rid.startswith('BR'):
+            issues.append({'row': row_no, 'field': 'Rule ID', 'issue': 'Invalid Rule ID format', 'value': rid})
+
         for c in required_columns:
             v = (row.get(c) or '').strip() if pd.notna(row.get(c)) else ''
             if not v:
                 issues.append({'row': row_no, 'field': c, 'issue': 'Required value is empty', 'value': ''})
 
-        type_v = (row.get('Type') or '').strip().lower() if pd.notna(row.get('Type')) else ''
-        sev_v = (row.get('Severity') or '').strip().lower() if pd.notna(row.get('Severity')) else ''
+        if is_ba:
+            sev_v = (row.get('Severity') or '').strip().lower() if pd.notna(row.get('Severity')) else ''
+            if sev_v and sev_v not in valid_severities:
+                issues.append({'row': row_no, 'field': 'Severity', 'issue': 'Invalid severity', 'value': sev_v})
 
-        if type_v and type_v not in valid_types:
-            issues.append({'row': row_no, 'field': 'Type', 'issue': 'Invalid type', 'value': type_v})
-        if sev_v and sev_v not in valid_severities:
-            issues.append({'row': row_no, 'field': 'Severity', 'issue': 'Invalid severity', 'value': sev_v})
+            cond_v = (row.get('Condition (optional)') or '').strip() if pd.notna(row.get('Condition (optional)')) else ''
+            if '~~' in cond_v:
+                issues.append({'row': row_no, 'field': 'Condition (optional)', 'issue': 'Invalid condition syntax', 'value': cond_v})
+        else:
+            type_v = (row.get('Type') or '').strip().lower() if pd.notna(row.get('Type')) else ''
+            sev_v = (row.get('Severity') or '').strip().lower() if pd.notna(row.get('Severity')) else ''
+            valid_types = {'field_validation', 'cross_field'}
+            if type_v and type_v not in valid_types:
+                issues.append({'row': row_no, 'field': 'Type', 'issue': 'Invalid type', 'value': type_v})
+            if sev_v and sev_v not in valid_severities:
+                issues.append({'row': row_no, 'field': 'Severity', 'issue': 'Invalid severity', 'value': sev_v})
 
-    return issues
+    return issues, kind
 
 
 def write_error_report(report_dir: Path, template_path: Path, issues: list[dict]) -> Path:
@@ -111,7 +133,7 @@ def main() -> int:
     success = 0
     failed = 0
     for template in templates:
-        issues = validate_template_strict(template)
+        issues, _kind = validate_template_strict(template)
         if issues:
             report = write_error_report(error_report_dir, template, issues)
             print(f"❌ Validation failed for {template.name}. Report: {report}")
