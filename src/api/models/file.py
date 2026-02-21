@@ -48,6 +48,18 @@ class FileCompareResult(BaseModel):
     field_statistics: Optional[Dict[str, Any]] = None
 
 
+class FileValidateRequest(BaseModel):
+    """Model for file validate request."""
+    mapping_id: str
+    detailed: bool = True
+    use_chunked: bool = False
+    chunk_size: int = 100000
+    progress: bool = False
+    strict_fixed_width: bool = False
+    strict_level: str = "format"
+    output_html: bool = True
+
+
 class FileValidationResult(BaseModel):
     """Model for file validation result."""
     valid: bool
@@ -56,6 +68,8 @@ class FileValidationResult(BaseModel):
     invalid_rows: int
     errors: List[Dict[str, Any]] = []
     warnings: List[str] = []
+    quality_score: Optional[float] = None
+    report_url: Optional[str] = None
 
 
 class FileCompareAsyncCreateResponse(BaseModel):

@@ -16,6 +16,8 @@ from src.api.models.file import (
     FileParseResult,
     FileCompareRequest,
     FileCompareResult,
+    FileValidateRequest,
+    FileValidationResult,
     FileCompareAsyncCreateResponse,
     FileCompareAsyncStatusResponse,
 )
@@ -123,6 +125,156 @@ async def parse_file(
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error parsing file: {str(e)}")
+
+
+@router.post("/validate", response_model=FileValidationResult)
+async def validate_file(
+    file: UploadFile = File(...),
+    request: FileValidateRequest = Body(...),
+):
+    """Validate a file with strict/chunked parity options."""
+    upload_path = UPLOADS_DIR / f"validate_{file.filename}"
+    with open(upload_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    try:
+        import json
+        from src.parsers.format_detector import FormatDetector
+        from src.parsers.fixed_width_parser import FixedWidthParser
+        from src.parsers.chunked_parser import ChunkedFixedWidthParser
+        from src.parsers.chunked_validator import ChunkedFileValidator
+        from src.parsers.enhanced_validator import EnhancedFileValidator
+        from src.reports.renderers.validation_renderer import ValidationReporter
+        from src.reports.adapters.result_adapter_chunked import adapt_chunked_validation_result
+
+        mapping_file = MAPPINGS_DIR / f"{request.mapping_id}.json"
+        if not mapping_file.exists():
+            raise HTTPException(status_code=404, detail=f"Mapping '{request.mapping_id}' not found")
+
+        mapping_config = json.loads(mapping_file.read_text(encoding="utf-8"))
+        mapping_config["file_path"] = str(mapping_file)
+        source_format = str((mapping_config.get("source") or {}).get("format") or "").lower()
+        is_fixed_width = source_format in {"fixed_width", "fixedwidth"}
+
+        report_url = None
+        if request.use_chunked:
+            parser_class = FixedWidthParser if is_fixed_width else FormatDetector().get_parser_class(str(upload_path))
+            chunk_parser = None
+            if parser_class == FixedWidthParser and is_fixed_width and mapping_config.get("fields"):
+                field_specs = []
+                current_pos = 0
+                for field in mapping_config.get("fields", []):
+                    length = int(field.get("length", 0))
+                    start = int(field.get("position") - 1) if field.get("position") is not None else current_pos
+                    end = start + length
+                    field_specs.append((field["name"], start, end))
+                    current_pos = end
+                chunk_parser = ChunkedFixedWidthParser(str(upload_path), field_specs, chunk_size=request.chunk_size)
+
+            expected_row_length = None
+            if is_fixed_width and mapping_config.get("fields"):
+                expected_row_length = sum(int(f.get("length", 0)) for f in mapping_config.get("fields", []))
+
+            strict_fields = mapping_config.get("fields", []) if is_fixed_width else []
+
+            validator = ChunkedFileValidator(
+                file_path=str(upload_path),
+                delimiter='|',
+                chunk_size=request.chunk_size,
+                parser=chunk_parser,
+                expected_row_length=expected_row_length,
+                strict_fixed_width=request.strict_fixed_width,
+                strict_level=request.strict_level,
+                strict_fields=strict_fields,
+            )
+
+            expected_columns = [f["name"] for f in mapping_config.get("fields", [])] if mapping_config.get("fields") else []
+            if expected_columns:
+                required_columns = [f["name"] for f in mapping_config.get("fields", []) if f.get("required", False)]
+                result = validator.validate_with_schema(
+                    expected_columns=expected_columns,
+                    required_columns=required_columns if required_columns else expected_columns,
+                    show_progress=request.progress,
+                )
+            else:
+                result = validator.validate(show_progress=request.progress)
+
+            if request.output_html:
+                report_path = UPLOADS_DIR / f"validation_{upload_path.stem}.html"
+                adapted = adapt_chunked_validation_result(result, file_path=str(upload_path), mapping=str(mapping_file))
+                ValidationReporter().generate(adapted, str(report_path))
+                report_url = f"/uploads/{report_path.name}"
+
+            total_rows = int(result.get("total_rows", 0))
+            invalid_rows = len({
+                int(e.get("row")) for e in (result.get("errors", []) or [])
+                if isinstance(e, dict) and e.get("row") is not None and str(e.get("row")).isdigit()
+            })
+            valid_rows = max(total_rows - invalid_rows, 0)
+
+            return FileValidationResult(
+                valid=bool(result.get("valid", False)),
+                total_rows=total_rows,
+                valid_rows=valid_rows,
+                invalid_rows=invalid_rows,
+                errors=[e if isinstance(e, dict) else {"message": str(e)} for e in (result.get("errors", []) or [])],
+                warnings=[w.get("message", str(w)) if isinstance(w, dict) else str(w) for w in (result.get("warnings", []) or [])],
+                quality_score=None,
+                report_url=report_url,
+            )
+
+        # non-chunked
+        parser_class = FixedWidthParser if is_fixed_width else FormatDetector().get_parser_class(str(upload_path))
+        if parser_class == FixedWidthParser and is_fixed_width and mapping_config.get("fields"):
+            field_specs = []
+            current_pos = 0
+            for field in mapping_config.get("fields", []):
+                length = int(field.get("length", 0))
+                start = int(field.get("position") - 1) if field.get("position") is not None else current_pos
+                end = start + length
+                field_specs.append((field["name"], start, end))
+                current_pos = end
+            parser = FixedWidthParser(str(upload_path), field_specs)
+        else:
+            parser = parser_class(str(upload_path))
+
+        result = EnhancedFileValidator(parser, mapping_config).validate(
+            detailed=request.detailed,
+            strict_fixed_width=request.strict_fixed_width,
+            strict_level=request.strict_level,
+        )
+
+        if request.output_html:
+            report_path = UPLOADS_DIR / f"validation_{upload_path.stem}.html"
+            ValidationReporter().generate(result, str(report_path))
+            report_url = f"/uploads/{report_path.name}"
+
+        qm = result.get("quality_metrics", {})
+        total_rows = int(qm.get("total_rows", 0))
+        invalid_rows = len({
+            int(e.get("row")) for e in (result.get("errors", []) or [])
+            if isinstance(e, dict) and e.get("row") is not None and str(e.get("row")).isdigit()
+        })
+        valid_rows = max(total_rows - invalid_rows, 0)
+
+        return FileValidationResult(
+            valid=bool(result.get("valid", False)),
+            total_rows=total_rows,
+            valid_rows=valid_rows,
+            invalid_rows=invalid_rows,
+            errors=[e if isinstance(e, dict) else {"message": str(e)} for e in (result.get("errors", []) or [])],
+            warnings=[w.get("message", str(w)) if isinstance(w, dict) else str(w) for w in (result.get("warnings", []) or [])],
+            quality_score=qm.get("quality_score"),
+            report_url=report_url,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error validating file: {str(e)}")
+    finally:
+        if upload_path.exists():
+            upload_path.unlink()
 
 
 def _run_compare_with_mapping(upload_path1: Path, upload_path2: Path, request: FileCompareRequest) -> FileCompareResult:

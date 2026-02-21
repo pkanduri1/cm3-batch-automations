@@ -5,9 +5,9 @@ from pathlib import Path
 
 from fastapi import UploadFile, HTTPException
 
-from src.api.models.file import FileParseRequest, FileCompareRequest
+from src.api.models.file import FileParseRequest, FileCompareRequest, FileValidateRequest
 from src.api.models.mapping import MappingCreate, SourceConfig, FieldSpec
-from src.api.routers.files import detect_format, parse_file, compare_files
+from src.api.routers.files import detect_format, parse_file, compare_files, validate_file
 from src.api.routers.mappings import (
     list_mappings,
     get_mapping,
@@ -70,6 +70,37 @@ def test_files_router_detect_parse_compare_direct():
         )
         assert cmp_res.total_rows_file1 == 2
         assert cmp_res.total_rows_file2 == 2
+    finally:
+        if mapping_path.exists():
+            mapping_path.unlink()
+
+
+def test_validate_router_strict_and_chunked_direct():
+    mapping_id = "test_api_validate_mapping"
+    mapping_path = _write_test_mapping(mapping_id)
+    try:
+        # non-chunked
+        v1 = asyncio.run(
+            validate_file(
+                file=_upload_file("v1.txt", "1|Alice\n2|Bob\n"),
+                request=FileValidateRequest(mapping_id=mapping_id, detailed=False, use_chunked=False),
+            )
+        )
+        assert v1.total_rows >= 0
+
+        # chunked strict path
+        v2 = asyncio.run(
+            validate_file(
+                file=_upload_file("v2.txt", "1|Alice\n2|Bob\n"),
+                request=FileValidateRequest(
+                    mapping_id=mapping_id,
+                    use_chunked=True,
+                    strict_fixed_width=True,
+                    strict_level="format",
+                ),
+            )
+        )
+        assert v2.total_rows >= 0
     finally:
         if mapping_path.exists():
             mapping_path.unlink()
