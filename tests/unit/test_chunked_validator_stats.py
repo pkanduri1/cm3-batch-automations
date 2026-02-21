@@ -50,6 +50,34 @@ def test_chunked_validator_detects_fixed_width_length_mismatches():
         os.unlink(temp_file)
 
 
+def test_chunked_strict_fixed_width_detects_field_format_errors():
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        f.write('A\n')
+        temp_file = f.name
+
+    try:
+        from src.parsers.chunked_parser import ChunkedFixedWidthParser
+
+        parser = ChunkedFixedWidthParser(temp_file, [('NUM', 0, 1)], chunk_size=10)
+        validator = ChunkedFileValidator(
+            file_path=temp_file,
+            parser=parser,
+            chunk_size=10,
+            strict_fixed_width=True,
+            strict_level='format',
+            strict_fields=[{'name': 'NUM', 'required': True, 'format': '9(1)'}],
+        )
+
+        result = validator.validate(show_progress=False)
+        assert result['valid'] is False
+        assert any(
+            isinstance(e, dict) and e.get('code') == 'FW_FMT_001' and e.get('field') == 'NUM'
+            for e in result.get('errors', [])
+        )
+    finally:
+        os.unlink(temp_file)
+
+
 def test_validate_with_schema_passes_show_progress_flag(monkeypatch):
     validator = ChunkedFileValidator(file_path='dummy.txt', delimiter='|', chunk_size=2)
 

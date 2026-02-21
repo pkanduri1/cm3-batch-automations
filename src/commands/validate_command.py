@@ -88,6 +88,8 @@ def run_validate_command(
             except Exception:
                 expected_row_length = None
 
+        strict_fields = mapping_config.get('fields', []) if (mapping_config and mapping_config.get('fields')) else []
+
         chunked_validator = ChunkedFileValidator(
             file_path=file,
             delimiter=delimiter,
@@ -95,12 +97,10 @@ def run_validate_command(
             parser=chunk_parser,
             rules_config_path=rules,
             expected_row_length=expected_row_length,
+            strict_fixed_width=bool(strict_fixed_width),
+            strict_level=str(strict_level or 'format'),
+            strict_fields=strict_fields,
         )
-
-        if strict_fixed_width:
-            click.echo(click.style(
-                "Strict fixed-width field-level checks are currently supported in non-chunked mode; "
-                "chunked mode will still enforce row-length defects.", fg='yellow'))
 
         if mapping_config:
             if 'fields' in mapping_config:
