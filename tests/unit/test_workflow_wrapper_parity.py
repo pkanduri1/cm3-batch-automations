@@ -7,17 +7,14 @@ import scripts.run_regression_workflow as regression_wf
 def test_regression_parse_stage_delegates_to_engine(monkeypatch):
     captured = {}
 
-    def fake_build_parse_cmd(**kwargs):
-        captured["kwargs"] = kwargs
-        return ["python", "-m", "src.main", "parse"]
-
-    def fake_run_subprocess(cmd, cwd):
-        captured["cmd"] = cmd
+    def fake_run_stage(name, py, cfg, cwd):
+        captured["name"] = name
+        captured["py"] = py
+        captured["cfg"] = cfg
         captured["cwd"] = cwd
         return {"exit_code": 0, "output": "ok", "status": "PASS"}
 
-    monkeypatch.setattr(regression_wf, "build_parse_cmd", fake_build_parse_cmd)
-    monkeypatch.setattr(regression_wf, "run_subprocess", fake_run_subprocess)
+    monkeypatch.setattr(regression_wf, "run_stage", fake_run_stage)
 
     cfg = {
         "input_file": "data/samples/customers.txt",
@@ -28,24 +25,22 @@ def test_regression_parse_stage_delegates_to_engine(monkeypatch):
     out = regression_wf._parse_stage("python", cfg)
 
     assert out["exit_code"] == 0
-    assert captured["kwargs"]["chunk_size"] == 123
-    assert captured["kwargs"]["use_chunked"] is True
+    assert captured["name"] == "parse"
+    assert captured["cfg"]["chunk_size"] == 123
+    assert captured["cfg"]["use_chunked"] is True
 
 
 def test_manifest_run_validate_delegates_to_engine(monkeypatch, tmp_path):
     captured = {}
 
-    def fake_build_validate_cmd(**kwargs):
-        captured["kwargs"] = kwargs
-        return ["python", "-m", "src.main", "validate"]
-
-    def fake_run_subprocess(cmd, cwd):
-        captured["cmd"] = cmd
+    def fake_run_stage(name, py, cfg, cwd):
+        captured["name"] = name
+        captured["py"] = py
+        captured["cfg"] = cfg
         captured["cwd"] = cwd
         return {"exit_code": 0, "output": "ok", "status": "PASS"}
 
-    monkeypatch.setattr(manifest_wf, "build_validate_cmd", fake_build_validate_cmd)
-    monkeypatch.setattr(manifest_wf, "run_subprocess", fake_run_subprocess)
+    monkeypatch.setattr(manifest_wf, "run_stage", fake_run_stage)
 
     rc, output = manifest_wf.run_validate(
         project_root=Path.cwd(),
@@ -60,5 +55,6 @@ def test_manifest_run_validate_delegates_to_engine(monkeypatch, tmp_path):
 
     assert rc == 0
     assert output == "ok"
-    assert captured["kwargs"]["use_chunked"] is True
-    assert captured["kwargs"]["chunk_size"] == 500
+    assert captured["name"] == "validate"
+    assert captured["cfg"]["use_chunked"] is True
+    assert captured["cfg"]["chunk_size"] == 500

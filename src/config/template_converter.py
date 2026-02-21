@@ -3,7 +3,7 @@
 import pandas as pd
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, Any, Optional
 
 
@@ -96,8 +96,8 @@ class TemplateConverter:
             "key_columns": [],
             "metadata": {
                 "created_by": "template_converter",
-                "created_date": datetime.utcnow().isoformat() + "Z",
-                "last_modified": datetime.utcnow().isoformat() + "Z",
+                "created_date": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                "last_modified": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 "source_template": str(template_path)
             }
         }

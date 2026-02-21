@@ -3,9 +3,18 @@
 Date: 2026-02-21
 Branch baseline: `main` (post architecture-review merge)
 
+## Status
+All backlog items in this roadmap have been implemented on `feature/next-architecture-features`.
+
+## Completion Verification
+- Full test suite: `154 passed`
+- Coverage gate: `81.69%` (threshold 80%)
+- Regression workflow: PASS
+- Manifest workflow: PASS (expected invalid scenarios captured in telemetry)
+
 ## Prioritized Backlog
 
-## 1) Compare API v2: Async Jobs (In Progress)
+## 1) Compare API v2: Async Jobs ✅ COMPLETE
 
 ### Goal
 Support large file compares over API without blocking request threads.
@@ -26,7 +35,7 @@ Support large file compares over API without blocking request threads.
 
 ---
 
-## 2) Validate API v2 strict/chunked parity
+## 2) Validate API v2 strict/chunked parity ✅ COMPLETE
 
 ### Goal
 Expose strict validation controls and chunked strict behavior over API.
@@ -45,7 +54,7 @@ Expose strict validation controls and chunked strict behavior over API.
 
 ---
 
-## 3) Report Contracts v1
+## 3) Report Contracts v1 ✅ COMPLETE
 
 ### Goal
 Freeze result shape for validation/compare payloads to prevent regressions.
@@ -63,7 +72,7 @@ Freeze result shape for validation/compare payloads to prevent regressions.
 
 ---
 
-## 4) Workflow Engine pluginization
+## 4) Workflow Engine pluginization ✅ COMPLETE
 
 ### Goal
 Make workflow stages pluggable and reusable.
@@ -81,7 +90,7 @@ Make workflow stages pluggable and reusable.
 
 ---
 
-## 5) Operational hardening
+## 5) Operational hardening ✅ COMPLETE
 
 ### Goal
 Improve production reliability and observability.

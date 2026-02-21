@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, Any
 
 import pandas as pd
@@ -56,7 +56,7 @@ class BARulesTemplateConverter:
                 'name': Path(template_path).stem,
                 'description': f"Generated from BA-friendly template: {Path(template_path).name}",
                 'created_by': 'ba_rules_template_converter',
-                'created_date': datetime.utcnow().isoformat() + 'Z',
+                'created_date': datetime.now(UTC).isoformat().replace('+00:00', 'Z'),
                 'template_path': str(template_path),
                 'template_type': 'ba_friendly',
             },

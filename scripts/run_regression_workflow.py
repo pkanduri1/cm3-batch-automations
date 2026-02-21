@@ -14,13 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from src.contracts.regression_workflow import RegressionWorkflowContract
-from src.workflows.engine import (
-    build_compare_cmd,
-    build_parse_cmd,
-    build_validate_cmd,
-    resolve_path,
-    run_subprocess,
-)
+from src.workflows.engine import resolve_path, run_stage
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -34,54 +28,51 @@ def _parse_stage(py: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
     out = _resolve(cfg.get("output")) if cfg.get("output") else None
     if out:
         out.parent.mkdir(parents=True, exist_ok=True)
-    cmd = build_parse_cmd(
-        py=py,
-        input_file=str(_resolve(cfg["input_file"])),
-        mapping=str(_resolve(cfg["mapping"])),
-        output=str(out) if out else None,
-        fmt=str(cfg["format"]) if cfg.get("format") else None,
-        use_chunked=bool(cfg.get("use_chunked")),
-        chunk_size=int(cfg.get("chunk_size", 100000)),
-    )
-    return run_subprocess(cmd, PROJECT_ROOT)
+    stage_cfg = {
+        "input_file": str(_resolve(cfg["input_file"])),
+        "mapping": str(_resolve(cfg["mapping"])),
+        "output": str(out) if out else None,
+        "format": str(cfg["format"]) if cfg.get("format") else None,
+        "use_chunked": bool(cfg.get("use_chunked")),
+        "chunk_size": int(cfg.get("chunk_size", 100000)),
+    }
+    return run_stage("parse", py, stage_cfg, PROJECT_ROOT)
 
 
 def _validate_stage(py: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
     out = _resolve(cfg.get("output")) if cfg.get("output") else None
     if out:
         out.parent.mkdir(parents=True, exist_ok=True)
-    cmd = build_validate_cmd(
-        py=py,
-        input_file=str(_resolve(cfg["input_file"])),
-        mapping=str(_resolve(cfg["mapping"])),
-        rules=str(_resolve(cfg["rules"])) if cfg.get("rules") else None,
-        output=str(out) if out else None,
-        detailed=bool(cfg.get("detailed", True)),
-        strict_fixed_width=bool(cfg.get("strict_fixed_width", False)),
-        strict_level=str(cfg.get("strict_level")) if cfg.get("strict_level") else None,
-        use_chunked=bool(cfg.get("use_chunked", False)),
-        chunk_size=int(cfg.get("chunk_size", 100000)),
-        progress=False,
-    )
-    return run_subprocess(cmd, PROJECT_ROOT)
+    stage_cfg = {
+        "input_file": str(_resolve(cfg["input_file"])),
+        "mapping": str(_resolve(cfg["mapping"])),
+        "rules": str(_resolve(cfg["rules"])) if cfg.get("rules") else None,
+        "output": str(out) if out else None,
+        "detailed": bool(cfg.get("detailed", True)),
+        "strict_fixed_width": bool(cfg.get("strict_fixed_width", False)),
+        "strict_level": str(cfg.get("strict_level")) if cfg.get("strict_level") else None,
+        "use_chunked": bool(cfg.get("use_chunked", False)),
+        "chunk_size": int(cfg.get("chunk_size", 100000)),
+        "progress": False,
+    }
+    return run_stage("validate", py, stage_cfg, PROJECT_ROOT)
 
 
 def _compare_stage(py: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
     out = _resolve(cfg.get("output")) if cfg.get("output") else None
     if out:
         out.parent.mkdir(parents=True, exist_ok=True)
-    cmd = build_compare_cmd(
-        py=py,
-        baseline_file=str(_resolve(cfg["baseline_file"])),
-        current_file=str(_resolve(cfg["current_file"])),
-        keys=str(cfg["keys"]) if cfg.get("keys") else None,
-        mapping=str(_resolve(cfg["mapping"])) if cfg.get("mapping") else None,
-        output=str(out) if out else None,
-        detailed=bool(cfg.get("detailed", True)),
-        use_chunked=bool(cfg.get("use_chunked", False)),
-        chunk_size=int(cfg.get("chunk_size", 100000)),
-    )
-    return run_subprocess(cmd, PROJECT_ROOT)
+    stage_cfg = {
+        "baseline_file": str(_resolve(cfg["baseline_file"])),
+        "current_file": str(_resolve(cfg["current_file"])),
+        "keys": str(cfg["keys"]) if cfg.get("keys") else None,
+        "mapping": str(_resolve(cfg["mapping"])) if cfg.get("mapping") else None,
+        "output": str(out) if out else None,
+        "detailed": bool(cfg.get("detailed", True)),
+        "use_chunked": bool(cfg.get("use_chunked", False)),
+        "chunk_size": int(cfg.get("chunk_size", 100000)),
+    }
+    return run_stage("compare", py, stage_cfg, PROJECT_ROOT)
 
 
 def _require(cfg: Dict[str, Any], fields: List[str], stage: str) -> None:

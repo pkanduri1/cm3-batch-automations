@@ -23,6 +23,7 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     timestamp: str
+    checks: Optional[dict] = None
 
 
 class SystemInfoResponse(BaseModel):
@@ -31,3 +32,5 @@ class SystemInfoResponse(BaseModel):
     api_version: str
     supported_formats: list
     database_connected: bool
+    database_configured: Optional[bool] = None
+    database_message: Optional[str] = None

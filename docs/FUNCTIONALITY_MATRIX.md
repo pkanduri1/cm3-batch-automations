@@ -28,7 +28,7 @@ Comprehensive matrix of what CM3 Batch Automations provides.
 |---|---|---|
 | System | `/api/v1/system/*` | health and service metadata |
 | Mappings | `/api/v1/mappings/*` | upload/list/get/validate/delete mappings |
-| Files | `/api/v1/files/*` | detect/parse/compare via HTTP (compare uses shared service parity with CLI and emits `report_url`) |
+| Files | `/api/v1/files/*` | detect/parse/validate/compare via HTTP (sync + async compare jobs, strict/chunked validate parity) |
 
 ## Reporting Outputs
 

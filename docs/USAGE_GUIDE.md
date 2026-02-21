@@ -956,7 +956,10 @@ POST /api/v1/mappings/upload            # Upload template
 GET  /api/v1/mappings/                  # List mappings
 POST /api/v1/files/detect               # Detect format
 POST /api/v1/files/parse                # Parse file
-POST /api/v1/files/compare              # Compare files
+POST /api/v1/files/validate             # Validate file (strict/chunked parity options)
+POST /api/v1/files/compare              # Compare files (sync)
+POST /api/v1/files/compare-async        # Create async compare job
+GET  /api/v1/files/compare-jobs/{id}    # Poll async compare job
 ```
 
 ### Python Usage
