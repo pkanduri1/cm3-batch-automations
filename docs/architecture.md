@@ -82,6 +82,7 @@ sequenceDiagram
 
 ## Current Compliance Snapshot (2026-02-21)
 - ✅ Compare path uses shared service (`src/services/compare_service.py`) from both CLI and API.
+- ✅ Parse/validate API flows route through shared services (`src/services/parse_service.py`, `src/services/validate_service.py`) instead of router-level parser orchestration.
 - ✅ Workflow scripts are thin wrappers over stage-based workflow engine (`src/workflows/engine.py`).
 - ✅ Reporting contract docs + v1 schemas are published for validation and compare outputs.
 - ✅ API supports sync + async compare and strict/chunked validate parity.
