@@ -8,97 +8,80 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List
 
 from src.contracts.regression_workflow import RegressionWorkflowContract
+from src.workflows.engine import (
+    build_compare_cmd,
+    build_parse_cmd,
+    build_validate_cmd,
+    resolve_path,
+    run_subprocess,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _resolve(path_value: str | None) -> Path | None:
-    if not path_value:
-        return None
-    p = Path(path_value)
-    return p if p.is_absolute() else PROJECT_ROOT / p
-
-
-def _run(cmd: List[str]) -> Dict[str, Any]:
-    started = time.perf_counter()
-    proc = subprocess.run(cmd, cwd=PROJECT_ROOT, text=True, capture_output=True)
-    duration = round(time.perf_counter() - started, 3)
-    out = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
-    return {
-        "command": " ".join(cmd),
-        "exit_code": proc.returncode,
-        "duration_seconds": duration,
-        "output": out.strip(),
-        "status": "PASS" if proc.returncode == 0 else "FAIL",
-    }
+    return resolve_path(path_value, PROJECT_ROOT)
 
 
 def _parse_stage(py: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
-    cmd = [py, "-m", "src.main", "parse", "-f", str(_resolve(cfg["input_file"])), "-m", str(_resolve(cfg["mapping"]))]
-    if cfg.get("output"):
-        out = _resolve(cfg["output"])
+    out = _resolve(cfg.get("output")) if cfg.get("output") else None
+    if out:
         out.parent.mkdir(parents=True, exist_ok=True)
-        cmd.extend(["-o", str(out)])
-    if cfg.get("format"):
-        cmd.extend(["--format", str(cfg["format"])])
-    if cfg.get("use_chunked"):
-        cmd.extend(["--use-chunked", "--chunk-size", str(cfg.get("chunk_size", 100000))])
-    return _run(cmd)
+    cmd = build_parse_cmd(
+        py=py,
+        input_file=str(_resolve(cfg["input_file"])),
+        mapping=str(_resolve(cfg["mapping"])),
+        output=str(out) if out else None,
+        fmt=str(cfg["format"]) if cfg.get("format") else None,
+        use_chunked=bool(cfg.get("use_chunked")),
+        chunk_size=int(cfg.get("chunk_size", 100000)),
+    )
+    return run_subprocess(cmd, PROJECT_ROOT)
 
 
 def _validate_stage(py: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
-    cmd = [py, "-m", "src.main", "validate", "-f", str(_resolve(cfg["input_file"])), "-m", str(_resolve(cfg["mapping"]))]
-    if cfg.get("rules"):
-        cmd.extend(["-r", str(_resolve(cfg["rules"]))])
-    if cfg.get("output"):
-        out = _resolve(cfg["output"])
+    out = _resolve(cfg.get("output")) if cfg.get("output") else None
+    if out:
         out.parent.mkdir(parents=True, exist_ok=True)
-        cmd.extend(["-o", str(out)])
-    if cfg.get("detailed", True):
-        cmd.append("--detailed")
-    if cfg.get("strict_fixed_width"):
-        cmd.append("--strict-fixed-width")
-        if cfg.get("strict_level"):
-            cmd.extend(["--strict-level", str(cfg["strict_level"])])
-    if cfg.get("use_chunked"):
-        cmd.extend(["--use-chunked", "--chunk-size", str(cfg.get("chunk_size", 100000)), "--no-progress"])
-    return _run(cmd)
+    cmd = build_validate_cmd(
+        py=py,
+        input_file=str(_resolve(cfg["input_file"])),
+        mapping=str(_resolve(cfg["mapping"])),
+        rules=str(_resolve(cfg["rules"])) if cfg.get("rules") else None,
+        output=str(out) if out else None,
+        detailed=bool(cfg.get("detailed", True)),
+        strict_fixed_width=bool(cfg.get("strict_fixed_width", False)),
+        strict_level=str(cfg.get("strict_level")) if cfg.get("strict_level") else None,
+        use_chunked=bool(cfg.get("use_chunked", False)),
+        chunk_size=int(cfg.get("chunk_size", 100000)),
+        progress=False,
+    )
+    return run_subprocess(cmd, PROJECT_ROOT)
 
 
 def _compare_stage(py: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
-    cmd = [
-        py,
-        "-m",
-        "src.main",
-        "compare",
-        "-f1",
-        str(_resolve(cfg["baseline_file"])),
-        "-f2",
-        str(_resolve(cfg["current_file"])),
-    ]
-    if cfg.get("keys"):
-        cmd.extend(["-k", str(cfg["keys"])])
-    if cfg.get("mapping"):
-        cmd.extend(["-m", str(_resolve(cfg["mapping"]))])
-    if cfg.get("output"):
-        out = _resolve(cfg["output"])
+    out = _resolve(cfg.get("output")) if cfg.get("output") else None
+    if out:
         out.parent.mkdir(parents=True, exist_ok=True)
-        cmd.extend(["-o", str(out)])
-    if cfg.get("detailed", True):
-        cmd.append("--detailed")
-    else:
-        cmd.append("--basic")
-    if cfg.get("use_chunked"):
-        cmd.extend(["--use-chunked", "--chunk-size", str(cfg.get("chunk_size", 100000)), "--no-progress"])
-    return _run(cmd)
+    cmd = build_compare_cmd(
+        py=py,
+        baseline_file=str(_resolve(cfg["baseline_file"])),
+        current_file=str(_resolve(cfg["current_file"])),
+        keys=str(cfg["keys"]) if cfg.get("keys") else None,
+        mapping=str(_resolve(cfg["mapping"])) if cfg.get("mapping") else None,
+        output=str(out) if out else None,
+        detailed=bool(cfg.get("detailed", True)),
+        use_chunked=bool(cfg.get("use_chunked", False)),
+        chunk_size=int(cfg.get("chunk_size", 100000)),
+    )
+    return run_subprocess(cmd, PROJECT_ROOT)
 
 
 def _require(cfg: Dict[str, Any], fields: List[str], stage: str) -> None:

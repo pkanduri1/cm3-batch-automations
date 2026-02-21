@@ -250,8 +250,8 @@ Most severe risks:
 - P2: 🚧 STARTED
 
 ### P2 Kickoff Plan (next execution slice)
-1. Create `src/workflows/engine.py` with reusable stage runners (`parse`, `validate`, `compare`).
-2. Refactor `scripts/run_manifest_workflow.py` and `scripts/run_regression_workflow.py` into thin wrappers over workflow engine.
+1. Create `src/workflows/engine.py` with reusable stage runners (`parse`, `validate`, `compare`). ✅
+2. Refactor `scripts/run_manifest_workflow.py` and `scripts/run_regression_workflow.py` into thin wrappers over workflow engine. ✅ (initial pass)
 3. Add ADRs:
    - `docs/adr/0001-boundary-cli-services.md`
    - `docs/adr/0002-validation-reporting-boundaries.md`

@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import argparse
 import csv
-import subprocess
 import sys
 import time
 from pathlib import Path
 
 from src.config.template_converter import TemplateConverter
+from src.workflows.engine import build_validate_cmd, run_subprocess
 
 
 def parse_bool(value: str | None, default: bool = False) -> bool:
@@ -45,22 +45,20 @@ def run_validate(project_root: Path, py: Path, data_file: Path, mapping_file: Pa
                  report_file: Path, chunked: bool, chunk_size: int) -> tuple[int, str]:
     report_file.parent.mkdir(parents=True, exist_ok=True)
 
-    cmd = [
-        str(py), "-m", "src.main", "validate",
-        "-f", str(data_file),
-        "-m", str(mapping_file),
-        "--detailed",
-        "-o", str(report_file),
-    ]
+    cmd = build_validate_cmd(
+        py=str(py),
+        input_file=str(data_file),
+        mapping=str(mapping_file),
+        rules=str(rules_file) if rules_file else None,
+        output=str(report_file),
+        detailed=True,
+        use_chunked=chunked,
+        chunk_size=chunk_size,
+        progress=False,
+    )
 
-    if rules_file:
-        cmd.extend(["-r", str(rules_file)])
-    if chunked:
-        cmd.extend(["--use-chunked", "--chunk-size", str(chunk_size), "--no-progress"])
-
-    proc = subprocess.run(cmd, cwd=project_root, capture_output=True, text=True)
-    output = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
-    return proc.returncode, output
+    res = run_subprocess(cmd, project_root)
+    return int(res["exit_code"]), str(res["output"])
 
 
 def count_csv_rows(path: Path) -> int:
