@@ -247,7 +247,7 @@ Most severe risks:
 
 ### Status Update
 - P1: ✅ COMPLETE
-- P2: 🚧 STARTED
+- P2: ✅ COMPLETE
 
 ### P2 Kickoff Plan (next execution slice)
 1. Create `src/workflows/engine.py` with reusable stage runners (`parse`, `validate`, `compare`). ✅
@@ -255,7 +255,16 @@ Most severe risks:
 3. Add ADRs: ✅
    - `docs/adr/0001-boundary-cli-services.md`
    - `docs/adr/0002-validation-reporting-boundaries.md`
-4. Add integration tests to prove wrapper parity before/after engine extraction. ✅ (initial parity tests added)
+4. Add integration tests to prove wrapper parity before/after engine extraction. ✅
+
+### P2 Completion Verification (2026-02-21)
+- Full test suite: `148 passed`
+- Coverage gate: `82.02%` (threshold 80%)
+- Regression workflow (`scripts/run_regression_workflow.py`): PASS
+- Manifest workflow (`scripts/run_manifest_workflow.py` with `config/validation_manifest_10_scenarios.csv`): PASS (expected scenario failures recorded in telemetry)
+- Pipeline dry-run profiles:
+  - `source_profile.SRC_A.sample.json`: PASS
+  - `source_profile.SRC_B.sample.json`: PASS
 
 ---
 
