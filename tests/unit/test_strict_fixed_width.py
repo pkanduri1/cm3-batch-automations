@@ -163,3 +163,34 @@ def test_pic_formats_fail_on_invalid_values():
         assert any(e.get('code') == 'FW_FMT_001' for e in result['errors'])
     finally:
         os.unlink(temp_file)
+
+
+def test_fixed_width_reports_line_length_and_impacted_fields():
+    mapping = {
+        'file_path': 'dummy_mapping.json',
+        'fields': [
+            {'name': 'A', 'position': 1, 'length': 2},
+            {'name': 'B', 'position': 3, 'length': 2},
+            {'name': 'C', 'position': 5, 'length': 2},
+        ],
+        'total_record_length': 6,
+    }
+
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        f.write('123456\n')   # valid
+        f.write('1234\n')     # short, should impact C
+        temp_file = f.name
+
+    try:
+        parser = FixedWidthParser(temp_file, [('A', 0, 2), ('B', 2, 4), ('C', 4, 6)])
+        validator = EnhancedFileValidator(parser, mapping)
+        result = validator.validate(detailed=False)
+
+        assert result['valid'] is False
+        codes = [e.get('code') for e in result['errors']]
+        assert 'FW_LEN_001' in codes
+        assert 'FW_LEN_002' in codes
+        assert any(e.get('row') == 2 for e in result['errors'])
+        assert any('Impacted/truncated fields' in e.get('message', '') for e in result['errors'])
+    finally:
+        os.unlink(temp_file)

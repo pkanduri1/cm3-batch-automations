@@ -17,7 +17,10 @@ class ChunkedFileValidator:
     def __init__(self, file_path: str, delimiter: str = '|',
                  chunk_size: int = 100000, parser: Optional[ChunkedFileParser] = None,
                  rules_config_path: Optional[str] = None,
-                 expected_row_length: Optional[int] = None):
+                 expected_row_length: Optional[int] = None,
+                 strict_fixed_width: bool = False,
+                 strict_level: str = 'format',
+                 strict_fields: Optional[List[Dict[str, Any]]] = None):
         """Initialize chunked validator.
         
         Args:
@@ -35,6 +38,9 @@ class ChunkedFileValidator:
         self.rule_engine: Optional[RuleEngine] = None
         self._total_rows_for_rules = 0
         self.expected_row_length = expected_row_length
+        self.strict_fixed_width = strict_fixed_width
+        self.strict_level = (strict_level or 'format').lower()
+        self.strict_fields = strict_fields or []
 
         if rules_config_path:
             try:
@@ -249,6 +255,40 @@ class ChunkedFileValidator:
 
         return mismatch_count, sampled, total_rows
 
+    def _is_value_valid_for_format(self, value: str, fmt: str) -> bool:
+        import re
+
+        v = str(value).strip()
+        fmt = str(fmt or '').upper()
+        if not fmt:
+            return True
+        if fmt == 'XXX':
+            return bool(re.fullmatch(r'[A-Za-z]{3}', v))
+        if fmt == 'CCYYMMDD':
+            return bool(re.fullmatch(r'\d{8}', v))
+
+        m_s9 = re.fullmatch(r'S9\((\d+)\)', fmt)
+        if m_s9:
+            n = int(m_s9.group(1))
+            return bool(re.fullmatch(rf'[+-]?\d{{{n}}}', v))
+
+        m_9 = re.fullmatch(r'9\((\d+)\)', fmt)
+        if m_9:
+            n = int(m_9.group(1))
+            return bool(re.fullmatch(rf'\d{{{n}}}', v))
+
+        m_dec = re.fullmatch(r'([+S])?9\((\d+)\)V9\((\d+)\)', fmt)
+        if m_dec:
+            sign_kind = m_dec.group(1)
+            n = int(m_dec.group(2))
+            m = int(m_dec.group(3))
+            if sign_kind == '+':
+                return bool(re.fullmatch(rf'[+-]\d{{{n+m}}}', v))
+            if sign_kind == 'S':
+                return bool(re.fullmatch(rf'[+-]?\d{{{n+m}}}', v))
+            return bool(re.fullmatch(rf'\d{{{n+m}}}', v))
+        return True
+
     def _validate_chunk(self, chunk: pd.DataFrame, chunk_num: int,
                        seen_rows: set, max_seen_rows: int) -> tuple:
         """Validate a single chunk.
@@ -296,7 +336,53 @@ class ChunkedFileValidator:
                 empty_count = (chunk[col] == '').sum()
                 if empty_count > 0:
                     stats['empty_strings'][col] = int(empty_count)
-        
+
+        # Strict field-level checks for fixed-width mappings (chunked mode)
+        if self.strict_fixed_width and self.strict_fields and self.strict_level in {'format', 'all'}:
+            row_base = (chunk_num - 1) * self.chunk_size
+            for local_idx, row in chunk.reset_index(drop=True).iterrows():
+                row_num = row_base + local_idx + 1
+                for field in self.strict_fields:
+                    name = field.get('name')
+                    if name not in chunk.columns:
+                        continue
+                    value = '' if pd.isna(row.get(name)) else str(row.get(name)).strip()
+
+                    if field.get('required') and value == '':
+                        errors.append({
+                            'severity': 'error',
+                            'category': 'strict_fixed_width',
+                            'code': 'FW_REQ_001',
+                            'message': f"Required field '{name}' is empty",
+                            'row': row_num,
+                            'field': name,
+                        })
+                        continue
+
+                    if value and field.get('valid_values'):
+                        allowed = {str(v).strip() for v in (field.get('valid_values') or [])}
+                        if value not in allowed:
+                            errors.append({
+                                'severity': 'error',
+                                'category': 'strict_fixed_width',
+                                'code': 'FW_VAL_001',
+                                'message': f"Field '{name}' has invalid value '{value}'",
+                                'row': row_num,
+                                'field': name,
+                            })
+                            continue
+
+                    fmt = str(field.get('format') or '').upper()
+                    if value and fmt and not self._is_value_valid_for_format(value, fmt):
+                        errors.append({
+                            'severity': 'error',
+                            'category': 'strict_fixed_width',
+                            'code': 'FW_FMT_001',
+                            'message': f"Field '{name}' has invalid format for value '{value}'",
+                            'row': row_num,
+                            'field': name,
+                        })
+
         return errors, warnings, stats
     
     def validate_with_schema(self, expected_columns: List[str],

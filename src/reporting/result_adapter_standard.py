@@ -1,13 +1,8 @@
-"""Adapter for standard validation output.
+"""Backward-compatible shim for standard result adapter.
 
-Currently pass-through to keep a consistent adapter interface.
+Deprecated: import from `src.reports.adapters.result_adapter_standard`.
 """
 
-from __future__ import annotations
+from src.reports.adapters.result_adapter_standard import adapt_standard_validation_result
 
-from typing import Dict, Any
-
-
-def adapt_standard_validation_result(result: Dict[str, Any]) -> Dict[str, Any]:
-    """Return standard validator result as reporter model."""
-    return result
+__all__ = ["adapt_standard_validation_result"]

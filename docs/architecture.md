@@ -7,15 +7,20 @@ flowchart TD
     U[Users / CI / Schedulers] --> C[CLI: cm3-batch]
     U --> A[REST API: FastAPI]
 
-    C --> O[Orchestration Layer\nsrc/main.py]
-    A --> O
+    C --> CMDS[Command Layer\nsrc/commands/*]
+    A --> API[API Routers\nsrc/api/routers/*]
 
-    O --> P[Parsing Layer\nformat detector + parsers]
-    O --> V[Validation Layer\nenhanced + chunked + rules]
-    O --> M[Mapping Layer\nconverter + parser + schemas]
-    O --> D[Database Layer\nOracle connection/extractor/reconcile]
-    O --> R[Reporting Layer\nHTML/JSON/CSV adapters]
-    O --> G[GE Layer\ncheckpoint1 config-driven]
+    CMDS --> SVCS[Service Layer\nsrc/services/*]
+    API --> SVCS
+
+    CMDS --> WF[Workflow Engine\nsrc/workflows/*]
+
+    SVCS --> P[Parsing Layer\nformat detector + parsers]
+    SVCS --> V[Validation Layer\nenhanced + chunked + rules]
+    SVCS --> M[Mapping Layer\nconverter + parser + schemas]
+    SVCS --> D[Database Layer\nOracle connection/extractor/reconcile]
+    SVCS --> R[Reporting Layer\nrenderers + adapters + contracts]
+    SVCS --> G[GE Layer\ncheckpoint1 config-driven]
 
     P --> DF[(DataFrame)]
     V --> DF
@@ -42,28 +47,34 @@ sequenceDiagram
     User->>CLI: validate -f file -m mapping [-r rules]
     CLI->>Parser: parse file (standard/chunked)
     Parser-->>CLI: DataFrame/chunks
-    CLI->>Validator: schema + quality checks
+    CLI->>Validator: schema + quality + strict checks
     alt rules provided
       CLI->>Rules: execute business rules
       Rules-->>Validator: violations
     end
     Validator-->>CLI: validation result
     CLI->>Reporter: render report
-    Reporter-->>User: HTML/JSON (+ warnings CSV)
+    Reporter-->>User: HTML/JSON (+ errors/warnings CSV)
 ```
 
 ## Core Modules
-- `src/main.py` — command orchestration
+- `src/main.py` — CLI wiring
+- `src/commands/` — thin command handlers
+- `src/services/` — shared business workflows (CLI/API parity)
+- `src/workflows/` — shared workflow orchestration engine for scripts
 - `src/parsers/` — format detection and parsing
 - `src/parsers/enhanced_validator.py` — standard validation
 - `src/parsers/chunked_validator.py` — chunked validation
 - `src/validators/` — business and field validators
 - `src/database/` — Oracle connectivity and extraction
-- `src/reporters/` + `src/reporting/` — report rendering/adapters
+- `src/contracts/` — typed config contracts (pipeline/workflow)
+- `src/reports/` — unified report rendering/adapters/contracts
+- `src/reporters/` + `src/reporting/` — backward-compatible shims (deprecated)
 - `src/quality/gx_checkpoint1.py` — Great Expectations checkpoint integration
 
 ## Design Principles
 - Mapping-driven processing (no hardcoded file layouts)
 - Fail-fast exit codes for CI correctness
 - Memory-safe chunked processing for large files
+- Service-first reuse to prevent CLI/API drift
 - Human + machine outputs for operations and automation

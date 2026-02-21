@@ -85,10 +85,28 @@ class EnhancedFileValidator:
             if self.mapping_config:
                 self._validate_schema(df)
             
-            # Optional strict fixed-width validation
+            # Optional/auto strict fixed-width validation
             strict_result = None
-            if strict_fixed_width:
+            auto_strict = (
+                not strict_fixed_width
+                and self.mapping_config
+                and isinstance(self.mapping_config, dict)
+                and self.mapping_config.get('fields')
+                and self.parser.__class__.__name__ == 'FixedWidthParser'
+            )
+            if strict_fixed_width or auto_strict:
                 strict_result = self._validate_strict_fixed_width(df, strict_level=strict_level)
+
+            # First-misalignment diagnostics for fixed-width rows
+            fixed_width_alignment = None
+            should_run_alignment = (
+                self.mapping_config
+                and self.mapping_config.get('fields')
+                and self.parser.__class__.__name__ == 'FixedWidthParser'
+                and (not strict_fixed_width or (strict_level or 'all').lower() in {'format', 'all'})
+            )
+            if should_run_alignment:
+                fixed_width_alignment = self._detect_first_misalignment_by_row(max_details=200)
 
             # Data profiling
             data_profile = self._profile_data(df) if detailed else {}
@@ -122,6 +140,7 @@ class EnhancedFileValidator:
             appendix=appendix_data,
             business_rules=business_rules_result,
             strict_fixed_width=strict_result,
+            fixed_width_alignment=fixed_width_alignment,
             issue_code_summary=self._build_issue_code_summary()
         )
 
@@ -197,6 +216,9 @@ class EnhancedFileValidator:
                     'row': None,
                     'field': None
                 })
+
+                # For fixed-width files, include line-length and impacted-field diagnostics.
+                self._add_fixed_width_format_diagnostics()
                 return False
             return True
         except Exception as e:
@@ -489,6 +511,111 @@ class EnhancedFileValidator:
                     'field': field
                 })
 
+    def _add_fixed_width_format_diagnostics(self) -> None:
+        """Add detailed fixed-width diagnostics (line length + impacted fields)."""
+        from src.parsers.fixed_width_parser import FixedWidthParser
+
+        if not isinstance(self.parser, FixedWidthParser):
+            return
+
+        try:
+            analysis = self.parser.analyze_line_lengths(sample_size=200)
+            expected_len = analysis.get('expected_length', 0)
+            mismatch_count = analysis.get('mismatch_count', 0)
+            total_lines = analysis.get('total_lines', 0)
+
+            correct_count = total_lines - mismatch_count
+            incorrect_rows = [m['line_number'] for m in analysis.get('mismatches', [])]
+
+            # Always include correct/incorrect line summary for operator visibility.
+            self.info.append({
+                'severity': 'info',
+                'category': 'format',
+                'code': 'FW_LEN_000',
+                'message': (
+                    f"Line length summary: correct={correct_count}, incorrect={mismatch_count}, "
+                    f"total={total_lines}, expected_length={expected_len}."
+                ),
+                'row': None,
+                'field': None,
+            })
+
+            if mismatch_count == 0:
+                return
+
+            self.errors.append({
+                'severity': 'error',
+                'category': 'format',
+                'code': 'FW_LEN_001',
+                'message': (
+                    f"Line length mismatch found in {mismatch_count} of {total_lines} rows "
+                    f"(expected length={expected_len}). Incorrect rows sample: {incorrect_rows[:20]}"
+                ),
+                'row': None,
+                'field': None,
+            })
+
+            # Build field ranges from parser spec
+            field_ranges = [(name, start, end) for name, start, end in self.parser.column_specs]
+
+            for mm in analysis.get('mismatches', []):
+                row = mm['line_number']
+                actual = mm['actual_length']
+                if actual < expected_len:
+                    impacted = [name for name, start, end in field_ranges if end > actual]
+                    field_hint = ', '.join(impacted[:8])
+                    if len(impacted) > 8:
+                        field_hint += f", +{len(impacted)-8} more"
+                    msg = (
+                        f"Row {row} length mismatch: expected {expected_len}, got {actual}. "
+                        f"Impacted/truncated fields: {field_hint if field_hint else 'unknown'}."
+                    )
+                    self.errors.append({
+                        'severity': 'error',
+                        'category': 'format',
+                        'code': 'FW_LEN_002',
+                        'message': msg,
+                        'row': row,
+                        'field': field_hint if field_hint else None,
+                        'expected_length': expected_len,
+                        'actual_length': actual,
+                    })
+                else:
+                    extra = actual - expected_len
+                    msg = (
+                        f"Row {row} length mismatch: expected {expected_len}, got {actual}. "
+                        f"Trailing extra data length: {extra}."
+                    )
+                    self.errors.append({
+                        'severity': 'error',
+                        'category': 'format',
+                        'code': 'FW_LEN_003',
+                        'message': msg,
+                        'row': row,
+                        'field': '__TRAILING_DATA__',
+                        'expected_length': expected_len,
+                        'actual_length': actual,
+                    })
+
+            remaining = mismatch_count - len(analysis.get('mismatches', []))
+            if remaining > 0:
+                self.warnings.append({
+                    'severity': 'warning',
+                    'category': 'format',
+                    'code': 'FW_LEN_004',
+                    'message': f"{remaining} additional mismatched rows omitted from detailed diagnostics.",
+                    'row': None,
+                    'field': None,
+                })
+        except Exception as e:
+            self.warnings.append({
+                'severity': 'warning',
+                'category': 'format',
+                'message': f"Could not compute fixed-width diagnostics: {e}",
+                'row': None,
+                'field': None,
+            })
+
     def _profile_data(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Generate data profile statistics."""
         return {
@@ -689,11 +816,10 @@ class EnhancedFileValidator:
                     issues_by_row[row_num] = []
                 issues_by_row[row_num].append(issue)
         
-        # Get top 100 most problematic rows
+        # Keep row ordering stable/ascending for operator readability.
         top_problematic = sorted(
             issues_by_row.items(),
-            key=lambda x: len(x[1]),
-            reverse=True
+            key=lambda x: int(x[0])
         )[:100]
         
         return {
@@ -707,6 +833,224 @@ class EnhancedFileValidator:
                 }
                 for row, issues in top_problematic
             ]
+        }
+
+    def _build_fixed_width_field_specs(self) -> List[Dict[str, Any]]:
+        """Build ordered fixed-width field specs (name/start/end/length/meta).
+
+        Uses parser column specs as the positional source of truth to match actual parsing,
+        then enriches with mapping metadata (required/format/valid_values).
+        """
+        specs: List[Dict[str, Any]] = []
+        mapping_by_name = {
+            str(f.get('name')): f for f in (self.mapping_config or {}).get('fields', []) if f.get('name')
+        }
+
+        parser_specs = getattr(self.parser, 'column_specs', []) or []
+        for name, start, end in parser_specs:
+            meta = mapping_by_name.get(str(name), {})
+            length = int(end) - int(start)
+            specs.append({
+                'name': name,
+                'start': int(start),
+                'end': int(end),
+                'length': length,
+                'required': bool(meta.get('required', False)),
+                'format': str(meta.get('format') or '').upper(),
+                'valid_values': meta.get('valid_values') or [],
+            })
+        return specs
+
+    def _is_value_valid_for_format(self, value: str, fmt: str) -> bool:
+        """Validate a string value against fixed-width picture format."""
+        import re
+
+        v = str(value).strip()
+        fmt = str(fmt or '').upper()
+        if not fmt:
+            return True
+
+        if fmt == 'XXX':
+            return bool(re.fullmatch(r'[A-Za-z]{3}', v))
+        if fmt == 'CCYYMMDD':
+            return bool(re.fullmatch(r'\d{8}', v))
+
+        m_s9 = re.fullmatch(r'S9\((\d+)\)', fmt)
+        if m_s9:
+            n = int(m_s9.group(1))
+            return bool(re.fullmatch(rf'[+-]?\d{{{n}}}', v))
+
+        m_9 = re.fullmatch(r'9\((\d+)\)', fmt)
+        if m_9:
+            n = int(m_9.group(1))
+            return bool(re.fullmatch(rf'\d{{{n}}}', v))
+
+        m_dec = re.fullmatch(r'([+S])?9\((\d+)\)V9\((\d+)\)', fmt)
+        if m_dec:
+            sign_kind = m_dec.group(1)
+            n = int(m_dec.group(2))
+            m = int(m_dec.group(3))
+            if sign_kind == '+':
+                return bool(re.fullmatch(rf'[+-]\d{{{n+m}}}', v))
+            if sign_kind == 'S':
+                return bool(re.fullmatch(rf'[+-]?\d{{{n+m}}}', v))
+            return bool(re.fullmatch(rf'\d{{{n+m}}}', v))
+
+        return True
+
+    def _detect_first_misalignment_by_row(self, max_details: int = 200) -> Dict[str, Any]:
+        """Detect first incorrect mapping position per row in fixed-width file."""
+        specs = self._build_fixed_width_field_specs()
+        if not specs:
+            return {'enabled': False, 'rows_scanned': 0, 'misaligned_rows': 0, 'details': []}
+
+        expected_len = max(s['end'] for s in specs)
+        details = []
+        total_rows = 0
+        misaligned_rows = 0
+        length_mismatch_rows = 0
+        field_error_rows = 0
+
+        with open(self.parser.file_path, 'r', encoding='utf-8', errors='replace') as f:
+            for row_no, line in enumerate(f, start=1):
+                total_rows += 1
+                raw = line.rstrip('\n')
+                actual_len = len(raw)
+
+                first_issue = None
+                has_length_mismatch = actual_len != expected_len
+                if has_length_mismatch:
+                    length_mismatch_rows += 1
+                    first_issue = {
+                        'reason': 'line_length_mismatch',
+                        'field': None,
+                        'offset': min(actual_len, expected_len),
+                        'expected_length': expected_len,
+                        'actual_length': actual_len,
+                        'expected': str(expected_len),
+                        'actual': str(actual_len),
+                    }
+
+                # Field-level checks in order; first failing field becomes first misalignment.
+                for s in specs:
+                    seg = raw[s['start']:s['end']] if s['start'] < actual_len else ''
+
+                    if len(seg) < s['length']:
+                        first_issue = {
+                            'reason': 'field_truncated',
+                            'field': s['name'],
+                            'offset': s['start'] + 1,
+                            'expected_length': expected_len,
+                            'actual_length': actual_len,
+                            'expected': f"len={s['length']}",
+                            'actual': f"len={len(seg)}",
+                        }
+                        break
+
+                    val = seg.strip()
+                    if s['required'] and val == '':
+                        first_issue = {
+                            'reason': 'required_empty',
+                            'field': s['name'],
+                            'offset': s['start'] + 1,
+                            'expected_length': expected_len,
+                            'actual_length': actual_len,
+                            'expected': 'non-empty',
+                            'actual': 'empty',
+                        }
+                        break
+
+                    if val and s['valid_values']:
+                        allowed = {str(v).strip() for v in s['valid_values']}
+                        if val not in allowed:
+                            first_issue = {
+                                'reason': 'invalid_value',
+                                'field': s['name'],
+                                'offset': s['start'] + 1,
+                                'expected_length': expected_len,
+                                'actual_length': actual_len,
+                                'expected': f"one of {sorted(list(allowed))[:10]}",
+                                'actual': val,
+                            }
+                            break
+
+                    if val and s['format'] and not self._is_value_valid_for_format(val, s['format']):
+                        first_issue = {
+                            'reason': 'invalid_format',
+                            'field': s['name'],
+                            'offset': s['start'] + 1,
+                            'expected_length': expected_len,
+                            'actual_length': actual_len,
+                            'expected': s['format'],
+                            'actual': val,
+                        }
+                        break
+
+                if first_issue:
+                    misaligned_rows += 1
+                    if first_issue.get('reason') != 'line_length_mismatch':
+                        field_error_rows += 1
+                    if len(details) < max_details:
+                        details.append({'row': row_no, **first_issue})
+                        self.errors.append({
+                            'severity': 'error',
+                            'category': 'fixed_width_alignment',
+                            'code': 'FW_ALIGN_002',
+                            'message': (
+                                f"Row {row_no} first misalignment at offset {first_issue['offset']}: "
+                                f"field={first_issue.get('field') or '__ROW__'}, reason={first_issue['reason']}, "
+                                f"expected={first_issue['expected']}, actual={first_issue['actual']}"
+                            ),
+                            'row': row_no,
+                            'field': first_issue.get('field'),
+                        })
+
+        self.info.append({
+            'severity': 'info',
+            'category': 'fixed_width_alignment',
+            'code': 'FW_ALIGN_000',
+            'message': (
+                f"Fixed-width alignment summary: correct_by_length={total_rows - length_mismatch_rows}, "
+                f"incorrect_by_length={length_mismatch_rows}, rows_with_field_validation_errors={field_error_rows}, "
+                f"total_rows={total_rows}, expected_length={expected_len}."
+            ),
+            'row': None,
+            'field': None,
+        })
+
+        if misaligned_rows > 0:
+            self.errors.append({
+                'severity': 'error',
+                'category': 'fixed_width_alignment',
+                'code': 'FW_ALIGN_001',
+                'message': (
+                    f"Found first-misalignment issues in {misaligned_rows}/{total_rows} rows "
+                    f"(showing up to {max_details} rows)."
+                ),
+                'row': None,
+                'field': None,
+            })
+
+        if misaligned_rows > len(details):
+            self.warnings.append({
+                'severity': 'warning',
+                'category': 'fixed_width_alignment',
+                'code': 'FW_ALIGN_003',
+                'message': f"{misaligned_rows - len(details)} additional misaligned rows omitted from detail section.",
+                'row': None,
+                'field': None,
+            })
+
+        return {
+            'enabled': True,
+            'rows_scanned': total_rows,
+            'misaligned_rows': misaligned_rows,
+            'correct_rows': total_rows - misaligned_rows,
+            'correct_by_length': total_rows - length_mismatch_rows,
+            'incorrect_by_length': length_mismatch_rows,
+            'rows_with_field_validation_errors': field_error_rows,
+            'expected_length': expected_len,
+            'details': details,
         }
 
     def _validate_strict_fixed_width(self, df: pd.DataFrame, strict_level: str = 'all') -> Dict[str, Any]:
@@ -766,23 +1110,7 @@ class EnhancedFileValidator:
             # format checks (FW_FMT_001)
             fmt = str(field.get('format') or '').upper()
             if fmt:
-                import re
-
-                def _is_valid(v: str) -> bool:
-                    v = str(v)
-                    if fmt == 'XXX':
-                        return bool(re.fullmatch(r'[A-Za-z]{3}', v))
-                    m_s9 = re.fullmatch(r'S9\((\d+)\)', fmt)
-                    if m_s9:
-                        n = int(m_s9.group(1))
-                        return bool(re.fullmatch(rf'[+-]?\d{{{n}}}', v))
-                    m_9 = re.fullmatch(r'9\((\d+)\)', fmt)
-                    if m_9:
-                        n = int(m_9.group(1))
-                        return bool(re.fullmatch(rf'\d{{{n}}}', v))
-                    return True
-
-                bad_mask = ~non_empty.apply(_is_valid)
+                bad_mask = ~non_empty.apply(lambda v: self._is_value_valid_for_format(v, fmt))
                 for idx in non_empty[bad_mask].index:
                     invalid_row_numbers.add(int(idx) + 1)
                     format_errors += 1

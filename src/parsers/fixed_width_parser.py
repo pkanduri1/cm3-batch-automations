@@ -1,7 +1,7 @@
 """Parser for fixed-width files."""
 
 import pandas as pd
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 from .base_parser import BaseParser
 
 
@@ -38,6 +38,46 @@ class FixedWidthParser(BaseParser):
         except Exception as e:
             raise ValueError(f"Failed to parse fixed-width file: {e}")
 
+    def get_expected_record_length(self) -> int:
+        """Get expected record length from column specs."""
+        if not self.column_specs:
+            return 0
+        return max(end for _, _, end in self.column_specs)
+
+    def analyze_line_lengths(self, sample_size: int = 1000) -> Dict[str, Any]:
+        """Analyze line lengths and return mismatch details.
+
+        Args:
+            sample_size: Maximum number of line-level mismatches to keep in detail
+
+        Returns:
+            Dict containing expected length, mismatches, and summary counts.
+        """
+        expected_length = self.get_expected_record_length()
+        mismatches = []
+        total_lines = 0
+        mismatch_count = 0
+
+        with open(self.file_path, "r", encoding="utf-8", errors="replace") as f:
+            for line_no, line in enumerate(f, start=1):
+                total_lines += 1
+                actual = len(line.rstrip("\n"))
+                if actual != expected_length:
+                    mismatch_count += 1
+                    if len(mismatches) < sample_size:
+                        mismatches.append({
+                            "line_number": line_no,
+                            "actual_length": actual,
+                            "expected_length": expected_length,
+                        })
+
+        return {
+            "expected_length": expected_length,
+            "total_lines": total_lines,
+            "mismatch_count": mismatch_count,
+            "mismatches": mismatches,
+        }
+
     def validate_format(self) -> bool:
         """Validate fixed-width format.
         
@@ -45,15 +85,8 @@ class FixedWidthParser(BaseParser):
             True if format is valid
         """
         try:
-            with open(self.file_path, "r") as f:
-                lines = []
-                for _, line in zip(range(10), f):
-                    lines.append(line)
-
-                if not lines:
-                    return False
-
-                line_lengths = [len(line.rstrip("\n")) for line in lines]
-                return len(set(line_lengths)) <= 2
+            with open(self.file_path, "r", encoding="utf-8", errors="replace") as f:
+                lengths = [len(line.rstrip("\n")) for line in f]
+            return bool(lengths) and len(set(lengths)) == 1
         except Exception:
             return False

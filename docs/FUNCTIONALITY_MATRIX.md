@@ -10,9 +10,11 @@ Comprehensive matrix of what CM3 Batch Automations provides.
 | Format detect | `cm3-batch detect -f <file>` | file | console | auto-detect fixed/delimited |
 | Parse | `cm3-batch parse -f ... -m ...` | data file + optional mapping | console/CSV | supports fixed-width and delimited |
 | Parse (chunked) | `cm3-batch parse --use-chunked` | large file | CSV/console | memory-efficient |
-| Validate | `cm3-batch validate -f ... -m ...` | file + mapping | HTML/console | quality metrics + issues |
-| Validate with rules | `cm3-batch validate ... -r <rules.json>` | file + mapping + rules | HTML/console | fails with non-zero on invalid |
-| Validate (chunked) | `cm3-batch validate --use-chunked` | large file | JSON or HTML + warnings CSV | supports failure reports |
+| Validate | `cm3-batch validate -f ... -m ...` | file + mapping | HTML/JSON + console | quality metrics + issues |
+| Validate with rules | `cm3-batch validate ... -r <rules.json>` | file + mapping + rules | HTML/JSON + console | fails with non-zero on invalid |
+| Validate strict fixed-width | `cm3-batch validate ... --strict-fixed-width --strict-level format|all` | fixed-width file + mapping | HTML/JSON + console | field-level required/format/value checks |
+| Validate (chunked) | `cm3-batch validate --use-chunked` | large file | JSON or HTML + sidecar CSVs | supports failure reports + progress bar |
+| Validate (chunked strict) | `cm3-batch validate --use-chunked --strict-fixed-width` | large fixed-width file + mapping | JSON/HTML + sidecar CSVs | includes row + field-level defects |
 | Compare | `cm3-batch compare -f1 ... -f2 ... -k ...` | two files + keys | HTML/console | fixed-width compare supports `--mapping` |
 | Extract | `cm3-batch extract -t/-q/-s ...` | Oracle table/query/sql-file | delimited file | streaming mode for large extracts |
 | Reconcile | `cm3-batch reconcile -m ...` | mapping + Oracle schema | console/report | schema compatibility |
@@ -26,7 +28,7 @@ Comprehensive matrix of what CM3 Batch Automations provides.
 |---|---|---|
 | System | `/api/v1/system/*` | health and service metadata |
 | Mappings | `/api/v1/mappings/*` | upload/list/get/validate/delete mappings |
-| Files | `/api/v1/files/*` | detect/parse/compare via HTTP |
+| Files | `/api/v1/files/*` | detect/parse/compare via HTTP (compare uses shared service parity with CLI and emits `report_url`) |
 
 ## Reporting Outputs
 
@@ -34,6 +36,7 @@ Comprehensive matrix of what CM3 Batch Automations provides.
 |---|---|---|
 | Validation report | `validate` | HTML |
 | Chunked validation report | `validate --use-chunked` | JSON/HTML |
+| Errors sidecar | validation reporter | CSV (`*_errors.csv`) |
 | Warnings sidecar | validation reporter | CSV (`*_warnings.csv`) |
 | Comparison report | `compare` | HTML |
 | GE summary | `gx-checkpoint1` | JSON/CSV/HTML |
