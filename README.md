@@ -125,6 +125,16 @@ cm3-batch validate -f data/samples/customers.txt -m config/mappings/customer_map
 # Validate with chunked processing (large files)
 cm3-batch validate -f data/samples/customers.txt -m config/mappings/customer_mapping.json --use-chunked -o reports/validation.json
 
+# Strict fixed-width validation (field-level checks)
+cm3-batch validate -f data/files/p327_sample_errored.txt -m config/mappings/p327_mapping.json \
+  --strict-fixed-width --strict-level format --detailed \
+  -o reports/p327_strict_validation.html
+
+# Chunked strict fixed-width validation (now includes field-level checks)
+cm3-batch validate -f data/files/p327_sample_errored.txt -m config/mappings/p327_mapping.json \
+  --use-chunked --strict-fixed-width --strict-level format --progress \
+  -o reports/p327_chunked_strict_validation.html
+
 # Compare files
 cm3-batch compare -f1 file1.txt -f2 file2.txt -k customer_id -o report.html
 
@@ -347,8 +357,7 @@ cm3-batch-automations/
 │   ├── api/             # REST API (FastAPI)
 │   │   ├── main.py      # API application
 │   │   ├── models/      # Pydantic models
-│   │   ├── routers/     # API endpoints
-│   │   └── services/    # Business logic
+│   │   └── routers/     # API endpoints
 │   ├── parsers/         # File parsers
 │   ├── database/        # Oracle DB connectivity
 │   ├── validators/      # Validation logic
@@ -356,6 +365,9 @@ cm3-batch-automations/
 │   ├── config/          # Configuration management
 │   │   ├── universal_mapping_parser.py  # Universal parser
 │   │   └── template_converter.py        # Excel/CSV converter
+│   ├── contracts/       # Typed contracts (pipeline/workflow)
+│   ├── services/        # Shared business services (CLI/API parity)
+│   ├── workflows/       # Shared workflow engine used by scripts
 │   ├── reports/         # Unified reporting namespace
 │   │   ├── renderers/   # HTML/report renderers
 │   │   ├── adapters/    # Result adapters (standard/chunked)

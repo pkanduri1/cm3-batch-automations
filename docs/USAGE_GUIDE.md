@@ -269,7 +269,19 @@ cm3-batch validate \
 - `-m, --mapping`: Mapping configuration file
 - `-r, --rules`: Business rules configuration file (JSON)
 - `-o, --output`: Output HTML or JSON report path
-- `--detailed`: Enable detailed analysis (recommended)
+- `--detailed/--basic`: Report depth
+- `--strict-fixed-width`: Enable strict fixed-width field checks
+- `--strict-level [basic|format|all]`: Strict validation depth
+
+#### Strict field-level validation (fixed-width)
+
+```bash
+cm3-batch validate \
+  -f data/files/p327_sample_errored.txt \
+  -m config/mappings/p327_mapping.json \
+  --strict-fixed-width --strict-level format --detailed \
+  -o reports/p327_strict_validation.html
+```
 
 #### Chunk-based validation (large files)
 
@@ -279,10 +291,22 @@ cm3-batch validate \
   -m config/mappings/p327_universal.json \
   --use-chunked \
   --chunk-size 50000 \
+  --progress \
   -o reports/validation_report_chunked.json
 ```
 
-> Chunked validation supports `--use-chunked` and `--chunk-size` and is recommended for very large files.
+#### Chunk-based strict fixed-width validation
+
+```bash
+cm3-batch validate \
+  -f data/files/p327_sample_errored.txt \
+  -m config/mappings/p327_mapping.json \
+  --use-chunked --strict-fixed-width --strict-level format \
+  --progress \
+  -o reports/p327_chunked_strict_validation.html
+```
+
+> Chunked validation supports strict fixed-width field checks, row-level mismatch detection, and progress display.
 
 #### Validation Report Features
 
