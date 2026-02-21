@@ -241,9 +241,21 @@ Most severe risks:
 - Risk: strict Pydantic validation blocks existing loose configs
   - Mitigation: support `model_config = extra='ignore'` initially, tighten after migration
 
-### P2 (Medium-term)
+### P2 (Medium-term) — IN PROGRESS
 7. Unify scripts onto shared workflow engine.
 8. Formal architecture decision records (ADRs) for parsing/validation/reporting boundaries.
+
+### Status Update
+- P1: ✅ COMPLETE
+- P2: 🚧 STARTED
+
+### P2 Kickoff Plan (next execution slice)
+1. Create `src/workflows/engine.py` with reusable stage runners (`parse`, `validate`, `compare`).
+2. Refactor `scripts/run_manifest_workflow.py` and `scripts/run_regression_workflow.py` into thin wrappers over workflow engine.
+3. Add ADRs:
+   - `docs/adr/0001-boundary-cli-services.md`
+   - `docs/adr/0002-validation-reporting-boundaries.md`
+4. Add integration tests to prove wrapper parity before/after engine extraction.
 
 ---
 
