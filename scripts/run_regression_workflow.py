@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
+from src.contracts.regression_workflow import RegressionWorkflowContract
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -116,7 +118,8 @@ def main() -> int:
         print(f"❌ Config not found: {args.config}")
         return 1
 
-    config = json.loads(cfg_path.read_text(encoding="utf-8"))
+    raw_config = json.loads(cfg_path.read_text(encoding="utf-8"))
+    config = RegressionWorkflowContract.model_validate(raw_config).model_dump(by_alias=True)
     py = str(PROJECT_ROOT / ".venv" / "bin" / "python")
 
     results: Dict[str, Any] = {

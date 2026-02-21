@@ -19,6 +19,8 @@ from src.parsers.format_detector import FormatDetector
 from src.parsers.fixed_width_parser import FixedWidthParser
 from src.parsers.pipe_delimited_parser import PipeDelimitedParser
 from src.config.universal_mapping_parser import UniversalMappingParser
+from src.services.compare_service import run_compare_service
+from src.reports.renderers.comparison_renderer import HTMLReporter
 
 router = APIRouter()
 
@@ -147,31 +149,28 @@ async def compare_files(
         if not mapping_file.exists():
             raise HTTPException(status_code=404, detail=f"Mapping '{request.mapping_id}' not found")
         
-        parser_obj = UniversalMappingParser(mapping_path=str(mapping_file))
-        
-        # Parse both files
-        if parser_obj.get_format() == 'fixed_width':
-            positions = parser_obj.get_field_positions()
-            parser1 = FixedWidthParser(str(upload_path1), positions)
-            parser2 = FixedWidthParser(str(upload_path2), positions)
-        else:
-            parser1 = PipeDelimitedParser(str(upload_path1))
-            parser2 = PipeDelimitedParser(str(upload_path2))
-        
-        df1 = parser1.parse()
-        df2 = parser2.parse()
-        
-        # Compare (simplified for now)
-        matching = len(df1) if len(df1) == len(df2) else 0
-        
+        keys = ",".join(request.key_columns) if request.key_columns else None
+        compare_result = run_compare_service(
+            file1=str(upload_path1),
+            file2=str(upload_path2),
+            keys=keys,
+            mapping=str(mapping_file),
+            detailed=request.detailed,
+            use_chunked=False,
+        )
+
+        report_path = UPLOADS_DIR / f"compare_{upload_path1.stem}_{upload_path2.stem}.html"
+        HTMLReporter().generate(compare_result, str(report_path))
+
         return FileCompareResult(
-            total_rows_file1=len(df1),
-            total_rows_file2=len(df2),
-            matching_rows=matching,
-            only_in_file1=max(0, len(df1) - len(df2)),
-            only_in_file2=max(0, len(df2) - len(df1)),
-            differences=abs(len(df1) - len(df2)),
-            report_url=None  # TODO: Generate HTML report
+            total_rows_file1=compare_result['total_rows_file1'],
+            total_rows_file2=compare_result['total_rows_file2'],
+            matching_rows=compare_result['matching_rows'],
+            only_in_file1=compare_result.get('only_in_file1_count', len(compare_result.get('only_in_file1', []))),
+            only_in_file2=compare_result.get('only_in_file2_count', len(compare_result.get('only_in_file2', []))),
+            differences=compare_result.get('rows_with_differences', len(compare_result.get('differences', []))),
+            report_url=f"/uploads/{report_path.name}",
+            field_statistics=compare_result.get('field_statistics'),
         )
     
     except Exception as e:

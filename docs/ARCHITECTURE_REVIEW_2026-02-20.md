@@ -172,9 +172,9 @@ Most severe risks:
 3. Split `main.py` into command modules. ✅ (started for parse/validate/compare)
 
 ### P1 (Near-term)
-4. Consolidate reporting namespace (`reporters` + `reporting`).
-5. API/CLI comparison parity via shared service.
-6. Typed config contracts for pipeline/workflow.
+4. Consolidate reporting namespace (`reporters` + `reporting`). ✅
+5. API/CLI comparison parity via shared service. ✅
+6. Typed config contracts for pipeline/workflow. ✅
 
 ## P1 Execution Plan (Proposed)
 
@@ -214,9 +214,24 @@ Most severe risks:
   - unit tests for happy path + representative invalid configs
 
 ### Suggested delivery slices
-1) Slice 1: Reporting consolidation + shims
-2) Slice 2: Compare shared service + API parity
-3) Slice 3: Typed config contracts + migration tests
+1) Slice 1: Reporting consolidation + shims ✅
+2) Slice 2: Compare shared service + API parity ✅
+3) Slice 3: Typed config contracts + migration tests ✅
+
+### P1 Completion Notes (2026-02-21)
+- Shared compare service added at `src/services/compare_service.py` and consumed by:
+  - CLI compare command (`src/commands/compare_command.py`)
+  - API compare endpoint (`src/api/routers/files.py`)
+- Typed contracts added:
+  - `src/contracts/pipeline_profile.py`
+  - `src/contracts/regression_workflow.py`
+- Contract validation wired into:
+  - `src/pipeline/runner.py`
+  - `scripts/run_regression_workflow.py`
+- Verification:
+  - targeted unit tests for command/api/service/contracts pass
+  - `scripts/run_regression_workflow.py` PASS
+  - `run-pipeline --dry-run` PASS
 
 ### Risks / mitigations
 - Risk: import breakage during namespace move

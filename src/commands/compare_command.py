@@ -8,109 +8,26 @@ import click
 def run_compare_command(file1, file2, keys, mapping, output, thresholds, detailed, chunk_size, progress, use_chunked, logger):
     """Compare two files and generate report."""
     try:
-        from src.parsers.format_detector import FormatDetector
-        from src.comparators.file_comparator import FileComparator
-        from src.comparators.chunked_comparator import ChunkedFileComparator
         from src.reports.renderers.comparison_renderer import HTMLReporter
         from src.validators.threshold import ThresholdEvaluator, ThresholdConfig
         from src.config.loader import ConfigLoader
+        from src.services.compare_service import run_compare_service
         
-        # Parse key columns if provided
-        if keys:
-            key_columns = [k.strip() for k in keys.split(',')]
-            comparison_mode = "key-based"
-        else:
-            key_columns = None
-            comparison_mode = "row-by-row"
-            click.echo(f"No keys provided - using row-by-row comparison...")
-        
-        # Use chunked processing for large files
+        if not keys:
+            click.echo("No keys provided - using row-by-row comparison...")
         if use_chunked:
-            if not keys:
-                click.echo(click.style("Error: Row-by-row comparison is not supported with chunked processing.", fg='red'))
-                click.echo("Please provide key columns with -k option or use standard comparison (remove --use-chunked).")
-                sys.exit(1)
-            
             click.echo(f"Using chunked processing (chunk size: {chunk_size:,})...")
-            
-            # Detect delimiter from file extension
-            delimiter = ','  # Default to comma for CSV
-            if file1.endswith('.txt') or file1.endswith('.dat'):
-                delimiter = '|'  # Pipe for text files
-            
-            comparator = ChunkedFileComparator(
-                file1, file2, key_columns,
-                delimiter=delimiter,
-                chunk_size=chunk_size
-            )
-            results = comparator.compare(detailed=detailed, show_progress=progress)
-        else:
-            # Parse both files (original method)
-            detector = FormatDetector()
-            import json
-            from src.parsers.fixed_width_parser import FixedWidthParser
 
-            mapping_config = None
-            if mapping:
-                with open(mapping, 'r') as f:
-                    mapping_config = json.load(f)
-
-            def _build_fixed_width_specs(cfg):
-                field_specs = []
-                current_pos = 0
-                for field in cfg.get('fields', []):
-                    name = field['name']
-                    length = int(field['length'])
-                    if field.get('position') is not None:
-                        start = int(field['position']) - 1
-                    else:
-                        start = current_pos
-                    end = start + length
-                    field_specs.append((name, start, end))
-                    current_pos = end
-                return field_specs
-
-            parser1_class = detector.get_parser_class(file1)
-            if parser1_class == FixedWidthParser:
-                if not (mapping_config and mapping_config.get('fields')):
-                    click.echo(click.style(
-                        "Error: fixed-width compare requires --mapping with fields/length metadata.",
-                        fg='red'))
-                    sys.exit(1)
-                parser1 = FixedWidthParser(file1, _build_fixed_width_specs(mapping_config))
-                df1 = parser1.parse()
-            else:
-                parser1 = parser1_class(file1)
-                df1 = parser1.parse()
-
-            parser2_class = detector.get_parser_class(file2)
-            if parser2_class == FixedWidthParser:
-                if not (mapping_config and mapping_config.get('fields')):
-                    click.echo(click.style(
-                        "Error: fixed-width compare requires --mapping with fields/length metadata.",
-                        fg='red'))
-                    sys.exit(1)
-                parser2 = FixedWidthParser(file2, _build_fixed_width_specs(mapping_config))
-                df2 = parser2.parse()
-            else:
-                parser2 = parser2_class(file2)
-                df2 = parser2.parse()
-
-            # For delimited files with header rows, retry parse with header-derived columns
-            # when provided keys are missing from default numeric columns.
-            if key_columns and any(k not in df1.columns for k in key_columns):
-                try:
-                    import pandas as pd
-                    df1h = pd.read_csv(file1, sep='|', dtype=str, keep_default_na=False, header=0)
-                    df2h = pd.read_csv(file2, sep='|', dtype=str, keep_default_na=False, header=0)
-                    if all(k in df1h.columns for k in key_columns) and all(k in df2h.columns for k in key_columns):
-                        df1, df2 = df1h, df2h
-                except Exception:
-                    pass
-
-            # Compare
-            comparator = FileComparator(df1, df2, key_columns)
-            results = comparator.compare(detailed=detailed)
+        results = run_compare_service(
+            file1=file1,
+            file2=file2,
+            keys=keys,
+            mapping=mapping,
+            detailed=detailed,
+            chunk_size=chunk_size,
+            progress=progress,
+            use_chunked=use_chunked,
+        )
         
         # Display summary
         click.echo(f"\nComparison Summary:")

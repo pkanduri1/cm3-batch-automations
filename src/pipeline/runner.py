@@ -6,6 +6,7 @@ import json
 import shlex
 import subprocess
 from dataclasses import dataclass
+from src.contracts.pipeline_profile import PipelineProfile
 from .sqlloader_adapter import evaluate_sqlloader_stage
 from .output_regression_suite import run_output_regression_suite
 from .profile_validator import validate_source_profile
@@ -38,7 +39,13 @@ class PipelineRunner:
         self.profile: Dict[str, Any] = {}
 
     def load(self) -> Dict[str, Any]:
-        self.profile = json.loads(self.profile_path.read_text())
+        raw = json.loads(self.profile_path.read_text())
+        try:
+            self.profile = PipelineProfile.model_validate(raw).model_dump()
+        except Exception as e:
+            if "source_system" in str(e):
+                raise ValueError("Missing required top-level key: source_system") from e
+            raise
         self._validate_profile(self.profile)
         return self.profile
 

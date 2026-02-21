@@ -29,9 +29,9 @@ def run_validate_command(
     use_chunked,
     chunk_size,
     progress,
-    strict_fixed_width,
-    strict_level,
-    logger,
+    strict_fixed_width=False,
+    strict_level='format',
+    logger=None,
 ):
     from src.parsers.format_detector import FormatDetector
     from src.parsers.enhanced_validator import EnhancedFileValidator
