@@ -56,3 +56,17 @@ class FileValidationResult(BaseModel):
     invalid_rows: int
     errors: List[Dict[str, Any]] = []
     warnings: List[str] = []
+
+
+class FileCompareAsyncCreateResponse(BaseModel):
+    """Response when creating an async compare job."""
+    job_id: str
+    status: str
+
+
+class FileCompareAsyncStatusResponse(BaseModel):
+    """Async compare job status/result."""
+    job_id: str
+    status: str
+    result: Optional[FileCompareResult] = None
+    error: Optional[str] = None
