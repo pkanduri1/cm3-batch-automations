@@ -3,15 +3,41 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, Any
 
 
 def adapt_chunked_validation_result(result: Dict[str, Any], file_path: str, mapping: str | None = None) -> Dict[str, Any]:
     """Convert chunked validator result into ValidationReporter-compatible model."""
+    p = Path(file_path)
+    exists = p.exists()
+
+    if exists:
+        stat = p.stat()
+        size_bytes = int(stat.st_size)
+        size_mb = round(stat.st_size / (1024 * 1024), 2)
+        modified_time = datetime.fromtimestamp(stat.st_mtime).isoformat()
+    else:
+        size_bytes = 0
+        size_mb = 0.0
+        modified_time = 'Unknown'
+
+    suffix = p.suffix.lower()
+    if suffix == '.csv':
+        file_format = 'csv'
+    elif suffix in {'.txt', '.dat'}:
+        file_format = 'fixedwidth'
+    else:
+        file_format = 'unknown'
+
     file_metadata = {
-        'file_path': file_path,
-        'file_name': file_path.split('/')[-1],
-        'exists': True,
+        'file_path': str(p),
+        'file_name': p.name,
+        'exists': exists,
+        'size_bytes': size_bytes,
+        'size_mb': size_mb,
+        'format': file_format,
+        'modified_time': modified_time,
     }
 
     total_rows = result.get('total_rows', 0)
@@ -61,6 +87,15 @@ def adapt_chunked_validation_result(result: Dict[str, Any], file_path: str, mapp
         }
     }
 
+    all_issues = []
+    for issue in (result.get('errors', []) or []) + (result.get('warnings', []) or []):
+        all_issues.append(issue)
+
+    affected_rows = sorted({
+        int(i.get('row')) for i in all_issues
+        if isinstance(i, dict) and i.get('row') is not None and str(i.get('row')).isdigit()
+    })
+
     return {
         'valid': result.get('valid', False),
         'timestamp': result.get('timestamp') or datetime.now().isoformat(),
@@ -103,7 +138,11 @@ def adapt_chunked_validation_result(result: Dict[str, Any], file_path: str, mapp
                 'rows_per_second': result.get('statistics', {}).get('rows_per_second')
             },
             'mapping_details': {'mapping_file': mapping},
-            'affected_rows_summary': {'total_affected_rows': 0, 'affected_row_pct': 0, 'top_problematic_rows': []}
+            'affected_rows_summary': {
+                'total_affected_rows': len(affected_rows),
+                'affected_row_pct': round((len(affected_rows) / total_rows * 100), 2) if total_rows else 0,
+                'top_problematic_rows': affected_rows[:20],
+            }
         },
         'business_rules': result.get('business_rules', {
             'enabled': False,
