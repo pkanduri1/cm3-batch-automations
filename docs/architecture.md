@@ -78,3 +78,10 @@ sequenceDiagram
 - Memory-safe chunked processing for large files
 - Service-first reuse to prevent CLI/API drift
 - Human + machine outputs for operations and automation
+- Contract-first report payloads (v1 JSON schemas under `docs/contracts/*.schema.json`)
+
+## Current Compliance Snapshot (2026-02-21)
+- ✅ Compare path uses shared service (`src/services/compare_service.py`) from both CLI and API.
+- ✅ Workflow scripts are thin wrappers over stage-based workflow engine (`src/workflows/engine.py`).
+- ✅ Reporting contract docs + v1 schemas are published for validation and compare outputs.
+- ✅ API supports sync + async compare and strict/chunked validate parity.
