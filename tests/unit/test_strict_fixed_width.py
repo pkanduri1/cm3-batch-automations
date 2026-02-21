@@ -132,6 +132,23 @@ def test_pic_formats_s9_and_xxx_supported():
         os.unlink(temp_file)
 
 
+def test_non_chunked_validate_detects_row_length_mismatch_without_strict_mode():
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        f.write('1234A\n')
+        f.write('999\n')  # malformed short row
+        temp_file = f.name
+
+    try:
+        parser = FixedWidthParser(temp_file, [('ACCOUNT', 0, 4), ('STATUS', 4, 5)])
+        validator = EnhancedFileValidator(parser, _make_mapping())
+        result = validator.validate(detailed=False, strict_fixed_width=False)
+
+        assert result['valid'] is False
+        assert any(e.get('code') == 'FW_LEN_001' and e.get('row') == 2 for e in result['errors'])
+    finally:
+        os.unlink(temp_file)
+
+
 def test_pic_formats_fail_on_invalid_values():
     with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
         f.write('A12345AB1\n')

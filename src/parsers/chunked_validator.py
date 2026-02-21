@@ -16,7 +16,8 @@ class ChunkedFileValidator:
     
     def __init__(self, file_path: str, delimiter: str = '|',
                  chunk_size: int = 100000, parser: Optional[ChunkedFileParser] = None,
-                 rules_config_path: Optional[str] = None):
+                 rules_config_path: Optional[str] = None,
+                 expected_row_length: Optional[int] = None):
         """Initialize chunked validator.
         
         Args:
@@ -33,6 +34,7 @@ class ChunkedFileValidator:
         self.memory_monitor = MemoryMonitor()
         self.rule_engine: Optional[RuleEngine] = None
         self._total_rows_for_rules = 0
+        self.expected_row_length = expected_row_length
 
         if rules_config_path:
             try:
@@ -68,7 +70,16 @@ class ChunkedFileValidator:
         
         # Add structure warnings
         warnings.extend(structure_result.get('warnings', []))
-        
+
+        # Fixed-width row-length validation (captures row-level defects)
+        if self.expected_row_length:
+            mismatch_count, length_issues, scanned_rows = self._scan_fixed_width_row_lengths()
+            errors.extend(length_issues)
+            if mismatch_count > len(length_issues):
+                warnings.append(
+                    f"Found {mismatch_count:,} row-length mismatches; showing first {len(length_issues):,} details"
+                )
+
         # Initialize statistics
         total_rows = 0
         total_nulls = {}
@@ -205,6 +216,39 @@ class ChunkedFileValidator:
                 'file_path': self.file_path
             }
     
+    def _scan_fixed_width_row_lengths(self, max_issue_details: int = 200) -> tuple[int, list[dict], int]:
+        """Scan file line lengths and return mismatch diagnostics.
+
+        Returns:
+            (mismatch_count, sampled_issue_dicts, total_rows_scanned)
+        """
+        if not self.expected_row_length:
+            return 0, [], 0
+
+        mismatch_count = 0
+        sampled: list[dict] = []
+        total_rows = 0
+
+        with open(self.file_path, 'r', encoding='utf-8', errors='replace') as fh:
+            for row_num, line in enumerate(fh, start=1):
+                total_rows = row_num
+                actual_len = len(line.rstrip('\r\n'))
+                if actual_len != self.expected_row_length:
+                    mismatch_count += 1
+                    if len(sampled) < max_issue_details:
+                        sampled.append({
+                            'severity': 'error',
+                            'category': 'format',
+                            'code': 'FW_LEN_001',
+                            'message': (
+                                f"Row {row_num} length mismatch: expected {self.expected_row_length}, got {actual_len}"
+                            ),
+                            'row': row_num,
+                            'field': None,
+                        })
+
+        return mismatch_count, sampled, total_rows
+
     def _validate_chunk(self, chunk: pd.DataFrame, chunk_num: int,
                        seen_rows: set, max_seen_rows: int) -> tuple:
         """Validate a single chunk.
@@ -271,7 +315,7 @@ class ChunkedFileValidator:
         required_columns = required_columns or expected_columns
         
         # First validate basic structure
-        basic_result = self.validate(show_progress=False)
+        basic_result = self.validate(show_progress=show_progress)
         
         if not basic_result['valid']:
             return basic_result

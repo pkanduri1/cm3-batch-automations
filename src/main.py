@@ -68,13 +68,21 @@ def parse(file, mapping, format, output, use_chunked, chunk_size):
 @click.option('--use-chunked', is_flag=True, help='Use chunked processing for large files')
 @click.option('--chunk-size', default=100000, help='Chunk size for large files (default: 100000)')
 @click.option('--progress/--no-progress', default=True, help='Show progress bar')
-def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress):
+@click.option('--strict-fixed-width/--no-strict-fixed-width', default=False,
+              help='Enable strict fixed-width field-level validation checks')
+@click.option('--strict-level', type=click.Choice(['basic', 'format', 'all']), default='format',
+              help='Strict fixed-width validation depth')
+def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress,
+             strict_fixed_width, strict_level):
     """Validate file format and content."""
     logger = setup_logger('cm3-batch', log_to_file=False)
 
     try:
         from src.commands.validate_command import run_validate_command
-        run_validate_command(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress, logger)
+        run_validate_command(
+            file, mapping, rules, output, detailed, use_chunked, chunk_size, progress,
+            strict_fixed_width, strict_level, logger,
+        )
     except Exception as e:
         logger.error(f"Error validating file: {e}")
         import traceback

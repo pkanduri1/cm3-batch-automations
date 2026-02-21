@@ -59,12 +59,11 @@ class EnhancedFileValidator:
 
         # Check file format
         format_ok = self._validate_format()
-        if not format_ok:
-            # For fixed-width, continue with best-effort parsing so we can report
-            # row/field-level diagnostics beyond just "invalid format".
-            from src.parsers.fixed_width_parser import FixedWidthParser
-            if not isinstance(self.parser, FixedWidthParser):
-                return self._build_result(False, file_metadata, None)
+        if not format_ok and not hasattr(self.parser, 'column_specs'):
+            return self._build_result(False, file_metadata, None)
+
+        # Fixed-width row-length validation (default, non-strict)
+        self._validate_fixed_width_row_lengths()
 
         # Parse and analyze data
         try:
@@ -231,6 +230,56 @@ class EnhancedFileValidator:
                 'field': None
             })
             return False
+
+    def _validate_fixed_width_row_lengths(self, max_issue_details: int = 200) -> None:
+        """Detect fixed-width row length defects and attach row-level errors."""
+        if not hasattr(self.parser, 'column_specs'):
+            return
+
+        specs = getattr(self.parser, 'column_specs', None) or []
+        if not specs:
+            return
+
+        expected_len = max(end for _, _, end in specs)
+        mismatch_count = 0
+
+        try:
+            with open(self.parser.file_path, 'r', encoding='utf-8', errors='replace') as fh:
+                for row_num, line in enumerate(fh, start=1):
+                    actual_len = len(line.rstrip('\r\n'))
+                    if actual_len != expected_len:
+                        mismatch_count += 1
+                        if mismatch_count <= max_issue_details:
+                            self.errors.append({
+                                'severity': 'error',
+                                'category': 'format',
+                                'code': 'FW_LEN_001',
+                                'message': f"Row {row_num} length mismatch: expected {expected_len}, got {actual_len}",
+                                'row': row_num,
+                                'field': None,
+                            })
+
+            if mismatch_count > max_issue_details:
+                self.warnings.append({
+                    'severity': 'warning',
+                    'category': 'format',
+                    'code': 'FW_LEN_002',
+                    'message': (
+                        f"Detected {mismatch_count} row-length mismatches; "
+                        f"showing first {max_issue_details} in error details"
+                    ),
+                    'row': None,
+                    'field': None,
+                })
+        except Exception as e:
+            self.warnings.append({
+                'severity': 'warning',
+                'category': 'format',
+                'code': 'FW_LEN_003',
+                'message': f"Row-length validation skipped: {e}",
+                'row': None,
+                'field': None,
+            })
 
     def _calculate_quality_metrics(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Calculate overall data quality metrics."""

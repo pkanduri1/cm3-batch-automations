@@ -20,7 +20,19 @@ def _json_default(obj):
     return str(obj)
 
 
-def run_validate_command(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress, logger):
+def run_validate_command(
+    file,
+    mapping,
+    rules,
+    output,
+    detailed,
+    use_chunked,
+    chunk_size,
+    progress,
+    strict_fixed_width,
+    strict_level,
+    logger,
+):
     from src.parsers.format_detector import FormatDetector
     from src.parsers.enhanced_validator import EnhancedFileValidator
     from src.parsers.fixed_width_parser import FixedWidthParser
@@ -37,14 +49,17 @@ def run_validate_command(file, mapping, rules, output, detailed, use_chunked, ch
 
     # Chunked path
     if use_chunked:
-        detector = FormatDetector()
-        try:
-            parser_class = detector.get_parser_class(file)
-        except Exception:
-            if mapping_config and mapping_config.get('fields'):
-                parser_class = FixedWidthParser
-            else:
-                raise
+        if mapping_config and mapping_config.get('fields'):
+            parser_class = FixedWidthParser
+        else:
+            detector = FormatDetector()
+            try:
+                parser_class = detector.get_parser_class(file)
+            except Exception:
+                if mapping_config and mapping_config.get('fields'):
+                    parser_class = FixedWidthParser
+                else:
+                    raise
 
         chunk_parser = None
         delimiter = '|'
@@ -66,13 +81,26 @@ def run_validate_command(file, mapping, rules, output, detailed, use_chunked, ch
             click.echo(click.style('Chunked fixed-width validation requires mapping with fields/position/length metadata.', fg='red'))
             sys.exit(1)
 
+        expected_row_length = None
+        if mapping_config and mapping_config.get('fields'):
+            try:
+                expected_row_length = sum(int(f.get('length', 0)) for f in mapping_config.get('fields', []))
+            except Exception:
+                expected_row_length = None
+
         chunked_validator = ChunkedFileValidator(
             file_path=file,
             delimiter=delimiter,
             chunk_size=chunk_size,
             parser=chunk_parser,
             rules_config_path=rules,
+            expected_row_length=expected_row_length,
         )
+
+        if strict_fixed_width:
+            click.echo(click.style(
+                "Strict fixed-width field-level checks are currently supported in non-chunked mode; "
+                "chunked mode will still enforce row-length defects.", fg='yellow'))
 
         if mapping_config:
             if 'fields' in mapping_config:
@@ -156,7 +184,11 @@ def run_validate_command(file, mapping, rules, output, detailed, use_chunked, ch
         parser = parser_class(file)
 
     validator = EnhancedFileValidator(parser, mapping_config, rules)
-    result = validator.validate(detailed=detailed)
+    result = validator.validate(
+        detailed=detailed,
+        strict_fixed_width=strict_fixed_width,
+        strict_level=strict_level,
+    )
 
     if result['valid']:
         click.echo(click.style('✓ File is valid', fg='green'))
