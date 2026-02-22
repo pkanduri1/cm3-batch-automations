@@ -56,3 +56,22 @@ def test_validation_renderer_generates_html_and_sidecars(tmp_path):
     warn = tmp_path / "report_warnings.csv"
     assert err.exists()
     assert warn.exists()
+
+
+def test_validation_renderer_required_field_error_summary(tmp_path):
+    out = tmp_path / "report_required.html"
+    payload = _sample_result()
+    payload["valid"] = False
+    payload["errors"] = [
+        {"severity": "error", "code": "FW_REQ_001", "field": "LOCATION-CODE", "message": "Required field 'LOCATION-CODE' is empty"},
+        {"severity": "error", "code": "FW_REQ_001", "field": "LOCATION-CODE", "message": "Required field 'LOCATION-CODE' is empty"},
+        {"severity": "error", "code": "FW_REQ_001", "field": "BASE-CURRENCY", "message": "Required field 'BASE-CURRENCY' is empty"},
+    ]
+
+    reporter = ValidationReporter()
+    reporter.generate(payload, str(out))
+
+    html = out.read_text(encoding="utf-8")
+    assert "Required Field Error Summary" in html
+    assert "LOCATION-CODE" in html
+    assert "BASE-CURRENCY" in html

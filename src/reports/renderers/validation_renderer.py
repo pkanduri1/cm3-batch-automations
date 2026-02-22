@@ -2,6 +2,7 @@
 
 import csv
 import json
+import re
 from typing import Dict, Any
 from datetime import datetime
 from pathlib import Path
@@ -717,6 +718,41 @@ class ValidationReporter:
         </details>
         """
 
+        required_counts: dict[str, int] = {}
+        for e in errors:
+            if not isinstance(e, dict):
+                continue
+            field = e.get('field')
+            code = str(e.get('code') or '')
+            msg = str(e.get('message') or '')
+            is_required = code == 'FW_REQ_001' or "required field" in msg.lower()
+            if not is_required:
+                continue
+            if not field:
+                m = re.search(r"Required field '([^']+)'", msg, flags=re.IGNORECASE)
+                if m:
+                    field = m.group(1)
+            if not field:
+                continue
+            name = str(field)
+            required_counts[name] = required_counts.get(name, 0) + 1
+
+        required_summary_html = ""
+        if required_counts:
+            rows = ''.join(
+                f"<tr><td><code>{fname}</code></td><td>{cnt:,}</td></tr>"
+                for fname, cnt in sorted(required_counts.items(), key=lambda x: (-x[1], x[0]))
+            )
+            required_summary_html = f"""
+            <details>
+                <summary>Required Field Error Summary ({sum(required_counts.values()):,})</summary>
+                <table style=\"margin-top: 15px;\">
+                    <thead><tr><th>Field</th><th>Error Count</th></tr></thead>
+                    <tbody>{rows}</tbody>
+                </table>
+            </details>
+            """
+
         error_items = errors[:self.ERROR_DISPLAY_LIMIT]
         warning_items = warnings[:self.WARNING_DISPLAY_LIMIT]
 
@@ -748,6 +784,7 @@ class ValidationReporter:
         <div class="section">
             <h2 class="section-title">Issues & Warnings</h2>
             {affected_rows_html}
+            {required_summary_html}
 
             <details open>
                 <summary>Errors ({len(errors)})</summary>
