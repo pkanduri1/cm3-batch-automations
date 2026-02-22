@@ -33,6 +33,9 @@ This is the **single source of truth** for docs navigation.
 ## Contracts
 - `docs/contracts/business_rules_v1.md`
 - `docs/contracts/validation_result_v1.md`
+- `docs/contracts/validation_result_v1.schema.json`
+- `docs/contracts/compare_result_v1.md`
+- `docs/contracts/compare_result_v1.schema.json`
 
 ---
 

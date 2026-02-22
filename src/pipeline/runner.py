@@ -10,7 +10,7 @@ from src.contracts.pipeline_profile import PipelineProfile
 from .sqlloader_adapter import evaluate_sqlloader_stage
 from .output_regression_suite import run_output_regression_suite
 from .profile_validator import validate_source_profile
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -119,7 +119,7 @@ class PipelineRunner:
         return {
             "source_system": self.profile.get("source_system"),
             "profile": str(self.profile_path),
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "dry_run": dry_run,
             "status": "failed" if failed else "passed",
             "steps": [r.__dict__ for r in results],

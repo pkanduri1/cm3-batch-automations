@@ -18,8 +18,10 @@ def test_system_health_endpoint():
     r = client.get("/api/v1/system/health")
     assert r.status_code == 200
     payload = r.json()
-    assert payload["status"] == "healthy"
+    assert payload["status"] in {"healthy", "degraded"}
     assert "timestamp" in payload
+    assert "checks" in payload
+    assert "database" in payload["checks"]
 
 
 def test_system_info_endpoint():

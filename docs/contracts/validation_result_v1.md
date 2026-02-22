@@ -2,6 +2,8 @@
 
 This document defines the normalized validation result payload consumed by reporting and downstream automation.
 
+Authoritative schema file: `docs/contracts/validation_result_v1.schema.json`
+
 ## Scope
 Applies to JSON outputs from `validate` (standard and chunked), with optional strict fixed-width and business rule sections.
 

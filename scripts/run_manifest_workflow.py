@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 
 from src.config.template_converter import TemplateConverter
-from src.workflows.engine import build_validate_cmd, run_subprocess
+from src.workflows.engine import run_stage
 
 
 def parse_bool(value: str | None, default: bool = False) -> bool:
@@ -45,19 +45,18 @@ def run_validate(project_root: Path, py: Path, data_file: Path, mapping_file: Pa
                  report_file: Path, chunked: bool, chunk_size: int) -> tuple[int, str]:
     report_file.parent.mkdir(parents=True, exist_ok=True)
 
-    cmd = build_validate_cmd(
-        py=str(py),
-        input_file=str(data_file),
-        mapping=str(mapping_file),
-        rules=str(rules_file) if rules_file else None,
-        output=str(report_file),
-        detailed=True,
-        use_chunked=chunked,
-        chunk_size=chunk_size,
-        progress=False,
-    )
+    stage_cfg = {
+        "input_file": str(data_file),
+        "mapping": str(mapping_file),
+        "rules": str(rules_file) if rules_file else None,
+        "output": str(report_file),
+        "detailed": True,
+        "use_chunked": chunked,
+        "chunk_size": chunk_size,
+        "progress": False,
+    }
 
-    res = run_subprocess(cmd, project_root)
+    res = run_stage("validate", str(py), stage_cfg, project_root)
     return int(res["exit_code"]), str(res["output"])
 
 
