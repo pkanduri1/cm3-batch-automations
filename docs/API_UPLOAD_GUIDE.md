@@ -59,6 +59,7 @@ Your Excel file **MUST** have these columns:
 | **Description** | No | Field description | `Customer identifier` |
 | **Target Name** | No | Database column name | `CUST_ID` |
 | **Default Value** | No | Default if empty | `0`, `N/A` |
+| **Valid Values** | No | Allowed values list (`|` or `,` separated) | `ACTIVE|INACTIVE|CLOSED` |
 
 ---
 

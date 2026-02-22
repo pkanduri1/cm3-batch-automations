@@ -154,6 +154,7 @@ Create an Excel file with the following columns:
 | Description | No | Field description | `Customer identifier` |
 | Target Name | No | Database column name | `CUST_ID` |
 | Default Value | No | Default if empty | `0` |
+| Valid Values | No | Allowed values list (`|` or `,` separated) | `ACTIVE|INACTIVE|CLOSED` |
 
 **Example Excel Template**:
 

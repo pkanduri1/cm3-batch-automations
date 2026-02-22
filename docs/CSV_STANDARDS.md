@@ -34,6 +34,7 @@ Columns:
 - `Format`
 - `Description`
 - `Default Value`
+- `Valid Values` (pipe-separated list, e.g. `ACTIVE|INACTIVE|CLOSED`)
 
 Notes:
 
