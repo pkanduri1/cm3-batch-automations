@@ -135,6 +135,11 @@ cm3-batch validate -f data/files/p327_sample_errored.txt -m config/mappings/p327
   --use-chunked --strict-fixed-width --strict-level format --progress \
   -o reports/p327_chunked_strict_validation.html
 
+# Parallel chunked strict validation (multi-core)
+cm3-batch validate -f data/files/p327_sample_errored.txt -m config/mappings/p327_mapping.json \
+  --use-chunked --chunk-size 50000 --workers 3 --strict-fixed-width --strict-level format --progress \
+  -o reports/p327_chunked_strict_parallel_validation.html
+
 # Compare files
 cm3-batch compare -f1 file1.txt -f2 file2.txt -k customer_id -o report.html
 

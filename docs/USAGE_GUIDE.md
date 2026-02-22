@@ -272,6 +272,7 @@ cm3-batch validate \
 - `--detailed/--basic`: Report depth
 - `--strict-fixed-width`: Enable strict fixed-width field checks
 - `--strict-level [basic|format|all]`: Strict validation depth
+- `--workers <n>`: Parallel worker processes for chunked validation (default: 1)
 
 #### Strict field-level validation (fixed-width)
 
@@ -307,6 +308,19 @@ cm3-batch validate \
 ```
 
 > Chunked validation supports strict fixed-width field checks, row-level mismatch detection, and progress display.
+
+#### Parallel chunked validation
+
+```bash
+cm3-batch validate \
+  -f data/files/p327_sample_errored.txt \
+  -m config/mappings/p327_mapping.json \
+  --use-chunked --chunk-size 50000 --workers 3 \
+  --strict-fixed-width --strict-level format \
+  -o reports/p327_chunked_strict_parallel_validation.html
+```
+
+> In parallel mode (`--workers > 1`), duplicate-row detection is disabled for performance.
 
 #### Validation Report Features
 

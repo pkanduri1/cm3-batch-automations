@@ -31,6 +31,7 @@ def run_validate_command(
     progress,
     strict_fixed_width=False,
     strict_level='format',
+    workers=1,
     logger=None,
 ):
     from src.parsers.format_detector import FormatDetector
@@ -100,6 +101,7 @@ def run_validate_command(
             strict_fixed_width=bool(strict_fixed_width),
             strict_level=str(strict_level or 'format'),
             strict_fields=strict_fields,
+            workers=int(workers or 1),
         )
 
         if mapping_config:
