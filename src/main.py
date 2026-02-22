@@ -93,6 +93,38 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
 
 
 
+@cli.command('convert-mappings')
+@click.option('--input-dir', default='mappings/csv', type=click.Path(exists=True, file_okay=False),
+              show_default=True, help='Directory containing mapping CSV/Excel templates')
+@click.option('--output-dir', default='config/mappings', type=click.Path(file_okay=False),
+              show_default=True, help='Directory to write mapping JSON files')
+@click.option('--format', 'file_format', type=click.Choice(['pipe_delimited', 'fixed_width', 'csv', 'tsv']),
+              help='Optional mapping source format override')
+@click.option('--error-report-dir', default='reports/template_validation', type=click.Path(file_okay=False),
+              show_default=True, help='Directory to write strict validation error reports')
+def convert_mappings(input_dir, output_dir, file_format, error_report_dir):
+    """Bulk convert mapping CSV/Excel templates to JSON mapping files."""
+    logger = setup_logger('cm3-batch', log_to_file=False)
+
+    try:
+        from src.commands.convert_mappings_command import run_convert_mappings_command
+
+        rc = run_convert_mappings_command(
+            input_dir=input_dir,
+            output_dir=output_dir,
+            file_format=file_format,
+            error_report_dir=error_report_dir,
+            logger=logger,
+        )
+        if rc != 0:
+            sys.exit(rc)
+    except Exception as e:
+        logger.error(f"Error converting mappings: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
 @cli.command('convert-rules')
 @click.option('--template', '-t', required=True, type=click.Path(exists=True),
               help='Excel or CSV template file')
