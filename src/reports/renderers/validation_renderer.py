@@ -925,7 +925,13 @@ class ValidationReporter:
                 [f for f in fields if isinstance(f, dict) and f.get('name')],
                 key=lambda f: int(f.get('position')) if f.get('position') not in (None, '') else 10**9,
             )
-            return {str(f['name']): idx for idx, f in enumerate(ordered)}
+            order_map = {}
+            for idx, f in enumerate(ordered):
+                name = str(f['name'])
+                order_map[name] = idx
+                order_map[name.upper()] = idx
+                order_map[name.lower()] = idx
+            return order_map
         except Exception:
             return {}
 
@@ -939,7 +945,10 @@ class ValidationReporter:
         order_map = self._field_position_order_map(results)
         sorted_items = sorted(
             field_analysis.items(),
-            key=lambda kv: (order_map.get(str(kv[0]), 10**9), str(kv[0]))
+            key=lambda kv: (
+                order_map.get(str(kv[0]), order_map.get(str(kv[0]).upper(), order_map.get(str(kv[0]).lower(), 10**9))),
+                str(kv[0]),
+            )
         )
 
         total_fields = len(field_analysis)

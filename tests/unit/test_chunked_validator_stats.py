@@ -106,10 +106,11 @@ def test_chunked_strict_fixed_width_detects_field_format_errors():
         os.unlink(temp_file)
 
 
-def test_chunked_validator_parallel_mode_reports_workers():
+def test_chunked_validator_parallel_mode_reports_workers_and_keeps_duplicate_detection():
     with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        f.write('c1|c2\n')
         f.write('1|A\n')
-        f.write('2|B\n')
+        f.write('1|A\n')
         f.write('3|C\n')
         temp_file = f.name
 
@@ -120,7 +121,8 @@ def test_chunked_validator_parallel_mode_reports_workers():
         stats = result.get('statistics', {})
         assert stats.get('parallel') is True
         assert stats.get('workers') == 2
-        assert any('Duplicate row detection is disabled in parallel mode' in str(w) for w in result.get('warnings', []))
+        assert stats.get('duplicate_count', 0) >= 1
+        assert not any('Duplicate row detection is disabled in parallel mode' in str(w) for w in result.get('warnings', []))
     finally:
         os.unlink(temp_file)
 

@@ -76,8 +76,8 @@ def test_validation_renderer_layout_counts_and_field_order(tmp_path):
 
     payload = _sample_result()
     payload["field_analysis"] = {
-        "ACCT-NUM": {"inferred_type": "string", "fill_rate_pct": 100.0, "unique_count": 2},
-        "LOCATION-CODE": {"inferred_type": "string", "fill_rate_pct": 100.0, "unique_count": 2},
+        "acct-num": {"inferred_type": "string", "fill_rate_pct": 100.0, "unique_count": 2},
+        "location-code": {"inferred_type": "string", "fill_rate_pct": 100.0, "unique_count": 2},
     }
     payload["appendix"] = {
         "validation_config": {"mapping_file": str(mapping)},
@@ -99,7 +99,7 @@ def test_validation_renderer_layout_counts_and_field_order(tmp_path):
     assert "Required Fields" in html
 
     assert html.index("Required Fields") < html.index("Field-Level Analysis")
-    assert html.index("LOCATION-CODE") < html.index("ACCT-NUM")
+    assert html.index("location-code") < html.index("acct-num")
 
 
 def test_validation_renderer_required_field_error_summary(tmp_path):

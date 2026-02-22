@@ -220,12 +220,21 @@ class ChunkedFileValidator:
                 warnings.append("Parallel mode disabled because business rules are enabled; falling back to sequential validation")
 
             if parallel_enabled:
-                warnings.append("Duplicate row detection is disabled in parallel mode")
                 max_in_flight = max(self.workers * 2, 2)
                 pending: dict[Any, int] = {}
 
                 with ProcessPoolExecutor(max_workers=self.workers) as pool:
                     for chunk_num, chunk in enumerate(parser.parse_chunks(), 1):
+                        # Keep duplicate detection active in parallel mode on the coordinator thread
+                        # (memory-limited to max_seen_rows, same semantics as sequential mode).
+                        if len(seen_rows) < max_seen_rows:
+                            for _, row in chunk.iterrows():
+                                row_hash = hash(tuple(row.values))
+                                if row_hash in seen_rows:
+                                    duplicate_count += 1
+                                else:
+                                    seen_rows.add(row_hash)
+
                         fut = pool.submit(
                             _validate_chunk_worker,
                             chunk,
