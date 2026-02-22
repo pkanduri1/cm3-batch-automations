@@ -164,6 +164,37 @@ def test_compare_command_fixed_width_without_mapping_exits():
         )
 
 
+def test_validate_command_chunked_missing_fixed_width_length_exits(tmp_path):
+    bad_mapping = tmp_path / "bad_mapping.json"
+    bad_mapping.write_text(
+        json.dumps(
+            {
+                "mapping_name": "bad",
+                "source": {"format": "fixed_width"},
+                "fields": [
+                    {"name": "LOCATION-CODE", "position": 1, "length": 6, "required": True},
+                    {"name": "ACCT-NUM", "position": 7, "required": True},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(Exception) as exc_info:
+        run_validate_command(
+            file=str(ROOT / "data/files/manifest_scenarios/scenario_01_all_valid.txt"),
+            mapping=str(bad_mapping),
+            rules=None,
+            output=None,
+            detailed=False,
+            use_chunked=True,
+            chunk_size=100000,
+            progress=False,
+            logger=_Logger(),
+        )
+    assert "missing required 'length'" in str(exc_info.value)
+
+
 def test_validate_command_json_payload_written(tmp_path):
     out_file = tmp_path / "validation.json"
     run_validate_command(

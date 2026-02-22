@@ -6,6 +6,53 @@ from pathlib import Path
 import click
 
 
+def _build_fixed_width_field_specs(fields):
+    """Build (name, start, end) specs from mapping fields with validation."""
+    field_specs = []
+    current_pos = 0
+
+    for idx, field in enumerate(fields or []):
+        field_name = field.get('name') or f"field_{idx + 1}"
+
+        if 'length' not in field or field.get('length') in (None, ''):
+            raise click.ClickException(
+                f"Invalid mapping: fixed-width field '{field_name}' is missing required 'length'."
+            )
+
+        try:
+            field_length = int(field.get('length'))
+        except Exception:
+            raise click.ClickException(
+                f"Invalid mapping: fixed-width field '{field_name}' has non-numeric length: {field.get('length')}"
+            )
+
+        if field_length <= 0:
+            raise click.ClickException(
+                f"Invalid mapping: fixed-width field '{field_name}' has non-positive length: {field_length}"
+            )
+
+        if field.get('position') is not None and field.get('position') != '':
+            try:
+                start = int(field.get('position')) - 1
+            except Exception:
+                raise click.ClickException(
+                    f"Invalid mapping: fixed-width field '{field_name}' has non-numeric position: {field.get('position')}"
+                )
+        else:
+            start = current_pos
+
+        if start < 0:
+            raise click.ClickException(
+                f"Invalid mapping: fixed-width field '{field_name}' resolves to negative start offset ({start})."
+            )
+
+        end = start + field_length
+        field_specs.append((field_name, start, end))
+        current_pos = end
+
+    return field_specs
+
+
 def _json_default(obj):
     try:
         import numpy as np
@@ -65,18 +112,7 @@ def run_validate_command(
         chunk_parser = None
         delimiter = '|'
         if parser_class == FixedWidthParser and mapping_config and 'fields' in mapping_config:
-            field_specs = []
-            current_pos = 0
-            for field in mapping_config.get('fields', []):
-                field_name = field['name']
-                field_length = int(field['length'])
-                if field.get('position') is not None:
-                    start = int(field['position']) - 1
-                else:
-                    start = current_pos
-                end = start + field_length
-                field_specs.append((field_name, start, end))
-                current_pos = end
+            field_specs = _build_fixed_width_field_specs(mapping_config.get('fields', []))
             chunk_parser = ChunkedFixedWidthParser(file, field_specs, chunk_size=chunk_size)
         elif parser_class == FixedWidthParser and mapping_config and 'mappings' in mapping_config:
             click.echo(click.style('Chunked fixed-width validation requires mapping with fields/position/length metadata.', fg='red'))
@@ -174,13 +210,7 @@ def run_validate_command(
             raise
 
     if mapping_config and parser_class == FixedWidthParser:
-        field_specs = []
-        current_pos = 0
-        for field in mapping_config.get('fields', []):
-            field_name = field['name']
-            field_length = field['length']
-            field_specs.append((field_name, current_pos, current_pos + field_length))
-            current_pos += field_length
+        field_specs = _build_fixed_width_field_specs(mapping_config.get('fields', []))
         parser = FixedWidthParser(file, field_specs)
     else:
         parser = parser_class(file)
