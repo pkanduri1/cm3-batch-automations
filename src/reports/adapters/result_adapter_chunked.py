@@ -44,6 +44,14 @@ def adapt_chunked_validation_result(result: Dict[str, Any], file_path: str, mapp
 
     total_rows = result.get('total_rows', 0)
     actual_columns = result.get('actual_columns', []) or []
+    if not actual_columns and mapping:
+        try:
+            mp = Path(mapping)
+            if mp.exists():
+                cfg = json.loads(mp.read_text(encoding='utf-8'))
+                actual_columns = [f.get('name') for f in cfg.get('fields', []) if isinstance(f, dict) and f.get('name')]
+        except Exception:
+            pass
     total_columns = len(actual_columns)
     null_cells = sum(result.get('statistics', {}).get('null_counts', {}).values())
     total_cells = total_rows * total_columns if total_rows and total_columns else 0

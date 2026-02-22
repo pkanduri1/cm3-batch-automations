@@ -569,10 +569,7 @@ class ChunkedFileValidator:
         
         # First validate basic structure
         basic_result = self.validate(show_progress=show_progress)
-        
-        if not basic_result['valid']:
-            return basic_result
-        
+
         errors = list(basic_result.get('errors', []))
         warnings = list(basic_result.get('warnings', []))
         
