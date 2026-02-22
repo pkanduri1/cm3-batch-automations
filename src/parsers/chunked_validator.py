@@ -70,9 +70,11 @@ def _validate_chunk_worker(
 
     for col in chunk.columns:
         if chunk[col].dtype == 'object':
-            empty_count = (chunk[col] == '').sum()
+            series = chunk[col]
+            empty_mask = series.notna() & (series.astype(str).str.strip() == '')
+            empty_count = int(empty_mask.sum())
             if empty_count > 0:
-                stats['empty_strings'][col] = int(empty_count)
+                stats['empty_strings'][col] = empty_count
 
     if strict_fixed_width and strict_fields and strict_level in {'format', 'all'}:
         row_base = (chunk_num - 1) * chunk_size
@@ -517,12 +519,14 @@ class ChunkedFileValidator:
             if count > 0:
                 stats['nulls'][col] = int(count)
         
-        # Check for empty strings
+        # Check for empty/whitespace strings
         for col in chunk.columns:
             if chunk[col].dtype == 'object':
-                empty_count = (chunk[col] == '').sum()
+                series = chunk[col]
+                empty_mask = series.notna() & (series.astype(str).str.strip() == '')
+                empty_count = int(empty_mask.sum())
                 if empty_count > 0:
-                    stats['empty_strings'][col] = int(empty_count)
+                    stats['empty_strings'][col] = empty_count
 
         # Strict field-level checks for fixed-width mappings (chunked mode)
         if self.strict_fixed_width and self.strict_fields and self.strict_level in {'format', 'all'}:
