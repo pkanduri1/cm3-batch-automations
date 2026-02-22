@@ -64,7 +64,9 @@ def test_adapt_chunked_validation_result_populates_affected_rows_summary():
     }
 
     model = adapt_chunked_validation_result(chunked_result, file_path='missing.txt', mapping=None)
-    summary = model['appendix']['affected_rows_summary']
+    summary = model['appendix']['affected_rows']
     assert summary['total_affected_rows'] == 2
     assert summary['affected_row_pct'] == 20.0
-    assert summary['top_problematic_rows'] == [3, 5]
+    assert summary['top_problematic_rows'][0]['row_number'] == 3
+    assert summary['top_problematic_rows'][0]['issue_count'] == 2
+    assert summary['top_problematic_rows'][1]['row_number'] == 5
