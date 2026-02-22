@@ -50,6 +50,34 @@ def test_chunked_validator_detects_fixed_width_length_mismatches():
         os.unlink(temp_file)
 
 
+def test_chunked_strict_fixed_width_detects_required_empty_as_error():
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        f.write(' A\n')
+        temp_file = f.name
+
+    try:
+        from src.parsers.chunked_parser import ChunkedFixedWidthParser
+
+        parser = ChunkedFixedWidthParser(temp_file, [('LOCATION-CODE', 0, 1), ('X', 1, 2)], chunk_size=10)
+        validator = ChunkedFileValidator(
+            file_path=temp_file,
+            parser=parser,
+            chunk_size=10,
+            strict_fixed_width=True,
+            strict_level='format',
+            strict_fields=[{'name': 'LOCATION-CODE', 'required': True}],
+        )
+
+        result = validator.validate(show_progress=False)
+        assert result['valid'] is False
+        assert any(
+            isinstance(e, dict) and e.get('code') == 'FW_REQ_001' and e.get('field') == 'LOCATION-CODE'
+            for e in result.get('errors', [])
+        )
+    finally:
+        os.unlink(temp_file)
+
+
 def test_chunked_strict_fixed_width_detects_field_format_errors():
     with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
         f.write('A\n')

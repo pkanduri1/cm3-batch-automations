@@ -319,16 +319,36 @@ class ChunkedFileValidator:
             if progress:
                 progress.finish()
             
-            # Generate warnings for nulls and empty strings
+            required_fields = {
+                f.get('name') for f in (self.strict_fields or [])
+                if isinstance(f, dict) and f.get('name') and f.get('required')
+            }
+
+            # Fail-safe: ensure required empty/null fields are represented as errors.
+            if self.strict_fixed_width and self.strict_level in {'format', 'all'}:
+                for field_name in sorted(required_fields):
+                    miss_count = int(total_nulls.get(field_name, 0)) + int(total_empty_strings.get(field_name, 0))
+                    if miss_count > 0:
+                        errors.append({
+                            'severity': 'error',
+                            'category': 'strict_fixed_width',
+                            'code': 'FW_REQ_001',
+                            'message': f"Required field '{field_name}' has {miss_count:,} empty/null values",
+                            'row': None,
+                            'field': field_name,
+                        })
+
+            # Generate warnings for nulls and empty strings (exclude required fields in strict mode,
+            # because they are already promoted to errors above).
             for col, count in total_nulls.items():
-                if count > 0:
+                if count > 0 and not (self.strict_fixed_width and col in required_fields):
                     pct = (count / total_rows) * 100
                     warnings.append(
                         f"Column '{col}' has {count:,} null values ({pct:.1f}%)"
                     )
-            
+
             for col, count in total_empty_strings.items():
-                if count > 0:
+                if count > 0 and not (self.strict_fixed_width and col in required_fields):
                     pct = (count / total_rows) * 100
                     warnings.append(
                         f"Column '{col}' has {count:,} empty strings ({pct:.1f}%)"
