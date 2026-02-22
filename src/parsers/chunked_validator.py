@@ -2,6 +2,7 @@
 
 import json
 import time
+from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
 import pandas as pd
 from typing import Dict, Any, List, Optional
 from .chunked_parser import ChunkedFileParser
@@ -9,6 +10,116 @@ from ..utils.progress import ProgressTracker
 from ..utils.memory_monitor import MemoryMonitor
 from ..utils.logger import get_logger
 from ..validators.rule_engine import RuleEngine
+
+
+def _is_value_valid_for_format(value: str, fmt: str) -> bool:
+    import re
+
+    v = str(value).strip()
+    fmt = str(fmt or '').upper()
+    if not fmt:
+        return True
+    if fmt == 'XXX':
+        return bool(re.fullmatch(r'[A-Za-z]{3}', v))
+    if fmt == 'CCYYMMDD':
+        return bool(re.fullmatch(r'\d{8}', v))
+
+    m_s9 = re.fullmatch(r'S9\((\d+)\)', fmt)
+    if m_s9:
+        n = int(m_s9.group(1))
+        return bool(re.fullmatch(rf'[+-]?\d{{{n}}}', v))
+
+    m_9 = re.fullmatch(r'9\((\d+)\)', fmt)
+    if m_9:
+        n = int(m_9.group(1))
+        return bool(re.fullmatch(rf'\d{{{n}}}', v))
+
+    m_dec = re.fullmatch(r'([+S])?9\((\d+)\)V9\((\d+)\)', fmt)
+    if m_dec:
+        sign_kind = m_dec.group(1)
+        n = int(m_dec.group(2))
+        m = int(m_dec.group(3))
+        if sign_kind == '+':
+            return bool(re.fullmatch(rf'[+-]\d{{{n+m}}}', v))
+        if sign_kind == 'S':
+            return bool(re.fullmatch(rf'[+-]?\d{{{n+m}}}', v))
+        return bool(re.fullmatch(rf'\d{{{n+m}}}', v))
+    return True
+
+
+def _validate_chunk_worker(
+    chunk: pd.DataFrame,
+    chunk_num: int,
+    chunk_size: int,
+    strict_fixed_width: bool,
+    strict_fields: list[dict],
+    strict_level: str,
+) -> dict:
+    errors = []
+    warnings = []
+    stats = {'duplicates': 0, 'nulls': {}, 'empty_strings': {}}
+
+    if chunk.empty:
+        warnings.append(f"Chunk {chunk_num} is empty")
+        return {'errors': errors, 'warnings': warnings, 'stats': stats, 'rows': 0}
+
+    null_counts = chunk.isnull().sum()
+    for col, count in null_counts.items():
+        if count > 0:
+            stats['nulls'][col] = int(count)
+
+    for col in chunk.columns:
+        if chunk[col].dtype == 'object':
+            empty_count = (chunk[col] == '').sum()
+            if empty_count > 0:
+                stats['empty_strings'][col] = int(empty_count)
+
+    if strict_fixed_width and strict_fields and strict_level in {'format', 'all'}:
+        row_base = (chunk_num - 1) * chunk_size
+        for local_idx, row in chunk.reset_index(drop=True).iterrows():
+            row_num = row_base + local_idx + 1
+            for field in strict_fields:
+                name = field.get('name')
+                if name not in chunk.columns:
+                    continue
+                value = '' if pd.isna(row.get(name)) else str(row.get(name)).strip()
+
+                if field.get('required') and value == '':
+                    errors.append({
+                        'severity': 'error',
+                        'category': 'strict_fixed_width',
+                        'code': 'FW_REQ_001',
+                        'message': f"Required field '{name}' is empty",
+                        'row': row_num,
+                        'field': name,
+                    })
+                    continue
+
+                if value and field.get('valid_values'):
+                    allowed = {str(v).strip() for v in (field.get('valid_values') or [])}
+                    if value not in allowed:
+                        errors.append({
+                            'severity': 'error',
+                            'category': 'strict_fixed_width',
+                            'code': 'FW_VAL_001',
+                            'message': f"Field '{name}' has invalid value '{value}'",
+                            'row': row_num,
+                            'field': name,
+                        })
+                        continue
+
+                fmt = str(field.get('format') or '').upper()
+                if value and fmt and not _is_value_valid_for_format(value, fmt):
+                    errors.append({
+                        'severity': 'error',
+                        'category': 'strict_fixed_width',
+                        'code': 'FW_FMT_001',
+                        'message': f"Field '{name}' has invalid format for value '{value}'",
+                        'row': row_num,
+                        'field': name,
+                    })
+
+    return {'errors': errors, 'warnings': warnings, 'stats': stats, 'rows': len(chunk)}
 
 
 class ChunkedFileValidator:
@@ -20,7 +131,8 @@ class ChunkedFileValidator:
                  expected_row_length: Optional[int] = None,
                  strict_fixed_width: bool = False,
                  strict_level: str = 'format',
-                 strict_fields: Optional[List[Dict[str, Any]]] = None):
+                 strict_fields: Optional[List[Dict[str, Any]]] = None,
+                 workers: int = 1):
         """Initialize chunked validator.
         
         Args:
@@ -41,6 +153,7 @@ class ChunkedFileValidator:
         self.strict_fixed_width = strict_fixed_width
         self.strict_level = (strict_level or 'format').lower()
         self.strict_fields = strict_fields or []
+        self.workers = max(int(workers or 1), 1)
 
         if rules_config_path:
             try:
@@ -100,57 +213,109 @@ class ChunkedFileValidator:
         progress = ProgressTracker(parser.count_rows(), "Validating") if show_progress else None
         
         try:
-            for chunk_num, chunk in enumerate(parser.parse_chunks(), 1):
-                # Validate chunk
-                chunk_errors, chunk_warnings, chunk_stats = self._validate_chunk(
-                    chunk, chunk_num, seen_rows, max_seen_rows
-                )
-                
-                errors.extend(chunk_errors)
-                warnings.extend(chunk_warnings)
-                
-                # Update statistics
-                total_rows += len(chunk)
-                duplicate_count += chunk_stats['duplicates']
+            parallel_enabled = self.workers > 1 and self.rule_engine is None
+            if self.workers > 1 and self.rule_engine is not None:
+                warnings.append("Parallel mode disabled because business rules are enabled; falling back to sequential validation")
 
-                # Optional business-rule validation
-                if self.rule_engine is not None:
-                    self.rule_engine.set_total_rows(total_rows)
-                    violations = self.rule_engine.validate(chunk)
-                    for v in violations:
-                        vdict = v.to_dict()
-                        business_violations.append(vdict)
-                        issue = {
-                            'severity': v.severity,
-                            'category': 'business_rule',
-                            'message': v.message,
-                            'row': v.row_number,
-                            'field': v.field,
-                            'rule_id': v.rule_id,
-                            'rule_name': v.rule_name,
-                        }
-                        if v.severity == 'error':
-                            errors.append(issue)
-                        elif v.severity == 'warning':
-                            warnings.append(issue)
-                        else:
-                            info.append(issue)
-                
-                # Aggregate null counts
-                for col, count in chunk_stats['nulls'].items():
-                    total_nulls[col] = total_nulls.get(col, 0) + count
-                
-                # Aggregate empty string counts
-                for col, count in chunk_stats['empty_strings'].items():
-                    total_empty_strings[col] = total_empty_strings.get(col, 0) + count
-                
-                if progress:
-                    progress.update(total_rows)
-                
-                # Periodic garbage collection
-                if chunk_num % 10 == 0:
-                    self.memory_monitor.force_garbage_collection()
-            
+            if parallel_enabled:
+                warnings.append("Duplicate row detection is disabled in parallel mode")
+                max_in_flight = max(self.workers * 2, 2)
+                pending: dict[Any, int] = {}
+
+                with ProcessPoolExecutor(max_workers=self.workers) as pool:
+                    for chunk_num, chunk in enumerate(parser.parse_chunks(), 1):
+                        fut = pool.submit(
+                            _validate_chunk_worker,
+                            chunk,
+                            chunk_num,
+                            self.chunk_size,
+                            bool(self.strict_fixed_width),
+                            list(self.strict_fields),
+                            str(self.strict_level or 'format'),
+                        )
+                        pending[fut] = chunk_num
+
+                        total_rows += len(chunk)
+                        if progress:
+                            progress.update(total_rows)
+
+                        while len(pending) >= max_in_flight:
+                            done, _ = wait(set(pending.keys()), return_when=FIRST_COMPLETED)
+                            for d in done:
+                                out = d.result()
+                                pending.pop(d, None)
+                                errors.extend(out.get('errors', []))
+                                warnings.extend(out.get('warnings', []))
+                                chunk_stats = out.get('stats', {})
+                                for col, count in chunk_stats.get('nulls', {}).items():
+                                    total_nulls[col] = total_nulls.get(col, 0) + count
+                                for col, count in chunk_stats.get('empty_strings', {}).items():
+                                    total_empty_strings[col] = total_empty_strings.get(col, 0) + count
+
+                    while pending:
+                        done, _ = wait(set(pending.keys()), return_when=FIRST_COMPLETED)
+                        for d in done:
+                            out = d.result()
+                            pending.pop(d, None)
+                            errors.extend(out.get('errors', []))
+                            warnings.extend(out.get('warnings', []))
+                            chunk_stats = out.get('stats', {})
+                            for col, count in chunk_stats.get('nulls', {}).items():
+                                total_nulls[col] = total_nulls.get(col, 0) + count
+                            for col, count in chunk_stats.get('empty_strings', {}).items():
+                                total_empty_strings[col] = total_empty_strings.get(col, 0) + count
+            else:
+                for chunk_num, chunk in enumerate(parser.parse_chunks(), 1):
+                    # Validate chunk
+                    chunk_errors, chunk_warnings, chunk_stats = self._validate_chunk(
+                        chunk, chunk_num, seen_rows, max_seen_rows
+                    )
+
+                    errors.extend(chunk_errors)
+                    warnings.extend(chunk_warnings)
+
+                    # Update statistics
+                    total_rows += len(chunk)
+                    duplicate_count += chunk_stats['duplicates']
+
+                    # Optional business-rule validation
+                    if self.rule_engine is not None:
+                        self.rule_engine.set_total_rows(total_rows)
+                        violations = self.rule_engine.validate(chunk)
+                        for v in violations:
+                            vdict = v.to_dict()
+                            business_violations.append(vdict)
+                            issue = {
+                                'severity': v.severity,
+                                'category': 'business_rule',
+                                'message': v.message,
+                                'row': v.row_number,
+                                'field': v.field,
+                                'rule_id': v.rule_id,
+                                'rule_name': v.rule_name,
+                            }
+                            if v.severity == 'error':
+                                errors.append(issue)
+                            elif v.severity == 'warning':
+                                warnings.append(issue)
+                            else:
+                                info.append(issue)
+
+                    # Aggregate null counts
+                    for col, count in chunk_stats['nulls'].items():
+                        total_nulls[col] = total_nulls.get(col, 0) + count
+
+                    # Aggregate empty string counts
+                    for col, count in chunk_stats['empty_strings'].items():
+                        total_empty_strings[col] = total_empty_strings.get(col, 0) + count
+
+                    if progress:
+                        progress.update(total_rows)
+
+                    # Periodic garbage collection
+                    if chunk_num % 10 == 0:
+                        self.memory_monitor.force_garbage_collection()
+
             if progress:
                 progress.finish()
             
@@ -201,7 +366,9 @@ class ChunkedFileValidator:
                     'null_counts': total_nulls,
                     'empty_string_counts': total_empty_strings,
                     'duplicate_count': duplicate_count,
-                    'duplicate_check_limited': len(seen_rows) >= max_seen_rows,
+                    'duplicate_check_limited': (False if parallel_enabled else len(seen_rows) >= max_seen_rows),
+                    'parallel': parallel_enabled,
+                    'workers': self.workers,
                     'elapsed_seconds': round(elapsed, 6),
                     'rows_per_second': round(rows_per_second, 2),
                     'chunk_size': self.chunk_size,

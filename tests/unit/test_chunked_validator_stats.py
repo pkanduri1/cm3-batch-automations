@@ -78,6 +78,25 @@ def test_chunked_strict_fixed_width_detects_field_format_errors():
         os.unlink(temp_file)
 
 
+def test_chunked_validator_parallel_mode_reports_workers():
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        f.write('1|A\n')
+        f.write('2|B\n')
+        f.write('3|C\n')
+        temp_file = f.name
+
+    try:
+        validator = ChunkedFileValidator(file_path=temp_file, delimiter='|', chunk_size=1, workers=2)
+        result = validator.validate(show_progress=False)
+
+        stats = result.get('statistics', {})
+        assert stats.get('parallel') is True
+        assert stats.get('workers') == 2
+        assert any('Duplicate row detection is disabled in parallel mode' in str(w) for w in result.get('warnings', []))
+    finally:
+        os.unlink(temp_file)
+
+
 def test_validate_with_schema_passes_show_progress_flag(monkeypatch):
     validator = ChunkedFileValidator(file_path='dummy.txt', delimiter='|', chunk_size=2)
 

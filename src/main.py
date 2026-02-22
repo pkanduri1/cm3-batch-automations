@@ -72,8 +72,10 @@ def parse(file, mapping, format, output, use_chunked, chunk_size):
               help='Enable strict fixed-width field-level validation checks')
 @click.option('--strict-level', type=click.Choice(['basic', 'format', 'all']), default='format',
               help='Strict fixed-width validation depth')
+@click.option('--workers', default=1, type=int, show_default=True,
+              help='Parallel worker processes for chunked validation (1 disables parallel mode)')
 def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, progress,
-             strict_fixed_width, strict_level):
+             strict_fixed_width, strict_level, workers):
     """Validate file format and content."""
     logger = setup_logger('cm3-batch', log_to_file=False)
 
@@ -81,7 +83,7 @@ def validate(file, mapping, rules, output, detailed, use_chunked, chunk_size, pr
         from src.commands.validate_command import run_validate_command
         run_validate_command(
             file, mapping, rules, output, detailed, use_chunked, chunk_size, progress,
-            strict_fixed_width, strict_level, logger,
+            strict_fixed_width, strict_level, workers, logger,
         )
     except Exception as e:
         logger.error(f"Error validating file: {e}")
