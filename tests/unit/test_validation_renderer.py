@@ -102,6 +102,32 @@ def test_validation_renderer_layout_counts_and_field_order(tmp_path):
     assert html.index("location-code") < html.index("acct-num")
 
 
+def test_validation_renderer_renders_chunked_telemetry_rows(tmp_path):
+    out = tmp_path / "report_telemetry.html"
+    payload = _sample_result()
+    payload["appendix"] = {
+        "validation_config": {
+            "mode": "chunked",
+            "chunk_size": 25000,
+            "elapsed_seconds": 1.23,
+            "rows_per_second": 4567.89,
+            "mapping_file": "config/mappings/sample.json",
+            "validator_version": "1.0.0",
+        },
+        "mapping_details": {"total_fields": 2, "required_field_count": 0, "required_fields": []},
+    }
+
+    reporter = ValidationReporter()
+    reporter.generate(payload, str(out))
+
+    html = out.read_text(encoding="utf-8")
+    assert "Validation Mode" in html
+    assert "chunked" in html
+    assert "Chunk Size" in html
+    assert "25,000" in html
+    assert "Rows / Second" in html
+
+
 def test_validation_renderer_required_field_error_summary(tmp_path):
     out = tmp_path / "report_required.html"
     payload = _sample_result()

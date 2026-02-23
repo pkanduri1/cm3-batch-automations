@@ -1314,6 +1314,41 @@ class ValidationReporter:
         mapping_details = appendix.get('mapping_details')
         # affected_rows summary moved to Issues & Warnings section
         
+        mode = validation_config.get('mode')
+        chunk_size = validation_config.get('chunk_size')
+        elapsed_seconds = validation_config.get('elapsed_seconds')
+        rows_per_second = validation_config.get('rows_per_second')
+
+        telemetry_rows = ""
+        if mode:
+            telemetry_rows += f"""
+            <tr>
+                <td>Validation Mode</td>
+                <td>{mode}</td>
+            </tr>
+            """
+        if chunk_size is not None:
+            telemetry_rows += f"""
+            <tr>
+                <td>Chunk Size</td>
+                <td>{chunk_size:,}</td>
+            </tr>
+            """
+        if elapsed_seconds is not None:
+            telemetry_rows += f"""
+            <tr>
+                <td>Elapsed Seconds</td>
+                <td>{elapsed_seconds}</td>
+            </tr>
+            """
+        if rows_per_second is not None:
+            telemetry_rows += f"""
+            <tr>
+                <td>Rows / Second</td>
+                <td>{rows_per_second}</td>
+            </tr>
+            """
+
         # Validation Configuration
         config_html = f"""
         <h3>Validation Configuration</h3>
@@ -1322,6 +1357,7 @@ class ValidationReporter:
                 <td>Detailed Mode</td>
                 <td>{validation_config.get('detailed_mode', False)}</td>
             </tr>
+            {telemetry_rows}
             <tr>
                 <td>Mapping File</td>
                 <td>{validation_config.get('mapping_file', 'None')}</td>
