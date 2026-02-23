@@ -108,9 +108,7 @@ class ValidationReporter:
     <div class="container">
         {self._generate_header(results)}
         {self._generate_dashboard_bar(results)}
-        {self._generate_summary(results)}
-        {self._generate_file_metadata(results)}
-        {self._generate_quality_metrics(results)}
+        {self._generate_full_metrics_details(results)}
         {self._generate_issues(results)}
         {self._generate_required_fields(results)}
         {self._wrap_collapsible_section('Field-Level Analysis', self._generate_field_analysis(results))}
@@ -667,6 +665,23 @@ class ValidationReporter:
         <details>
             <summary>Show {title}</summary>
             {section_html}
+        </details>
+        """
+
+    def _generate_full_metrics_details(self, results: Dict[str, Any]) -> str:
+        """Keep legacy metric cards available, but collapsed to avoid redundancy."""
+        parts = [
+            self._generate_summary(results),
+            self._generate_file_metadata(results),
+            self._generate_quality_metrics(results),
+        ]
+        content = ''.join(p for p in parts if p)
+        if not content:
+            return ''
+        return f"""
+        <details>
+            <summary>Show Full Metrics Details</summary>
+            {content}
         </details>
         """
 
