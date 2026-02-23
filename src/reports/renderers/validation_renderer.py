@@ -107,16 +107,17 @@ class ValidationReporter:
 <body>
     <div class="container">
         {self._generate_header(results)}
+        {self._generate_dashboard_bar(results)}
         {self._generate_summary(results)}
         {self._generate_file_metadata(results)}
         {self._generate_quality_metrics(results)}
         {self._generate_issues(results)}
         {self._generate_required_fields(results)}
-        {self._generate_field_analysis(results)}
-        {self._generate_date_analysis(results)}
-        {self._generate_duplicate_analysis(results)}
-        {self._generate_business_rules(results)}
-        {self._generate_appendix(results)}
+        {self._wrap_collapsible_section('Field-Level Analysis', self._generate_field_analysis(results))}
+        {self._wrap_collapsible_section('Date Field Analysis', self._generate_date_analysis(results))}
+        {self._wrap_collapsible_section('Duplicate Analysis', self._generate_duplicate_analysis(results))}
+        {self._wrap_collapsible_section('Business Rules', self._generate_business_rules(results))}
+        {self._wrap_collapsible_section('Appendix', self._generate_appendix(results))}
         {self._generate_footer()}
     </div>
     <script>
@@ -144,7 +145,44 @@ class ValidationReporter:
         .container {
             max-width: 1400px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 14px;
+        }
+
+        .dashboard-bar {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: rgba(255,255,255,0.96);
+            backdrop-filter: blur(4px);
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 8px 10px;
+            margin-bottom: 12px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .dashboard-kpi {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 8px 10px;
+        }
+
+        .dashboard-kpi .k {
+            font-size: 0.72em;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .dashboard-kpi .v {
+            font-size: 1.1em;
+            font-weight: 700;
+            line-height: 1.2;
         }
         
         .header {
@@ -582,6 +620,54 @@ class ValidationReporter:
             <div class="subtitle">Generated: {timestamp}</div>
             <span class="status-badge {status_class}">✓ {status}</span>
         </div>
+        """
+
+    def _generate_dashboard_bar(self, results: Dict[str, Any]) -> str:
+        """Generate compact, single-screen KPI bar."""
+        metrics = results.get('quality_metrics', {})
+        appendix = results.get('appendix', {})
+        affected = appendix.get('affected_rows', {}) if isinstance(appendix, dict) else {}
+        dup = results.get('duplicate_analysis', {})
+
+        total_rows = int(metrics.get('total_rows', 0) or 0)
+        errored_rows = int(affected.get('total_affected_rows', 0) or 0)
+        if total_rows > 0:
+            errored_rows = min(max(errored_rows, 0), total_rows)
+        good_rows = max(total_rows - errored_rows, 0)
+
+        kpis = [
+            ("Quality", f"{metrics.get('quality_score', 0)}%"),
+            ("Rows", f"{total_rows:,}"),
+            ("Errors", f"{results.get('error_count', 0):,}"),
+            ("Warnings", f"{results.get('warning_count', 0):,}"),
+            ("Good Rows", f"{good_rows:,}"),
+            ("Errored Rows", f"{errored_rows:,}"),
+            ("Completeness", f"{metrics.get('completeness_pct', 0)}%"),
+            ("Uniqueness", f"{metrics.get('uniqueness_pct', 0)}%"),
+            ("Duplicates", f"{dup.get('duplicate_rows', 0):,}"),
+            ("Columns", f"{metrics.get('total_columns', 0):,}"),
+        ]
+
+        blocks = ''.join(
+            f'<div class="dashboard-kpi"><div class="k">{k}</div><div class="v">{v}</div></div>'
+            for k, v in kpis
+        )
+
+        return f"""
+        <div class="dashboard-bar">
+            <div class="dashboard-grid">{blocks}</div>
+        </div>
+        """
+
+    def _wrap_collapsible_section(self, title: str, section_html: str) -> str:
+        """Wrap heavy sections in collapsed containers for single-screen overview."""
+        if not section_html:
+            return ""
+        return f"""
+        <details>
+            <summary>Show {title}</summary>
+            {section_html}
+        </details>
         """
 
     def _generate_summary(self, results: Dict[str, Any]) -> str:
