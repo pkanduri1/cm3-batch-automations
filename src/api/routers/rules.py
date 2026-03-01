@@ -14,10 +14,11 @@ from src.config.rules_template_converter import RulesTemplateConverter
 
 router = APIRouter()
 
-RULES_DIR = Path("config/rules")
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+RULES_DIR = _REPO_ROOT / "config" / "rules"
 RULES_DIR.mkdir(parents=True, exist_ok=True)
 
-UPLOADS_DIR = Path("uploads")
+UPLOADS_DIR = _REPO_ROOT / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -27,7 +28,21 @@ async def upload_rules_template(
     rules_name: str = Query(None, description="Name for the rules config"),
     rules_type: Literal["ba_friendly", "technical"] = Query("ba_friendly", description="ba_friendly or technical"),
 ):
-    """Upload Excel/CSV rules template and convert to rules JSON."""
+    """Upload Excel/CSV rules template and convert to rules JSON.
+
+    Args:
+        file: The uploaded template file (.xlsx, .xls, or .csv).
+        rules_name: Optional name for the output rules config.
+            Defaults to the uploaded filename stem.
+        rules_type: Converter to use — ``ba_friendly`` (default) or ``technical``.
+
+    Returns:
+        Dict with keys: ``rules_id``, ``filename``, ``size``, ``message``.
+
+    Raises:
+        HTTPException: 400 if file extension is not .xlsx, .xls, or .csv.
+        HTTPException: 500 if template conversion fails.
+    """
     if not file.filename.endswith((".xlsx", ".xls", ".csv")):
         raise HTTPException(status_code=400, detail="Only .xlsx, .xls, and .csv files are supported.")
 
@@ -47,7 +62,7 @@ async def upload_rules_template(
             converter.from_csv(str(upload_path))
 
         rules_id = rules_name or Path(file.filename).stem
-        if hasattr(converter, "rules_config") and converter.rules_config:
+        if converter.rules_config:
             converter.rules_config.setdefault("metadata", {})["name"] = rules_id
 
         output_path = RULES_DIR / f"{rules_id}.json"
