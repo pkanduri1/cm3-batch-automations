@@ -3,6 +3,7 @@
 import shutil
 import sys
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
@@ -24,7 +25,7 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 async def upload_rules_template(
     file: UploadFile = File(...),
     rules_name: str = Query(None, description="Name for the rules config"),
-    rules_type: str = Query("ba_friendly", description="ba_friendly or technical"),
+    rules_type: Literal["ba_friendly", "technical"] = Query("ba_friendly", description="ba_friendly or technical"),
 ):
     """Upload Excel/CSV rules template and convert to rules JSON."""
     if not file.filename.endswith((".xlsx", ".xls", ".csv")):

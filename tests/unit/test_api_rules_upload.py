@@ -83,3 +83,9 @@ def test_upload_rules_defaults_to_ba_friendly(monkeypatch):
     import os
     p = "config/rules/default_rules.json"
     if os.path.exists(p): os.remove(p)
+
+
+def test_upload_rules_rejects_invalid_rules_type():
+    files = {"file": ("rules.csv", b"x", "text/csv")}
+    r = client.post("/api/v1/rules/upload?rules_type=garbage", files=files)
+    assert r.status_code == 422
