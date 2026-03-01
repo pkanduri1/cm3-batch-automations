@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 import logging
 import os
 import sys
@@ -92,6 +93,13 @@ app.include_router(
 )
 app.include_router(ui_router)
 app.include_router(runs_router)
+
+# Serve generated reports
+_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(_UPLOADS_DIR)), name="uploads")
+_REPORTS_DIR = Path(__file__).parent.parent.parent / "reports"
+_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/reports", StaticFiles(directory=str(_REPORTS_DIR)), name="reports")
 
 # Root endpoint
 @app.get("/", tags=["Root"])
