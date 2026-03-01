@@ -667,6 +667,41 @@ def gx_checkpoint1(targets_csv, expectations_csv, output_json, csv_output, html_
         sys.exit(1)
 
 
+@cli.command('convert-suite')
+@click.option('--input', 'input_path', required=False, default=None,
+              type=click.Path(), help='Path to Excel test suite file to convert')
+@click.option('--output-dir', default='.', show_default=True,
+              type=click.Path(), help='Directory to write the generated YAML file')
+@click.option('--template', 'template_path', default=None,
+              type=click.Path(), help='Write an empty Excel template to this path and exit')
+def convert_suite(input_path, output_dir, template_path):
+    """Convert an Excel test suite template to a YAML file for cm3-batch run-tests."""
+    logger = setup_logger('cm3-batch', log_to_file=False)
+
+    try:
+        from src.config.suite_template_converter import SuiteTemplateConverter
+
+        converter = SuiteTemplateConverter()
+
+        if template_path:
+            converter.create_template(template_path)
+            click.echo(f"Template written to: {template_path}")
+            return
+
+        if not input_path:
+            click.echo(click.style('Error: --input is required when --template is not specified', fg='red'))
+            sys.exit(1)
+
+        output_path = converter.convert(input_path, output_dir)
+        click.echo(f"YAML test suite written to: {output_path}")
+
+    except Exception as e:
+        logger.error(f"Error converting test suite: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
 @cli.command('run-tests')
 @click.option('--suite', '-s', required=True, help='Path to test suite YAML file')
 @click.option('--params', '-p', default='', help='Parameters as key=value,key2=value2')
