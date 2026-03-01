@@ -210,6 +210,48 @@
   a.report-link:hover { text-decoration: underline; }
 
   .empty-msg { color: var(--muted); padding: 24px 12px; text-align: center; font-size: 13px; }
+
+  /* mapping generator */
+  .gen-section { margin-bottom: 28px; }
+  .gen-section:last-child { margin-bottom: 0; }
+  .gen-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  input.text-input {
+    background: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    padding: 6px 10px;
+    width: 200px;
+    transition: border-color 0.15s;
+  }
+  input.text-input:focus { border-color: #4a9eff; }
+  input.text-input::placeholder { color: var(--muted); }
+  .result-bar {
+    margin-top: 14px;
+    min-height: 22px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .result-bar.loading { color: #4a9eff; }
+  .result-bar.success { color: var(--pass); }
+  .result-bar.error   { color: var(--fail); }
+  .result-bar.info    { color: var(--muted); }
+  .result-bar a { color: #4a9eff; font-size: 12px; text-decoration: none; }
+  .result-bar a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -224,6 +266,8 @@
           onclick="switchTab('quick')">Quick Test</button>
   <button id="tab-runs" role="tab" aria-selected="false"
           onclick="switchTab('runs')">Recent Runs</button>
+  <button id="tab-mapping" role="tab" aria-selected="false"
+          onclick="switchTab('mapping')">Mapping Generator</button>
 </nav>
 
 <main>
@@ -282,6 +326,70 @@
     </div>
   </div>
 
+  <!-- MAPPING GENERATOR PANEL -->
+  <div id="panel-mapping" class="panel" role="tabpanel" aria-labelledby="tab-mapping" style="display:none">
+    <h2>Mapping Generator</h2>
+
+    <!-- Section 1: Field Mapping -->
+    <div class="gen-section">
+      <div class="gen-section-title">Field Mapping</div>
+      <div class="drop-zone" id="mapDropZone" tabindex="0"
+           role="button" aria-label="Click or drag a mapping template here">
+        <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+        </svg>
+        <span class="dz-label">Drop mapping template here or click to browse (.xlsx, .csv)</span>
+        <span class="dz-filename" id="mapFileName"></span>
+      </div>
+      <input type="file" id="mapFileInput" accept=".xlsx,.xls,.csv">
+      <div class="form-row">
+        <label class="field-label" for="mapNameInput">Mapping name</label>
+        <input type="text" id="mapNameInput" class="text-input" placeholder="(optional — uses filename)">
+        <label class="field-label" for="mapFormatSelect">Format</label>
+        <select id="mapFormatSelect">
+          <option value="">Auto-detect</option>
+          <option value="fixed_width">Fixed Width</option>
+          <option value="pipe_delimited">Pipe-delimited</option>
+          <option value="csv">CSV</option>
+          <option value="tsv">TSV</option>
+        </select>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnGenMapping" disabled>Generate Mapping</button>
+      </div>
+      <div class="result-bar info" id="mapResultBar">Select a mapping template to get started.</div>
+    </div>
+
+    <!-- Section 2: Validation Rules -->
+    <div class="gen-section">
+      <div class="gen-section-title">Validation Rules</div>
+      <div class="drop-zone" id="rulesDropZone" tabindex="0"
+           role="button" aria-label="Click or drag a rules template here">
+        <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+        </svg>
+        <span class="dz-label">Drop rules template here or click to browse (.xlsx, .csv)</span>
+        <span class="dz-filename" id="rulesFileName"></span>
+      </div>
+      <input type="file" id="rulesFileInput" accept=".xlsx,.xls,.csv">
+      <div class="form-row">
+        <label class="field-label" for="rulesNameInput">Rules name</label>
+        <input type="text" id="rulesNameInput" class="text-input" placeholder="(optional — uses filename)">
+        <label class="field-label" for="rulesTypeSelect">Type</label>
+        <select id="rulesTypeSelect">
+          <option value="ba_friendly">BA-friendly</option>
+          <option value="technical">Technical</option>
+        </select>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnGenRules" disabled>Generate Rules</button>
+      </div>
+      <div class="result-bar info" id="rulesResultBar">Select a rules template to get started.</div>
+    </div>
+  </div>
+
 </main>
 
 <script>
@@ -296,7 +404,7 @@ var compareMode   = false;
 // Tab switching
 // ---------------------------------------------------------------------------
 function switchTab(name) {
-  ['quick', 'runs'].forEach(function(t) {
+  ['quick', 'runs', 'mapping'].forEach(function(t) {
     document.getElementById('panel-' + t).style.display = (t === name) ? '' : 'none';
     var btn = document.getElementById('tab-' + t);
     btn.classList.toggle('active', t === name);
@@ -633,6 +741,138 @@ async function loadRunHistory() {
     wrap.appendChild(p);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Mapping Generator — state
+// ---------------------------------------------------------------------------
+var mapFile   = null;
+var rulesFile = null;
+
+// ---------------------------------------------------------------------------
+// Mapping Generator — result bar helper
+// ---------------------------------------------------------------------------
+function setGenResult(barId, type, msg, links) {
+  var el = document.getElementById(barId);
+  el.className = 'result-bar ' + type;
+  while (el.firstChild) { el.removeChild(el.firstChild); }
+  if (type === 'loading') {
+    var sp = document.createElement('span');
+    sp.className = 'spinner';
+    el.appendChild(sp);
+  }
+  el.appendChild(document.createTextNode(msg));
+  if (links) {
+    links.forEach(function(lnk) {
+      var a = document.createElement('a');
+      a.textContent = lnk.text;
+      a.href = lnk.href || '#';
+      if (lnk.download) { a.setAttribute('download', lnk.download); }
+      if (lnk.onClick)  { a.addEventListener('click', lnk.onClick); }
+      el.appendChild(a);
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mapping Generator — drop zones
+// ---------------------------------------------------------------------------
+function setupGenDrop(zoneId, inputId, slot) {
+  var zone   = document.getElementById(zoneId);
+  var input  = document.getElementById(inputId);
+  var nameId = slot === 'map' ? 'mapFileName'  : 'rulesFileName';
+  var btnId  = slot === 'map' ? 'btnGenMapping' : 'btnGenRules';
+
+  zone.addEventListener('dragover',  function(e) { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', function()  { zone.classList.remove('dragover'); });
+  zone.addEventListener('drop', function(e) {
+    e.preventDefault(); zone.classList.remove('dragover');
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) { setGenFile(f, slot, nameId, btnId); }
+  });
+  zone.addEventListener('click',   function()  { input.click(); });
+  zone.addEventListener('keydown', function(e) { if (e.key === 'Enter' || e.key === ' ') { input.click(); } });
+  input.addEventListener('change', function()  { if (this.files.length) { setGenFile(this.files[0], slot, nameId, btnId); } });
+}
+
+function setGenFile(file, slot, nameId, btnId) {
+  document.getElementById(nameId).textContent = file.name;
+  document.getElementById(btnId).disabled = false;
+  if (slot === 'map')   { mapFile   = file; }
+  if (slot === 'rules') { rulesFile = file; }
+}
+
+setupGenDrop('mapDropZone',   'mapFileInput',   'map');
+setupGenDrop('rulesDropZone', 'rulesFileInput', 'rules');
+
+// ---------------------------------------------------------------------------
+// Mapping Generator — Generate Mapping button
+// ---------------------------------------------------------------------------
+document.getElementById('btnGenMapping').addEventListener('click', async function() {
+  if (!mapFile) { return; }
+  setGenResult('mapResultBar', 'loading', 'Generating mapping\u2026', null);
+  this.disabled = true;
+  try {
+    var mappingName = document.getElementById('mapNameInput').value.trim();
+    var format      = document.getElementById('mapFormatSelect').value;
+    var url = '/api/v1/mappings/upload';
+    var params = [];
+    if (mappingName) { params.push('mapping_name=' + encodeURIComponent(mappingName)); }
+    if (format)      { params.push('file_format='  + encodeURIComponent(format)); }
+    if (params.length) { url += '?' + params.join('&'); }
+    var fd = new FormData();
+    fd.append('file', mapFile);
+    var resp = await fetch(url, { method: 'POST', body: fd });
+    if (!resp.ok) {
+      var err = await resp.json().catch(function() { return { detail: resp.statusText }; });
+      throw new Error(err.detail || resp.statusText);
+    }
+    var data = await resp.json();
+    var mid  = data.mapping_id;
+    setGenResult('mapResultBar', 'success', '\u2705 \u2018' + mid + '\u2019 created\u00a0\u00a0', [
+      { text: 'Download JSON', href: '/api/v1/mappings/' + encodeURIComponent(mid), download: mid + '.json' },
+      { text: 'Use in Quick Test \u2192', onClick: function(e) {
+          e.preventDefault();
+          loadMappings();
+          switchTab('quick');
+      }}
+    ]);
+  } catch (err) {
+    setGenResult('mapResultBar', 'error', 'Error: ' + err.message, null);
+  } finally {
+    document.getElementById('btnGenMapping').disabled = false;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Mapping Generator — Generate Rules button
+// ---------------------------------------------------------------------------
+document.getElementById('btnGenRules').addEventListener('click', async function() {
+  if (!rulesFile) { return; }
+  setGenResult('rulesResultBar', 'loading', 'Generating rules\u2026', null);
+  this.disabled = true;
+  try {
+    var rulesName = document.getElementById('rulesNameInput').value.trim();
+    var rulesType = document.getElementById('rulesTypeSelect').value;
+    var url = '/api/v1/rules/upload?rules_type=' + encodeURIComponent(rulesType);
+    if (rulesName) { url += '&rules_name=' + encodeURIComponent(rulesName); }
+    var fd = new FormData();
+    fd.append('file', rulesFile);
+    var resp = await fetch(url, { method: 'POST', body: fd });
+    if (!resp.ok) {
+      var err = await resp.json().catch(function() { return { detail: resp.statusText }; });
+      throw new Error(err.detail || resp.statusText);
+    }
+    var data = await resp.json();
+    var rid  = data.rules_id;
+    setGenResult('rulesResultBar', 'success', '\u2705 \u2018' + rid + '\u2019 created\u00a0\u00a0', [
+      { text: 'Download JSON', href: '/api/v1/rules/' + encodeURIComponent(rid) + '.json', download: rid + '.json' }
+    ]);
+  } catch (err) {
+    setGenResult('rulesResultBar', 'error', 'Error: ' + err.message, null);
+  } finally {
+    document.getElementById('btnGenRules').disabled = false;
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Init

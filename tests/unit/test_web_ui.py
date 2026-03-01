@@ -156,3 +156,32 @@ def test_run_history_returns_empty_on_corrupt_file(tmp_path, monkeypatch):
     response = client.get("/api/v1/runs/history")
     assert response.status_code == 200
     assert response.json() == []
+
+
+# ---------------------------------------------------------------------------
+# Mapping Generator tab smoke tests
+# ---------------------------------------------------------------------------
+
+def test_ui_contains_mapping_generator_tab(client):
+    """GET /ui must contain the Mapping Generator tab button."""
+    response = client.get("/ui")
+    assert response.status_code == 200
+    assert b"Mapping Generator" in response.content
+
+
+def test_ui_contains_generate_mapping_button(client):
+    """GET /ui must contain a Generate Mapping button."""
+    response = client.get("/ui")
+    assert b"Generate Mapping" in response.content
+
+
+def test_ui_contains_generate_rules_button(client):
+    """GET /ui must contain a Generate Rules button."""
+    response = client.get("/ui")
+    assert b"Generate Rules" in response.content
+
+
+def test_ui_contains_rules_type_dropdown(client):
+    """GET /ui must contain the BA-friendly rules type option."""
+    response = client.get("/ui")
+    assert b"BA-friendly" in response.content

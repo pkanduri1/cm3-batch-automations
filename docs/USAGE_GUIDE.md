@@ -1128,3 +1128,29 @@ The HTML report opens in a new tab.
 
 **Recent Runs** — Shows the last 20 test suite runs with pass/fail status and links
 to suite reports.
+
+### Mapping Generator Tab
+
+Upload an Excel or CSV template to generate JSON config files without using the CLI.
+
+#### Generate a Field Mapping
+
+1. Open the web UI at `http://localhost:8000/ui`
+2. Click the **Mapping Generator** tab
+3. Drop your mapping template (`.xlsx` or `.csv`) into the **Field Mapping** drop zone
+4. Optionally enter a mapping name and select a format (defaults to auto-detect)
+5. Click **Generate Mapping**
+6. On success: download the JSON or click **Use in Quick Test →** to use it immediately
+
+**Required template columns:** `Field Name`, `Data Type`
+**Optional columns:** `Position`, `Length`, `Format`, `Required`, `Description`, `Default Value`, `Target Name`, `Valid Values`
+
+#### Generate Validation Rules
+
+1. Drop your rules template into the **Validation Rules** drop zone
+2. Select the template type: **BA-friendly** (default) or **Technical**
+3. Click **Generate Rules**
+4. Download the generated rules JSON
+
+**BA-friendly required columns:** `Rule ID`, `Rule Name`, `Field`, `Rule Type`, `Severity`, `Expected / Values`, `Enabled`
+**Technical required columns:** `Rule ID`, `Rule Name`, `Description`, `Type`, `Severity`, `Operator`
