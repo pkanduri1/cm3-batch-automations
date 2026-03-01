@@ -16,6 +16,10 @@ Commands
    :members:
    :undoc-members:
 
+.. automodule:: src.commands.run_tests_command
+   :members:
+   :undoc-members:
+
 Database
 --------
 

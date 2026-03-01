@@ -530,8 +530,28 @@ tests:
 - `structural` — validates file format against mapping (field lengths, required fields, data types)
 - `rules` — validates business rules from a rules file
 - `oracle_vs_file` — extracts Oracle data to CSV then compares against the file
+- `api_check` — calls an external HTTP endpoint and asserts on status code / JSON response
 
 **Exit codes:** 0 = all tests passed, 1 = one or more tests failed or errored.
+
+### API Check Tests
+
+Use `type: api_check` to validate external HTTP endpoints in your suite:
+
+```yaml
+tests:
+  - name: Batch service health check
+    type: api_check
+    url: "http://internal-batch-svc/health"
+    method: GET
+    expected_status: 200
+    response_contains:
+      status: "ok"
+    timeout_seconds: 30
+```
+
+Supported fields: `url`, `method` (GET/POST), `body` (JSON dict for POST),
+`expected_status`, `response_contains` (JSON key/value assertions), `timeout_seconds`.
 
 ---
 

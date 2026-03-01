@@ -17,6 +17,73 @@ from src.reports.renderers.suite_renderer import SuiteReporter
 from src.utils.params import resolve_params
 
 
+def _run_api_check_test(test: TestConfig, params: dict) -> dict:
+    """Execute an HTTP API check test.
+
+    Makes an HTTP request to the configured URL and checks the response
+    status code and JSON body against expectations.
+
+    Args:
+        test: TestConfig with type="api_check".
+        params: Resolved parameter dict for variable substitution.
+
+    Returns:
+        Result dict with status (PASS/FAIL/ERROR), message, and errors list.
+    """
+    import httpx
+
+    result: dict[str, Any] = {
+        "name": test.name,
+        "type": test.type,
+        "status": "PASS",
+        "errors": [],
+        "warnings": [],
+    }
+
+    url = resolve_params(test.url or "", params)
+
+    try:
+        if test.method and test.method.upper() == "POST":
+            resp = httpx.post(url, json=test.body, timeout=test.timeout_seconds)
+        else:
+            resp = httpx.get(url, timeout=test.timeout_seconds)
+
+        # Check status code
+        expected = test.expected_status or 200
+        if resp.status_code != expected:
+            result["status"] = "FAIL"
+            result["errors"].append(
+                f"Expected HTTP {expected}, got {resp.status_code}"
+            )
+
+        # Check response_contains only when status check passed
+        if test.response_contains and result["status"] == "PASS":
+            try:
+                body = resp.json()
+                for key, expected_val in test.response_contains.items():
+                    actual = body.get(key)
+                    if actual != expected_val:
+                        result["status"] = "FAIL"
+                        result["errors"].append(
+                            f"response['{key}']: expected {expected_val!r}, got {actual!r}"
+                        )
+            except Exception:
+                result["status"] = "FAIL"
+                result["errors"].append("Response is not valid JSON")
+
+    except httpx.ConnectError as e:
+        result["status"] = "ERROR"
+        result["errors"].append(f"Connection failed: {e}")
+    except httpx.TimeoutException:
+        result["status"] = "ERROR"
+        result["errors"].append(f"Request timed out after {test.timeout_seconds}s")
+    except Exception as e:
+        result["status"] = "ERROR"
+        result["errors"].append(f"Unexpected error: {e}")
+
+    return result
+
+
 def _run_oracle_vs_file_test(
     test: TestConfig, resolved_file: str, output_dir: str, run_id: str
 ) -> dict[str, Any]:
@@ -223,6 +290,7 @@ def _run_single_test(
     resolved_file: str,
     output_dir: str,
     run_id: str = "",
+    params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run one test and return its result dict."""
     start = time.monotonic()
@@ -270,6 +338,23 @@ def _run_single_test(
             total_rows = svc_result.get("total_rows_file1", 0) or 0
             error_count = svc_result.get("rows_with_differences", 0) or 0
             warning_count = 0
+
+        elif test.type == "api_check":
+            # Resolve params dict for variable substitution in URL
+            merged: dict[str, Any] = dict(params) if params is not None else {}
+            api_result = _run_api_check_test(test, merged)
+            return {
+                "name": test.name,
+                "type": test.type,
+                "status": api_result["status"],
+                "total_rows": 0,
+                "error_count": len(api_result.get("errors", [])),
+                "warning_count": 0,
+                "duration_seconds": round(time.monotonic() - start, 1),
+                "report_path": None,
+                "detail": "; ".join(api_result.get("errors", [])),
+            }
+
         else:
             raise ValueError(f"Unknown test type: {test.type!r}")
 
@@ -407,8 +492,10 @@ def run_suite_from_path(
 
     results: list[dict[str, Any]] = []
     for test in suite.tests:
-        resolved_file = resolve_params(test.file, merged_params)
-        result = _run_single_test(test, resolved_file, output_dir, run_id=run_id)
+        resolved_file = resolve_params(test.file or "", merged_params)
+        result = _run_single_test(
+            test, resolved_file, output_dir, run_id=run_id, params=merged_params
+        )
         results.append(result)
 
     safe_suite_name = re.sub(r"[^\w\-]", "_", suite.name)
@@ -464,7 +551,7 @@ def run_tests_command(
         click.echo(f"[dry-run] Environment: {env or suite.environment}")
         click.echo(f"[dry-run] run_id: {run_id}")
         for test in suite.tests:
-            resolved_file = resolve_params(test.file, params)
+            resolved_file = resolve_params(test.file or "", params)
             click.echo(
                 f"[dry-run]   test={test.name!r}  type={test.type}"
                 f"  file={resolved_file!r}  mapping={test.mapping!r}"

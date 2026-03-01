@@ -15,14 +15,21 @@ class ThresholdConfig(BaseModel):
 
 class TestConfig(BaseModel):
     name: str
-    type: Literal["structural", "oracle_vs_file", "rules"]
-    file: str  # supports ${variable} placeholders
-    mapping: str
+    type: Literal["structural", "oracle_vs_file", "rules", "api_check"]
+    file: Optional[str] = None  # supports ${variable} placeholders; not required for api_check
+    mapping: Optional[str] = None  # not required for api_check
     rules: Optional[str] = None  # for type=rules
     oracle_query: Optional[str] = None  # for type=oracle_vs_file
     oracle_params: Optional[Dict] = None
     key_columns: Optional[List[str]] = None
     thresholds: ThresholdConfig = Field(default_factory=ThresholdConfig)
+    # api_check type fields
+    url: Optional[str] = None
+    method: Optional[str] = "GET"
+    body: Optional[Dict] = None
+    expected_status: Optional[int] = 200
+    response_contains: Optional[Dict] = None
+    timeout_seconds: Optional[int] = 30
 
 
 class TestSuiteConfig(BaseModel):
