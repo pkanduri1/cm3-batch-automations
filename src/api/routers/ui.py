@@ -62,5 +62,6 @@ async def get_run_history() -> JSONResponse:
     try:
         entries = json.loads(_RUN_HISTORY_PATH.read_text(encoding="utf-8"))
         return JSONResponse(content=entries[-20:][::-1])
-    except Exception:
+    except Exception as exc:
+        logging.getLogger(__name__).warning("run_history JSON read failed: %s", exc)
         return JSONResponse(content=[])

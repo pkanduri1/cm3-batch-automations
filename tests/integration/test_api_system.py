@@ -1,6 +1,7 @@
 """FastAPI system endpoint regression tests using TestClient."""
 
 import pytest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from src.api.main import app
 
@@ -81,7 +82,6 @@ def test_run_history_falls_back_to_json_when_oracle_user_unset(monkeypatch):
     """When ORACLE_USER is not set, history is read from JSON (not DB)."""
     monkeypatch.delenv("ORACLE_USER", raising=False)
 
-    from unittest.mock import patch
     with patch("src.api.routers.ui.fetch_history_from_db") as mock_fn:
         response = client.get("/api/v1/runs/history")
 
@@ -93,7 +93,6 @@ def test_run_history_uses_db_when_oracle_user_set(monkeypatch):
     """When ORACLE_USER is set, history is read from fetch_history_from_db."""
     monkeypatch.setenv("ORACLE_USER", "CM3INT")
 
-    from unittest.mock import patch
     mock_data = [
         {
             "run_id": "test-001", "suite_name": "DB Suite",
@@ -116,7 +115,6 @@ def test_run_history_falls_back_to_json_when_db_raises(monkeypatch):
     """When DB raises, endpoint falls back to JSON and returns 200."""
     monkeypatch.setenv("ORACLE_USER", "CM3INT")
 
-    from unittest.mock import patch
     with patch("src.api.routers.ui.fetch_history_from_db", side_effect=RuntimeError("ORA-12170")):
         response = client.get("/api/v1/runs/history")
 

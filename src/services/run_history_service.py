@@ -27,7 +27,7 @@ def write_run_to_db(
     repo.insert_tests(run_id, results)
 
 
-def fetch_history_from_db(limit: int = 20) -> list[dict]:
+def fetch_history_from_db(limit: int = 20) -> list[dict[str, Any]]:
     """Return the most recent run summaries from Oracle.
 
     Args:
