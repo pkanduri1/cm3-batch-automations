@@ -1,6 +1,7 @@
 """Main entry point for CM3 Batch Automations."""
 
 import sys
+import json
 import os
 import click
 from src.utils.logger import setup_logger
@@ -806,7 +807,6 @@ def list_runs(limit):
 @click.argument('run_id')
 def get_run(run_id):
     """Retrieve archived files and manifest for a specific run."""
-    import json
     from src.utils.archive import ArchiveManager
 
     archive = ArchiveManager()
