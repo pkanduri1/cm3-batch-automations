@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import shutil
 import time
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -76,13 +79,22 @@ class ArchiveManager:
         run_dir.mkdir(parents=True, exist_ok=True)
 
         archived: list[dict[str, str]] = []
+        seen_names: set[str] = set()
         for src_path_str in files:
             src = Path(src_path_str)
             if not src.exists():
                 continue
-            dst = run_dir / src.name
+            name = src.name
+            if name in seen_names:
+                stem, suffix = src.stem, src.suffix
+                counter = 1
+                while name in seen_names:
+                    name = f"{stem}_{counter}{suffix}"
+                    counter += 1
+            seen_names.add(name)
+            dst = run_dir / name
             shutil.copy2(str(src), str(dst))
-            archived.append({"name": src.name, "sha256": _sha256_file(dst)})
+            archived.append({"name": name, "sha256": _sha256_file(dst)})
 
         payload: dict[str, Any] = {
             "run_id": run_id,
@@ -115,6 +127,7 @@ class ArchiveManager:
                 data = json.loads(manifest_path.read_text(encoding="utf-8"))
                 results.append(data)
             except Exception:
+                logger.warning("Skipping unreadable manifest: %s", manifest_path, exc_info=True)
                 continue
 
         results.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
@@ -141,6 +154,7 @@ class ArchiveManager:
                 ]
                 return {"manifest": manifest, "files": file_paths}
             except Exception:
+                logger.warning("Skipping unreadable manifest: %s", manifest_path, exc_info=True)
                 continue
         return None
 
@@ -176,6 +190,7 @@ class ArchiveManager:
                     shutil.rmtree(str(run_dir))
                     deleted += 1
             except Exception:
+                logger.warning("Could not delete run dir: %s", run_dir, exc_info=True)
                 continue
 
         return deleted

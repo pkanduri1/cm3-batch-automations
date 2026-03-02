@@ -121,6 +121,33 @@ class TestArchiveRun:
         assert len(manifest["files"]) == 1
         assert manifest["files"][0]["name"] == "exists.html"
 
+    def test_deduplicates_same_basename(self, manager, tmp_path, archive_dir):
+        file1 = tmp_path / "dir1" / "report.html"
+        file2 = tmp_path / "dir2" / "report.html"
+        file1.parent.mkdir()
+        file2.parent.mkdir()
+        file1.write_text("content1", encoding="utf-8")
+        file2.write_text("content2", encoding="utf-8")
+
+        manager.archive_run(
+            run_id="duprun",
+            suite_name="Dup",
+            env="dev",
+            timestamp="2026-03-02T00:00:00Z",
+            files=[str(file1), str(file2)],
+        )
+
+        run_dir = archive_dir / "2026" / "03" / "02" / "duprun"
+        manifest = json.loads((run_dir / "duprun_manifest.json").read_text(encoding="utf-8"))
+        # Both files should be in manifest with distinct names
+        assert len(manifest["files"]) == 2
+        names = {f["name"] for f in manifest["files"]}
+        assert "report.html" in names
+        assert "report_1.html" in names
+        # Both files should exist in the archive dir
+        assert (run_dir / "report.html").exists()
+        assert (run_dir / "report_1.html").exists()
+
 
 class TestListRuns:
     def test_returns_empty_when_no_archive(self, manager):
