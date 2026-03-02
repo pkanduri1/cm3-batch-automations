@@ -9,7 +9,8 @@ This is the **single source of truth** for docs navigation.
 - `docs/architecture.md` — architecture and flow diagrams
 
 ## Core Operational Docs
-- `docs/TESTING_GUIDE.md` — test strategy and commands
+- `docs/E2E_TESTING_GUIDE.md` — **end-to-end walkthrough** (CLI, Web UI, CI/CD triggers, api_check)
+- `docs/TESTING_GUIDE.md` — test strategy and unit/integration commands
 - `docs/CICD_GUIDE.md` — CI/CD setup and behavior
 - `docs/PIPELINE_REGRESSION_GUIDE.md` — pipeline regression flows
 - `docs/GREAT_EXPECTATIONS_CHECKPOINT1.md` — BA-friendly GE usage
