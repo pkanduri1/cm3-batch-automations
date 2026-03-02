@@ -330,6 +330,8 @@ cm3-batch validate --help
 python3 -m pytest tests/unit/ -q
 ```
 
+> **About the sample files in `data/samples/`:** These are synthetic files generated for unit testing and developer onboarding only. They are not representative of real Shaw batch files and are intentionally incomplete — for example, `customers.txt` is missing a column present in the mapping, and `transactions.txt` uses simplified field widths. Running `validate` against them will produce errors. Use your own batch extract files and the corresponding mapping JSON from `config/mappings/` for real validation work.
+
 ---
 
 ## Troubleshooting
