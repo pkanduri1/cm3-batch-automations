@@ -534,6 +534,31 @@ tests:
 
 **Exit codes:** 0 = all tests passed, 1 = one or more tests failed or errored.
 
+### Listing archived runs
+
+```bash
+cm3-batch list-runs            # show latest 20 runs
+cm3-batch list-runs --limit 5  # show latest 5 runs
+```
+
+Lists all archived suite runs, newest first. Runs older than `REPORT_RETENTION_DAYS` (default 365) are purged automatically on each call.
+
+### Inspecting a specific run
+
+```bash
+cm3-batch get-run <run_id>
+```
+
+Prints the SHA-256 manifest for the given run and lists all archived file paths. Exits with code 1 if the run ID is not found.
+
+### Tamper-evident archive
+
+Every suite run is automatically archived to `reports/archive/YYYY/MM/DD/{run_id}/` with a SHA-256 manifest. The manifest covers all report files and itself, allowing auditors to detect post-run tampering.
+
+Environment variables:
+- `REPORT_ARCHIVE_PATH` (default: `reports/archive`) — root of the archive tree
+- `REPORT_RETENTION_DAYS` (default: `365`) — runs older than this are deleted by `list-runs`
+
 ### API Check Tests
 
 Use `type: api_check` to validate external HTTP endpoints in your suite:
@@ -1049,6 +1074,8 @@ cm3-batch validate -f <file>            # Validate file
 cm3-batch convert-rules -t <template>   # Convert rules
 cm3-batch extract -t <table>            # Extract from DB
 cm3-batch reconcile -m <mapping>        # Reconcile mapping
+cm3-batch list-runs                     # List archived suite runs
+cm3-batch get-run <run_id>              # Inspect a specific run
 ```
 
 ### API Endpoints
@@ -1154,3 +1181,7 @@ Upload an Excel or CSV template to generate JSON config files without using the 
 
 **BA-friendly required columns:** `Rule ID`, `Rule Name`, `Field`, `Rule Type`, `Severity`, `Expected / Values`, `Enabled`
 **Technical required columns:** `Rule ID`, `Rule Name`, `Description`, `Type`, `Severity`, `Operator`
+
+### UI tooltips
+
+Hover over any button, dropdown, or upload zone to see a contextual tooltip describing what it does.

@@ -167,3 +167,7 @@ Reporting & Utilities
 .. automodule:: src.utils.memory_monitor
    :members:
    :undoc-members:
+
+.. automodule:: src.utils.archive
+   :members:
+   :undoc-members:
