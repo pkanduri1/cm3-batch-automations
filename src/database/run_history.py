@@ -35,12 +35,32 @@ FETCH FIRST :limit ROWS ONLY
 
 
 def _parse_ts(ts_str: str) -> datetime:
-    """Parse ISO-8601 UTC string (with or without trailing Z) to datetime."""
+    """Parse ISO-8601 UTC string (with or without trailing Z) to aware datetime.
+
+    Args:
+        ts_str: UTC timestamp string, e.g. ``'2026-03-02T10:00:00.000000Z'``.
+
+    Returns:
+        Timezone-aware datetime in UTC.
+
+    Raises:
+        ValueError: If ts_str contains an explicit non-UTC offset.
+    """
+    if "+" in ts_str:
+        raise ValueError(f"_parse_ts expects a UTC string, got: {ts_str!r}")
     return datetime.fromisoformat(ts_str.rstrip("Z")).replace(tzinfo=timezone.utc)
 
 
 def _ts_to_iso(value: Any) -> Any:
-    """Convert a datetime to ISO-8601 string; pass non-datetime values through."""
+    """Convert a datetime to ISO-8601 UTC string; pass non-datetime values through.
+
+    Args:
+        value: A datetime instance or any other value.
+
+    Returns:
+        ISO-8601 string ending in ``'Z'`` if value is a datetime,
+        otherwise the original value unchanged.
+    """
     if isinstance(value, datetime):
         ts = value.astimezone(timezone.utc)
         return ts.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"

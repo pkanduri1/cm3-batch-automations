@@ -32,13 +32,14 @@ SAMPLE_RESULTS = [
 def _make_repo():
     """Return a RunHistoryRepository with a fully mocked OracleConnection."""
     from src.database.run_history import RunHistoryRepository
-    mock_conn = MagicMock()
+    mock_conn = MagicMock()          # stands in for OracleConnection (the wrapper)
+    mock_raw_conn = MagicMock()      # stands in for the raw oracledb.Connection
     mock_cursor = MagicMock()
-    mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+    mock_conn.__enter__ = MagicMock(return_value=mock_raw_conn)
     mock_conn.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
+    mock_raw_conn.cursor.return_value = mock_cursor
     repo = RunHistoryRepository(conn=mock_conn)
-    return repo, mock_conn, mock_cursor
+    return repo, mock_raw_conn, mock_cursor
 
 
 class TestInsertRun:
@@ -62,9 +63,9 @@ class TestInsertRun:
         assert params["run_timestamp"].tzinfo is not None
 
     def test_commits_after_insert(self):
-        repo, mock_conn, mock_cursor = _make_repo()
+        repo, mock_raw_conn, mock_cursor = _make_repo()
         repo.insert_run(SAMPLE_ENTRY)
-        mock_conn.commit.assert_called_once()
+        mock_raw_conn.commit.assert_called_once()
 
 
 class TestInsertTests:
@@ -85,9 +86,9 @@ class TestInsertTests:
         mock_cursor.executemany.assert_not_called()
 
     def test_commits_after_insert(self):
-        repo, mock_conn, mock_cursor = _make_repo()
+        repo, mock_raw_conn, mock_cursor = _make_repo()
         repo.insert_tests("abc-123", SAMPLE_RESULTS)
-        mock_conn.commit.assert_called_once()
+        mock_raw_conn.commit.assert_called_once()
 
 
 class TestFetchHistory:
