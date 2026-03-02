@@ -1,10 +1,17 @@
 """Web UI router — serves the single-page tester UI and run history API."""
 
 import json
+import logging
+import os
 from pathlib import Path
 
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, JSONResponse
+
+try:
+    from src.services.run_history_service import fetch_history_from_db
+except ImportError:
+    fetch_history_from_db = None  # type: ignore[assignment]
 
 router = APIRouter()
 
@@ -32,10 +39,8 @@ async def serve_ui() -> HTMLResponse:
 async def get_run_history() -> JSONResponse:
     """Return the last 20 suite run history entries.
 
-    Reads ``reports/run_history.json`` from the working directory, reverses
-    the list so the most-recent entry comes first, and caps the result at 20
-    entries.  Returns an empty list when the file does not exist or cannot
-    be parsed.
+    Reads from Oracle DB when ORACLE_USER is configured,
+    with automatic fallback to reports/run_history.json.
 
     Returns:
         JSONResponse: A JSON array of run result dicts (most recent first,
@@ -43,6 +48,15 @@ async def get_run_history() -> JSONResponse:
         environment, timestamp, status, report_url, pass_count, fail_count,
         skip_count, total_count.
     """
+    if os.getenv("ORACLE_USER") and fetch_history_from_db is not None:
+        try:
+            return JSONResponse(content=fetch_history_from_db(limit=20))
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "run_history DB read failed, falling back to JSON: %s", exc
+            )
+
+    # JSON fallback
     if not _RUN_HISTORY_PATH.exists():
         return JSONResponse(content=[])
     try:

@@ -25,3 +25,18 @@ def write_run_to_db(
     repo = RunHistoryRepository()
     repo.insert_run(entry)
     repo.insert_tests(run_id, results)
+
+
+def fetch_history_from_db(limit: int = 20) -> list[dict]:
+    """Return the most recent run summaries from Oracle.
+
+    Args:
+        limit: Maximum number of rows to return (default 20).
+
+    Returns:
+        List of run summary dicts, newest first.
+    """
+    from src.database.run_history import RunHistoryRepository
+
+    repo = RunHistoryRepository()
+    return repo.fetch_history(limit=limit)
