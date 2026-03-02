@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 import shutil
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Body
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Body
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
@@ -73,7 +73,8 @@ async def detect_format(file: UploadFile = File(...)):
 @router.post("/parse", response_model=FileParseResult)
 async def parse_file(
     file: UploadFile = File(...),
-    request: FileParseRequest = Body(...),
+    mapping_id: str = Form(...),
+    output_format: str = Form("csv"),
 ):
     """Parse file using specified mapping.
 
@@ -84,9 +85,9 @@ async def parse_file(
         shutil.copyfileobj(file.file, buffer)
 
     try:
-        mapping_file = MAPPINGS_DIR / f"{request.mapping_id}.json"
+        mapping_file = MAPPINGS_DIR / f"{mapping_id}.json"
         if not mapping_file.exists():
-            raise HTTPException(status_code=404, detail=f"Mapping '{request.mapping_id}' not found")
+            raise HTTPException(status_code=404, detail=f"Mapping '{mapping_id}' not found")
 
         parsed = run_parse_service(
             file_path=str(upload_path),
@@ -116,7 +117,11 @@ async def parse_file(
 @router.post("/validate", response_model=FileValidationResult)
 async def validate_file(
     file: UploadFile = File(...),
-    request: FileValidateRequest = Body(...),
+    mapping_id: str = Form(...),
+    detailed: bool = Form(True),
+    strict_fixed_width: bool = Form(False),
+    strict_level: str = Form("format"),
+    output_html: bool = Form(True),
 ):
     """Validate a file against a mapping with optional strict mode.
 
@@ -127,19 +132,19 @@ async def validate_file(
         shutil.copyfileobj(file.file, buffer)
 
     try:
-        mapping_file = MAPPINGS_DIR / f"{request.mapping_id}.json"
+        mapping_file = MAPPINGS_DIR / f"{mapping_id}.json"
         if not mapping_file.exists():
-            raise HTTPException(status_code=404, detail=f"Mapping '{request.mapping_id}' not found")
+            raise HTTPException(status_code=404, detail=f"Mapping '{mapping_id}' not found")
 
-        report_path = UPLOADS_DIR / f"validate_{upload_path.stem}.html" if request.output_html else None
+        report_path = UPLOADS_DIR / f"validate_{upload_path.stem}.html" if output_html else None
 
         result = run_validate_service(
             file=str(upload_path),
             mapping=str(mapping_file),
             output=str(report_path) if report_path else None,
-            detailed=request.detailed,
-            strict_fixed_width=request.strict_fixed_width,
-            strict_level=request.strict_level,
+            detailed=detailed,
+            strict_fixed_width=strict_fixed_width,
+            strict_level=strict_level,
         )
 
         return FileValidationResult(
@@ -202,7 +207,9 @@ def _run_compare_with_mapping(
 async def compare_files(
     file1: UploadFile = File(...),
     file2: UploadFile = File(...),
-    request: FileCompareRequest = Body(...),
+    mapping_id: str = Form(...),
+    key_columns: str = Form(""),
+    detailed: bool = Form(True),
 ):
     """Compare two files and return a diff report.
 
@@ -215,6 +222,9 @@ async def compare_files(
         shutil.copyfileobj(file1.file, buffer)
     with open(upload_path2, "wb") as buffer:
         shutil.copyfileobj(file2.file, buffer)
+
+    keys_list = [k.strip() for k in key_columns.split(",") if k.strip()]
+    request = FileCompareRequest(mapping_id=mapping_id, key_columns=keys_list, detailed=detailed)
 
     try:
         return _run_compare_with_mapping(upload_path1, upload_path2, request)
@@ -254,7 +264,9 @@ async def _run_compare_job(
 async def compare_files_async(
     file1: UploadFile = File(...),
     file2: UploadFile = File(...),
-    request: FileCompareRequest = Body(...),
+    mapping_id: str = Form(...),
+    key_columns: str = Form(""),
+    detailed: bool = Form(True),
 ):
     """Create an async compare job and return the job ID.
 
@@ -268,6 +280,9 @@ async def compare_files_async(
         shutil.copyfileobj(file1.file, buffer)
     with open(upload_path2, "wb") as buffer:
         shutil.copyfileobj(file2.file, buffer)
+
+    keys_list = [k.strip() for k in key_columns.split(",") if k.strip()]
+    request = FileCompareRequest(mapping_id=mapping_id, key_columns=keys_list, detailed=detailed)
 
     _COMPARE_JOBS[job_id] = {"status": "queued", "result": None, "error": None}
     task = asyncio.create_task(_run_compare_job(job_id, upload_path1, upload_path2, request))

@@ -64,7 +64,7 @@ class FileValidationResult(BaseModel):
     valid_rows: int
     invalid_rows: int
     errors: List[Dict[str, Any]] = []
-    warnings: List[str] = []
+    warnings: List[Any] = []
     quality_score: Optional[float] = None
     report_url: Optional[str] = None
 

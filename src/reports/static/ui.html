@@ -614,25 +614,22 @@ document.getElementById('btnValidate').addEventListener('click', async function(
   this.disabled = true;
 
   try {
-    var requestBlob = new Blob(
-      [JSON.stringify({ mapping_id: mapping, output_format: 'csv' })],
-      { type: 'application/json' }
-    );
     var fd = new FormData();
     fd.append('file', primaryFile);
-    fd.append('request', requestBlob);
+    fd.append('mapping_id', mapping);
 
-    var resp = await fetch('/api/v1/files/parse', { method: 'POST', body: fd });
+    var resp = await fetch('/api/v1/files/validate', { method: 'POST', body: fd });
     if (!resp.ok) {
       var errData = await resp.json().catch(function() { return { detail: resp.statusText }; });
       throw new Error(errData.detail || resp.statusText);
     }
     var data = await resp.json();
-    var msg = 'Parsed successfully — ' + data.rows_parsed + ' rows, ' + data.columns + ' columns.';
-    if (data.download_url) {
-      setStatusWithLink(msg, 'success', 'Download CSV', data.download_url);
+    var msg = 'Validated — ' + data.valid_rows + '/' + data.total_rows + ' rows valid'
+      + (data.invalid_rows ? ' (' + data.invalid_rows + ' errors)' : '') + '.';
+    if (data.report_url) {
+      setStatusWithLink(msg, data.valid ? 'success' : 'error', 'Open report', data.report_url);
     } else {
-      setStatusText(msg, 'success');
+      setStatusText(msg, data.valid ? 'success' : 'error');
     }
   } catch (err) {
     setStatusText('Error: ' + err.message, 'error');
@@ -653,14 +650,12 @@ document.getElementById('btnCompare').addEventListener('click', async function()
   this.disabled = true;
 
   try {
-    var requestBlob = new Blob(
-      [JSON.stringify({ mapping_id: mapping, key_columns: [], detailed: true })],
-      { type: 'application/json' }
-    );
     var fd = new FormData();
     fd.append('file1', primaryFile);
     fd.append('file2', secondaryFile);
-    fd.append('request', requestBlob);
+    fd.append('mapping_id', mapping);
+    fd.append('key_columns', '');
+    fd.append('detailed', 'true');
 
     var resp = await fetch('/api/v1/files/compare', { method: 'POST', body: fd });
     if (!resp.ok) {
