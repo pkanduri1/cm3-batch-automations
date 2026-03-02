@@ -285,7 +285,7 @@ This creates:
 | `CM3INT.CM3_RUN_HISTORY` | One row per suite run — run ID, suite name, environment, status, pass/fail counts, report URL |
 | `CM3INT.CM3_RUN_TESTS` | One row per individual test within a run — test name, type, status, row count, duration |
 
-> **Note:** The tool does not yet write to these tables automatically. They are provided as the target schema for a future database-backed history feature. In the meantime, you can load data from `reports/run_history.json` using a SQL\*Loader or Python ETL script.
+> **Enabling DB run history:** Once the tables are created, set `ORACLE_USER`, `ORACLE_PASSWORD`, and `ORACLE_DSN` in your `.env` file. The tool will automatically dual-write every suite run to both `reports/run_history.json` (always) and the Oracle tables (when Oracle is configured). The Recent Runs UI and `GET /api/v1/runs/history` will read from the DB when available, with automatic fallback to JSON if the DB is unreachable.
 
 **Useful queries once populated:**
 

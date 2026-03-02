@@ -501,6 +501,8 @@ cm3-batch run-tests --suite config/test_suites/p327_uat.yaml \
   --output-dir reports
 ```
 
+> **Run history storage:** Results are always written to `reports/run_history.json`. When `ORACLE_USER` is set in `.env`, each run is also persisted to `CM3INT.CM3_RUN_HISTORY` and `CM3INT.CM3_RUN_TESTS` in Oracle. The Recent Runs tab in the Web UI reads from the DB when available, falling back to the JSON file. See [Database Setup](INSTALL.md#database-setup) in the install guide for table setup instructions.
+
 **Suite YAML format:**
 ```yaml
 name: P327 UAT Suite

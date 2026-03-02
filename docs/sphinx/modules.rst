@@ -43,6 +43,10 @@ Database
    :members:
    :undoc-members:
 
+.. automodule:: src.database.run_history
+   :members:
+   :undoc-members:
+
 Parsers
 -------
 
@@ -142,6 +146,13 @@ Runs
 ~~~~
 
 .. automodule:: src.api.routers.runs
+   :members:
+   :undoc-members:
+
+Services
+--------
+
+.. automodule:: src.services.run_history_service
    :members:
    :undoc-members:
 
