@@ -587,3 +587,72 @@ class TestArchiveIntegration:
         history = json.loads(Path(found[0]).read_text(encoding="utf-8"))
         assert len(history) == 1
         assert history[0]["archive_path"] == ""
+
+
+class TestRunHistoryDbWrite:
+    """Verify _append_run_history dual-writes to Oracle when ORACLE_USER is set."""
+
+    def _run_suite(self, tmp_path, monkeypatch, env_vars=None):
+        """Helper: run a minimal api_check suite and return the output_dir."""
+        import yaml
+        from src.commands.run_tests_command import run_suite_from_path
+        import src.utils.archive as archive_mod
+
+        monkeypatch.setattr(
+            archive_mod.ArchiveManager, "archive_run",
+            lambda self_inner, **kwargs: tmp_path,
+        )
+        for k, v in (env_vars or {}).items():
+            monkeypatch.setenv(k, v)
+
+        suite_yaml = tmp_path / "suite.yaml"
+        suite_yaml.write_text(
+            yaml.dump({
+                "name": "DB Test Suite",
+                "environment": "dev",
+                "tests": [{"name": "ping", "type": "api_check", "url": "http://localhost:9999/nope"}],
+            }),
+            encoding="utf-8",
+        )
+        output_dir = tmp_path / "reports"
+        output_dir.mkdir()
+        run_suite_from_path(suite_path=str(suite_yaml), params={}, env="dev", output_dir=str(output_dir))
+        return output_dir
+
+    def test_db_write_called_when_oracle_user_set(self, tmp_path, monkeypatch):
+        """RunHistoryRepository.insert_run is called when ORACLE_USER is set."""
+        from unittest.mock import MagicMock, patch
+
+        mock_repo = MagicMock()
+        with patch("src.commands.run_tests_command.RunHistoryRepository", return_value=mock_repo):
+            self._run_suite(tmp_path, monkeypatch, env_vars={"ORACLE_USER": "CM3INT"})
+
+        mock_repo.insert_run.assert_called_once()
+        mock_repo.insert_tests.assert_called_once()
+
+    def test_db_write_skipped_when_oracle_user_not_set(self, tmp_path, monkeypatch):
+        """RunHistoryRepository is NOT instantiated when ORACLE_USER is absent."""
+        monkeypatch.delenv("ORACLE_USER", raising=False)
+        from unittest.mock import patch
+
+        with patch("src.commands.run_tests_command.RunHistoryRepository") as mock_cls:
+            self._run_suite(tmp_path, monkeypatch)
+
+        mock_cls.assert_not_called()
+
+    def test_json_written_even_if_db_raises(self, tmp_path, monkeypatch):
+        """JSON history must be written even if the DB insert raises."""
+        import json, glob
+        from pathlib import Path
+        from unittest.mock import MagicMock, patch
+
+        mock_repo = MagicMock()
+        mock_repo.insert_run.side_effect = RuntimeError("ORA-12170: connection timeout")
+
+        with patch("src.commands.run_tests_command.RunHistoryRepository", return_value=mock_repo):
+            output_dir = self._run_suite(tmp_path, monkeypatch, env_vars={"ORACLE_USER": "CM3INT"})
+
+        found = glob.glob(str(tmp_path / "**" / "run_history.json"), recursive=True)
+        assert found, "run_history.json must be written even after DB failure"
+        history = json.loads(Path(found[0]).read_text(encoding="utf-8"))
+        assert len(history) == 1

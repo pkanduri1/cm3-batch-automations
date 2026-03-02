@@ -16,6 +16,11 @@ from src.contracts.test_suite import TestConfig, TestSuiteConfig
 from src.reports.renderers.suite_renderer import SuiteReporter
 from src.utils.params import resolve_params
 
+try:
+    from src.database.run_history import RunHistoryRepository
+except ImportError:  # module not yet present in all environments
+    RunHistoryRepository = None  # type: ignore[assignment,misc]
+
 
 def _run_api_check_test(test: TestConfig, params: dict) -> dict:
     """Execute an HTTP API check test.
@@ -465,6 +470,18 @@ def _append_run_history(
             existing = []
     existing.append(entry)
     history_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+
+    # Dual-write to Oracle when ORACLE_USER is configured.
+    if os.getenv("ORACLE_USER") and RunHistoryRepository is not None:
+        try:
+            repo = RunHistoryRepository()
+            repo.insert_run(entry)
+            repo.insert_tests(run_id, results)
+        except Exception as exc:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning(
+                "run_history DB write failed (JSON fallback still written): %s", exc
+            )
 
 
 def run_suite_from_path(
