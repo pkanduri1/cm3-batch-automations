@@ -73,7 +73,7 @@ def delete(path: str, **kwargs) -> httpx.Response:
 
 def expect(label: str, resp: httpx.Response, status: int,
            body_checks: dict[str, Any] | None = None) -> Any:
-    """Run status + optional body checks; return parsed JSON or None."""
+    """Record status check and optional body checks via check(); return parsed JSON or None."""
     ok = resp.status_code == status
     detail = "" if ok else f"expected {status}, got {resp.status_code}: {resp.text[:200]}"
     check(label, ok, detail)
@@ -81,7 +81,8 @@ def expect(label: str, resp: httpx.Response, status: int,
         return None
     try:
         data = resp.json()
-    except Exception:
+    except Exception as exc:
+        check(f"  {label} → JSON parse", False, str(exc))
         return None
     if body_checks:
         for key, val in body_checks.items():
@@ -154,7 +155,10 @@ def test_mappings() -> None:
         check("  /mappings/ → returns list", isinstance(data, list))
 
     # Get specific mapping
-    if mapping_id:
+    if not mapping_id:
+        check("GET /api/v1/mappings/{id}", False, "no mapping_id from upload")
+        check("DELETE /api/v1/mappings/{id}", False, "no mapping_id from upload")
+    else:
         r = get(f"/api/v1/mappings/{mapping_id}")
         expect(f"GET /api/v1/mappings/{{id}}", r, 200)
 
@@ -268,7 +272,9 @@ def test_files() -> None:
         job_id = data.get("job_id") or data.get("id")
         check("  compare-async → job_id present", bool(job_id))
 
-    if job_id:
+    if not job_id:
+        check("GET /api/v1/files/compare-jobs/{id}", False, "no job_id returned by compare-async")
+    else:
         # Poll up to 30 s
         status = None
         for _ in range(15):
@@ -299,7 +305,9 @@ def test_rules() -> None:
         rules_id = data.get("rules_id") or data.get("id")
         check("  /rules/upload → rules_id present", bool(rules_id), f"got {data!r}")
 
-    if rules_id:
+    if not rules_id:
+        check("GET /api/v1/rules/{id}.json", False, "no rules_id from upload")
+    else:
         r = get(f"/api/v1/rules/{rules_id}.json")
         data = expect(f"GET /api/v1/rules/{{id}}.json", r, 200)
         if data:
@@ -442,13 +450,19 @@ def run_api_tests(out_dir: Path) -> dict:
     global _results
     _results = []
 
-    test_root_and_static()
-    test_system()
-    test_mappings()
-    test_files()
-    test_rules()
-    test_runs()
-    test_api_tester()
+    for _group_name, _group_fn in [
+        ("Root & Static", test_root_and_static),
+        ("System", test_system),
+        ("Mappings", test_mappings),
+        ("Files", test_files),
+        ("Rules", test_rules),
+        ("Runs", test_runs),
+        ("API Tester", test_api_tester),
+    ]:
+        try:
+            _group_fn()
+        except Exception as _exc:
+            check(f"{_group_name} group — unexpected error", False, str(_exc))
 
     passed = sum(1 for r in _results if r["status"] == "PASS")
     failed = sum(1 for r in _results if r["status"] == "FAIL")
