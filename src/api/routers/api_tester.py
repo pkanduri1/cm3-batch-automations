@@ -19,7 +19,7 @@ from src.api.models.api_tester import (
 
 router = APIRouter(prefix="/api/v1/api-tester", tags=["API Tester"])
 
-SUITES_DIR = Path("config/api-tester/suites")
+SUITES_DIR = Path(__file__).parent.parent.parent.parent / "config" / "api-tester" / "suites"
 SUITES_DIR.mkdir(parents=True, exist_ok=True)
 
 
