@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 from pathlib import Path
 from typing import List
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
@@ -21,6 +23,8 @@ router = APIRouter(prefix="/api/v1/api-tester", tags=["API Tester"])
 
 SUITES_DIR = Path(__file__).parent.parent.parent.parent / "config" / "api-tester" / "suites"
 SUITES_DIR.mkdir(parents=True, exist_ok=True)
+
+_UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
 
 
 # ---------------------------------------------------------------------------
@@ -54,7 +58,10 @@ async def proxy_request(
 
     method = cfg.get("method", "GET").upper()
     url = cfg.get("url", "")
-    timeout = int(cfg.get("timeout", 30))
+    try:
+        timeout = max(1, min(120, int(cfg.get("timeout", 30))))
+    except (ValueError, TypeError):
+        timeout = 30
     body_type = cfg.get("body_type", "none")
 
     # Build headers dict, strip Content-Type so httpx sets it correctly per body type
@@ -63,6 +70,13 @@ async def proxy_request(
         for h in cfg.get("headers", [])
         if h.get("key") and h["key"].lower() != "content-type"
     }
+
+    # Validate URL scheme to prevent file:// and other non-HTTP(S) schemes
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=422, detail="Only http and https URLs are supported")
+    if not parsed.netloc:
+        raise HTTPException(status_code=422, detail="Invalid URL: missing host")
 
     try:
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as http:
@@ -112,6 +126,10 @@ async def proxy_request(
         )
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail={"error": "timeout"})
+    except httpx.TooManyRedirects:
+        raise HTTPException(status_code=502, detail={"error": "too_many_redirects"})
+    except httpx.InvalidURL as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid URL: {exc}")
 
     try:
         body_text = resp.text
@@ -134,11 +152,16 @@ def _suite_path(suite_id: str) -> Path:
     """Return the filesystem path for a suite JSON file.
 
     Args:
-        suite_id: The UUID of the suite.
+        suite_id: The UUID of the suite (must match standard UUID format).
 
     Returns:
         Path to the suite's JSON file within SUITES_DIR.
+
+    Raises:
+        HTTPException: 400 if suite_id is not a valid UUID format.
     """
+    if not _UUID_RE.match(suite_id):
+        raise HTTPException(status_code=400, detail="Invalid suite_id format")
     return SUITES_DIR / f"{suite_id}.json"
 
 
@@ -181,7 +204,7 @@ def list_suites():
                 base_url=data["base_url"],
                 request_count=len(data.get("requests", [])),
             ))
-        except Exception:
+        except (json.JSONDecodeError, KeyError, ValueError):
             continue
     return suites
 

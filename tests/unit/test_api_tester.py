@@ -76,23 +76,57 @@ class TestProxy:
         resp = client.post("/api/v1/api-tester/proxy", data={})
         assert resp.status_code == 422
 
+    def test_proxy_file_scheme_rejected_422(self):
+        """file:// URLs are rejected with 422 to prevent SSRF file reads."""
+        resp = client.post(
+            "/api/v1/api-tester/proxy",
+            data={"config": json.dumps({"method": "GET", "url": "file:///etc/passwd"})},
+        )
+        assert resp.status_code == 422
+        assert "http" in resp.json()["detail"].lower()
+
+    def test_proxy_ftp_scheme_rejected_422(self):
+        """ftp:// URLs are also rejected with 422."""
+        resp = client.post(
+            "/api/v1/api-tester/proxy",
+            data={"config": json.dumps({"method": "GET", "url": "ftp://example.com/file"})},
+        )
+        assert resp.status_code == 422
+
 
 class TestSuiteCRUD:
-    def test_list_suites_returns_list(self):
+    def test_list_suites_returns_list(self, tmp_path, monkeypatch):
+        """list_suites returns empty list when directory is empty, then one entry after create."""
+        monkeypatch.setattr("src.api.routers.api_tester.SUITES_DIR", tmp_path)
+
         resp = client.get("/api/v1/api-tester/suites")
         assert resp.status_code == 200
-        assert isinstance(resp.json(), list)
+        assert resp.json() == []
+
+        payload = {"name": "Listed Suite", "base_url": "http://example.com", "requests": []}
+        client.post("/api/v1/api-tester/suites", json=payload)
+
+        resp2 = client.get("/api/v1/api-tester/suites")
+        assert resp2.status_code == 200
+        assert len(resp2.json()) == 1
 
     def test_create_and_get_suite(self, tmp_path, monkeypatch):
         monkeypatch.setattr("src.api.routers.api_tester.SUITES_DIR", tmp_path)
         payload = {"name": "Test Suite", "base_url": "http://localhost", "requests": []}
         resp = client.post("/api/v1/api-tester/suites", json=payload)
         assert resp.status_code == 201
-        suite_id = resp.json()["id"]
+        created = resp.json()
+        suite_id = created["id"]
+        assert suite_id  # non-empty
+        assert created["base_url"] == "http://localhost"
+        assert created["requests"] == []
 
         resp2 = client.get(f"/api/v1/api-tester/suites/{suite_id}")
         assert resp2.status_code == 200
         assert resp2.json()["name"] == "Test Suite"
+        assert resp2.json()["id"] == suite_id
+        assert resp2.json()["base_url"] == "http://localhost"
+        assert resp2.json()["requests"] == []
 
     def test_update_suite(self, tmp_path, monkeypatch):
         monkeypatch.setattr("src.api.routers.api_tester.SUITES_DIR", tmp_path)
@@ -115,6 +149,19 @@ class TestSuiteCRUD:
         resp2 = client.get(f"/api/v1/api-tester/suites/{suite_id}")
         assert resp2.status_code == 404
 
-    def test_get_nonexistent_suite_returns_404(self):
-        resp = client.get("/api/v1/api-tester/suites/nonexistent-id")
+    def test_get_nonexistent_suite_returns_404(self, tmp_path, monkeypatch):
+        """A valid-format UUID that has no backing file returns 404."""
+        monkeypatch.setattr("src.api.routers.api_tester.SUITES_DIR", tmp_path)
+        resp = client.get("/api/v1/api-tester/suites/00000000-0000-0000-0000-000000000000")
         assert resp.status_code == 404
+
+    def test_get_invalid_suite_id_returns_400(self):
+        """A non-UUID suite_id returns 400 (guards against path traversal via suite_id).
+
+        Note: URL-level path traversal (../../../etc) is normalized by Starlette before
+        reaching the handler. This test verifies the UUID regex in _suite_path rejects
+        any non-UUID string that does reach the handler.
+        """
+        resp = client.get("/api/v1/api-tester/suites/not-a-valid-uuid")
+        assert resp.status_code == 400
+        assert "Invalid suite_id" in resp.json()["detail"]
