@@ -95,4 +95,4 @@ def test_chunked_validate_detects_errors_in_bad_data(tmp_path):
 
     result = run_validate_service(file=str(data_file), mapping=str(mapping_file), use_chunked=True)
     assert result["error_count"] > 0, "Expected errors for non-integer age value"
-    assert result["valid"] is False
+    assert result["valid"] == False

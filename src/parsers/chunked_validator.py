@@ -94,50 +94,79 @@ def _validate_chunk_worker(
             if empty_count > 0:
                 stats['empty_strings'][col] = empty_count
 
-    if strict_fixed_width and strict_fields and strict_level in {'format', 'all'}:
+    if strict_fields:
         row_base = (chunk_num - 1) * chunk_size
         for local_idx, row in chunk.reset_index(drop=True).iterrows():
             row_num = row_base + local_idx + 1
+            # --- data-type checks ---
             for field in strict_fields:
                 name = field.get('name')
-                if name not in chunk.columns:
+                dtype = str(field.get('data_type') or '').lower()
+                if not dtype or dtype == 'string' or name not in chunk.columns:
                     continue
                 value = '' if pd.isna(row.get(name)) else str(row.get(name)).strip()
-
-                if field.get('required') and value == '':
+                if not value:
+                    continue
+                if dtype in {'integer', 'int'} and not _is_integer(value):
                     errors.append({
                         'severity': 'error',
-                        'category': 'strict_fixed_width',
-                        'code': 'FW_REQ_001',
-                        'message': f"Required field '{name}' is empty",
+                        'category': 'data_type',
+                        'code': 'DT_INT_001',
+                        'message': f"Field '{name}' expects integer but got '{value}'",
                         'row': row_num,
                         'field': name,
                     })
-                    continue
+                elif dtype in {'float', 'decimal', 'number'} and not _is_float(value):
+                    errors.append({
+                        'severity': 'error',
+                        'category': 'data_type',
+                        'code': 'DT_FLT_001',
+                        'message': f"Field '{name}' expects float but got '{value}'",
+                        'row': row_num,
+                        'field': name,
+                    })
+            # --- strict fixed-width checks ---
+            if strict_fixed_width and strict_level in {'format', 'all'}:
+                for field in strict_fields:
+                    name = field.get('name')
+                    if name not in chunk.columns:
+                        continue
+                    value = '' if pd.isna(row.get(name)) else str(row.get(name)).strip()
 
-                if value and field.get('valid_values'):
-                    allowed = {str(v).strip() for v in (field.get('valid_values') or [])}
-                    if value not in allowed:
+                    if field.get('required') and value == '':
                         errors.append({
                             'severity': 'error',
                             'category': 'strict_fixed_width',
-                            'code': 'FW_VAL_001',
-                            'message': f"Field '{name}' has invalid value '{value}'",
+                            'code': 'FW_REQ_001',
+                            'message': f"Required field '{name}' is empty",
                             'row': row_num,
                             'field': name,
                         })
                         continue
 
-                fmt = str(field.get('format') or '').upper()
-                if value and fmt and not _is_value_valid_for_format(value, fmt):
-                    errors.append({
-                        'severity': 'error',
-                        'category': 'strict_fixed_width',
-                        'code': 'FW_FMT_001',
-                        'message': f"Field '{name}' has invalid format for value '{value}'",
-                        'row': row_num,
-                        'field': name,
-                    })
+                    if value and field.get('valid_values'):
+                        allowed = {str(v).strip() for v in (field.get('valid_values') or [])}
+                        if value not in allowed:
+                            errors.append({
+                                'severity': 'error',
+                                'category': 'strict_fixed_width',
+                                'code': 'FW_VAL_001',
+                                'message': f"Field '{name}' has invalid value '{value}'",
+                                'row': row_num,
+                                'field': name,
+                            })
+                            continue
+
+                    fmt = str(field.get('format') or '').upper()
+                    if value and fmt and not _is_value_valid_for_format(value, fmt):
+                        errors.append({
+                            'severity': 'error',
+                            'category': 'strict_fixed_width',
+                            'code': 'FW_FMT_001',
+                            'message': f"Field '{name}' has invalid format for value '{value}'",
+                            'row': row_num,
+                            'field': name,
+                        })
 
     return {'errors': errors, 'warnings': warnings, 'stats': stats, 'rows': len(chunk)}
 
@@ -577,11 +606,12 @@ class ChunkedFileValidator:
                 if empty_count > 0:
                     stats['empty_strings'][col] = empty_count
 
-        # Data-type checks: run whenever mapping fields carry data_type declarations.
+        # Single-pass row loop: data-type checks and strict fixed-width checks combined.
         if self.strict_fields:
             row_base = (chunk_num - 1) * self.chunk_size
             for local_idx, row in chunk.reset_index(drop=True).iterrows():
                 row_num = row_base + local_idx + 1
+                # --- data-type checks ---
                 for field in self.strict_fields:
                     name = field.get('name')
                     dtype = str(field.get('data_type') or '').lower()
@@ -612,52 +642,48 @@ class ChunkedFileValidator:
                             'row': row_num,
                             'field': name,
                         })
+                # --- strict fixed-width checks ---
+                if self.strict_fixed_width and self.strict_level in {'format', 'all'}:
+                    for field in self.strict_fields:
+                        name = field.get('name')
+                        if name not in chunk.columns:
+                            continue
+                        value = '' if pd.isna(row.get(name)) else str(row.get(name)).strip()
 
-        # Strict field-level checks for fixed-width mappings (chunked mode)
-        if self.strict_fixed_width and self.strict_fields and self.strict_level in {'format', 'all'}:
-            row_base = (chunk_num - 1) * self.chunk_size
-            for local_idx, row in chunk.reset_index(drop=True).iterrows():
-                row_num = row_base + local_idx + 1
-                for field in self.strict_fields:
-                    name = field.get('name')
-                    if name not in chunk.columns:
-                        continue
-                    value = '' if pd.isna(row.get(name)) else str(row.get(name)).strip()
-
-                    if field.get('required') and value == '':
-                        errors.append({
-                            'severity': 'error',
-                            'category': 'strict_fixed_width',
-                            'code': 'FW_REQ_001',
-                            'message': f"Required field '{name}' is empty",
-                            'row': row_num,
-                            'field': name,
-                        })
-                        continue
-
-                    if value and field.get('valid_values'):
-                        allowed = {str(v).strip() for v in (field.get('valid_values') or [])}
-                        if value not in allowed:
+                        if field.get('required') and value == '':
                             errors.append({
                                 'severity': 'error',
                                 'category': 'strict_fixed_width',
-                                'code': 'FW_VAL_001',
-                                'message': f"Field '{name}' has invalid value '{value}'",
+                                'code': 'FW_REQ_001',
+                                'message': f"Required field '{name}' is empty",
                                 'row': row_num,
                                 'field': name,
                             })
                             continue
 
-                    fmt = str(field.get('format') or '').upper()
-                    if value and fmt and not self._is_value_valid_for_format(value, fmt):
-                        errors.append({
-                            'severity': 'error',
-                            'category': 'strict_fixed_width',
-                            'code': 'FW_FMT_001',
-                            'message': f"Field '{name}' has invalid format for value '{value}'",
-                            'row': row_num,
-                            'field': name,
-                        })
+                        if value and field.get('valid_values'):
+                            allowed = {str(v).strip() for v in (field.get('valid_values') or [])}
+                            if value not in allowed:
+                                errors.append({
+                                    'severity': 'error',
+                                    'category': 'strict_fixed_width',
+                                    'code': 'FW_VAL_001',
+                                    'message': f"Field '{name}' has invalid value '{value}'",
+                                    'row': row_num,
+                                    'field': name,
+                                })
+                                continue
+
+                        fmt = str(field.get('format') or '').upper()
+                        if value and fmt and not self._is_value_valid_for_format(value, fmt):
+                            errors.append({
+                                'severity': 'error',
+                                'category': 'strict_fixed_width',
+                                'code': 'FW_FMT_001',
+                                'message': f"Field '{name}' has invalid format for value '{value}'",
+                                'row': row_num,
+                                'field': name,
+                            })
 
         return errors, warnings, stats
     
