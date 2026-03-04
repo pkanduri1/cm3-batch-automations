@@ -138,6 +138,8 @@ cm3-batch compare \
 
 > Chunked comparison requires key columns (`-k/--keys`). Row-by-row mode is not supported in chunked compare.
 
+> **Auto-threshold:** When using the API (`POST /api/v1/files/compare`), files larger than 50 MB are automatically routed to chunked mode — no `--use-chunked` flag needed. Key columns must still be provided for chunked compare to activate.
+
 #### Structure compatibility check
 
 Before any data comparison, the compare service checks that both files are structurally compatible:
@@ -337,6 +339,8 @@ cm3-batch validate \
 
 > Chunked validation supports strict fixed-width field checks, row-level mismatch detection, and progress display.
 
+> **Auto-threshold:** When using the API (`POST /api/v1/files/validate`), files larger than 50 MB are automatically routed to chunked mode — no `--use-chunked` flag needed.
+
 #### Parallel chunked validation
 
 ```bash
@@ -349,6 +353,17 @@ cm3-batch validate \
 ```
 
 > In parallel mode (`--workers > 1`), duplicate-row detection is disabled for performance.
+
+#### Data-type checking in chunked validation
+
+When a mapping defines `data_type` on a field, chunked validation checks every value against that type:
+
+| Type | Check |
+|------|-------|
+| `integer` | Value must be a whole number |
+| `float` / `decimal` | Value must be a number |
+
+Violations are reported as `data_type` category errors (e.g. code `DT_INT_001`) with row number and field name, consistent with non-chunked validation output.
 
 #### Validation Report Features
 
