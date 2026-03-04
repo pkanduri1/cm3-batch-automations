@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import UploadFile, HTTPException
 
-from src.api.models.file import FileParseRequest, FileCompareRequest
+
 from src.api.models.mapping import MappingCreate, SourceConfig, FieldSpec
 from src.api.routers.files import detect_format, parse_file, compare_files
 from src.api.routers.mappings import (
@@ -51,7 +51,8 @@ def test_files_router_detect_parse_compare_direct():
         parse_res = asyncio.run(
             parse_file(
                 file=_upload_file("sample_parse.txt", "1|Alice\n2|Bob\n"),
-                request=FileParseRequest(mapping_id=mapping_id, output_format="csv"),
+                mapping_id=mapping_id,
+                output_format="csv",
             )
         )
         assert parse_res.rows_parsed == 2
@@ -60,7 +61,9 @@ def test_files_router_detect_parse_compare_direct():
             compare_files(
                 file1=_upload_file("f1.txt", "1|Alice\n2|Bob\n"),
                 file2=_upload_file("f2.txt", "1|Alice\n3|Charlie\n"),
-                request=FileCompareRequest(mapping_id=mapping_id, key_columns=["id"], detailed=True),
+                mapping_id=mapping_id,
+                key_columns="id",
+                detailed=True,
             )
         )
         assert cmp_res.total_rows_file1 == 2
