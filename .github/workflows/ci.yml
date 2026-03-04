@@ -83,6 +83,7 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     needs: test-and-docs
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -105,23 +106,18 @@ jobs:
       - name: Start server
         run: |
           uvicorn src.api.main:app --host 127.0.0.1 --port 8000 &
-          python - <<'EOF'
-          import time, httpx, sys
-          for i in range(20):
-              try:
-                  r = httpx.get("http://127.0.0.1:8000/api/v1/system/health", timeout=2)
-                  if r.is_success:
-                      print("Server ready")
-                      sys.exit(0)
-              except Exception:
-                  pass
-              time.sleep(0.5)
-          print("Server did not start in time")
-          sys.exit(1)
-          EOF
+          echo $! > /tmp/uvicorn.pid
+          python scripts/wait_for_server.py
 
       - name: Run E2E suite
         run: python3 scripts/e2e_full_ui.py
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f /tmp/uvicorn.pid ]; then
+            kill "$(cat /tmp/uvicorn.pid)" 2>/dev/null || true
+          fi
 
       - name: Upload screenshots on failure
         if: failure()
