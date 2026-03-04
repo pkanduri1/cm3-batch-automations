@@ -1182,6 +1182,26 @@ Copy from the `ci/` directory:
 - `ci/gitlab-cm3-validate.yml` — GitLab CI include template
 - `ci/azure-cm3-validate.yml` — Azure DevOps pipeline task
 
+### E2E Tests (Playwright)
+
+The `e2e` CI job runs `scripts/e2e_full_ui.py` on every push. It starts the
+FastAPI server with uvicorn, waits for the health endpoint, then drives all
+four UI workflows with a headless Chromium browser. Failures block merges.
+
+To run the E2E suite locally (server must already be running on port 8000):
+
+```bash
+# Install Playwright and browser once
+pip install playwright
+playwright install chromium
+
+# Run suite
+python3 scripts/e2e_full_ui.py
+```
+
+Screenshots are written to `screenshots/e2e-full-{date}/`. On CI failure,
+they are uploaded as the `e2e-screenshots` artifact for debugging.
+
 ---
 
 ## Web UI
