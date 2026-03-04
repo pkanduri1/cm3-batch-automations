@@ -30,6 +30,25 @@ from src.reports.renderers.comparison_renderer import HTMLReporter
 
 router = APIRouter()
 
+_CHUNK_THRESHOLD_BYTES: int = 50 * 1024 * 1024  # 50 MB
+
+
+def _should_use_chunked(path: Path) -> bool:
+    """Return True when the file at *path* meets the chunked-processing threshold.
+
+    Args:
+        path: Filesystem path to the uploaded file.
+
+    Returns:
+        True if the file size is >= _CHUNK_THRESHOLD_BYTES, False otherwise
+        (including when the file does not exist).
+    """
+    try:
+        return path.stat().st_size >= _CHUNK_THRESHOLD_BYTES
+    except OSError:
+        return False
+
+
 UPLOADS_DIR = Path("uploads")
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -145,6 +164,7 @@ async def validate_file(
             detailed=detailed,
             strict_fixed_width=strict_fixed_width,
             strict_level=strict_level,
+            use_chunked=_should_use_chunked(upload_path),
         )
 
         return FileValidationResult(
@@ -179,13 +199,18 @@ def _run_compare_with_mapping(
         raise HTTPException(status_code=404, detail=f"Mapping '{request.mapping_id}' not found")
 
     keys = ",".join(request.key_columns) if request.key_columns else None
+    # Enable chunked compare only when key_columns are present (ChunkedFileComparator
+    # requires keys) and at least one file is large enough to warrant it.
+    use_chunked = bool(keys) and (
+        _should_use_chunked(upload_path1) or _should_use_chunked(upload_path2)
+    )
     compare_result = run_compare_service(
         file1=str(upload_path1),
         file2=str(upload_path2),
         keys=keys,
         mapping=str(mapping_file),
         detailed=request.detailed,
-        use_chunked=False,
+        use_chunked=use_chunked,
     )
 
     report_path = UPLOADS_DIR / f"compare_{upload_path1.stem}_{upload_path2.stem}.html"
