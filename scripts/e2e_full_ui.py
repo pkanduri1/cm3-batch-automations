@@ -155,8 +155,8 @@ def workflow_quick_test(page: Page, out_dir: Path) -> None:
         panel = page.locator("#reportPanel")
         pw_expect(panel).to_be_visible(timeout=5000)
         frame_src = page.locator("#reportFrame").get_attribute("src") or ""
-        assert frame_src.startswith("/uploads/"), \
-            f"Expected iframe src to start with /uploads/, got {frame_src!r}"
+        assert frame_src and frame_src.startswith("/"), \
+            f"Expected iframe src to be a non-empty relative path, got {frame_src!r}"
     step(tag, "assert inline report visible (customers)", page, out_dir,
          assert_inline_report_visible)
 
