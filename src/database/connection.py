@@ -34,10 +34,26 @@ class OracleConnection:
 
     def connect(self) -> oracledb.Connection:
         """Establish database connection.
-        
+
         Returns:
-            Oracle connection object
+            Oracle connection object.
+
+        Raises:
+            ValueError: If required DB env variables are missing.
+            ConnectionError: If Oracle driver connection fails.
         """
+        missing = []
+        if not self.username:
+            missing.append("ORACLE_USER")
+        if not self.password:
+            missing.append("ORACLE_PASSWORD")
+        if not self.dsn:
+            missing.append("ORACLE_DSN")
+        if missing:
+            raise ValueError(
+                "Missing required database configuration: " + ", ".join(missing)
+            )
+
         try:
             self.connection = cx_Oracle.connect(
                 user=self.username,
@@ -69,13 +85,15 @@ class OracleConnection:
     @staticmethod
     def from_env() -> "OracleConnection":
         """Create connection from environment variables.
-        
+
+        Defaults preserve local dev compatibility.
+
         Returns:
-            OracleConnection instance
+            OracleConnection instance.
         """
         return OracleConnection(
-            username=os.getenv("ORACLE_USER", ""),
+            username=os.getenv("ORACLE_USER", "CM3INT"),
             password=os.getenv("ORACLE_PASSWORD", ""),
-            dsn=os.getenv("ORACLE_DSN", ""),
+            dsn=os.getenv("ORACLE_DSN", "localhost:1521/FREEPDB1"),
         )
 

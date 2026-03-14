@@ -226,6 +226,7 @@ All configuration is loaded from the `.env` file in the project root. Copy `.env
 | `ORACLE_USER` | `batch_user` | Oracle database username |
 | `ORACLE_PASSWORD` | `s3cr3t` | Oracle database password |
 | `ORACLE_DSN` | `db-host:1521/ORCL` | Connection string — format is `host:port/service_name`. **No Instant Client needed.** |
+| `ORACLE_SCHEMA` | `CM3INT` | Optional schema override for multi-schema environments. |
 | `ENVIRONMENT` | `dev` | One of `dev`, `staging`, `prod`. Controls log verbosity and safety checks. |
 | `LOG_LEVEL` | `INFO` | One of `DEBUG`, `INFO`, `WARNING`, `ERROR`. Use `DEBUG` when troubleshooting. |
 | `FILE_RETENTION_HOURS` | `24` | Uploaded/temp files older than this many hours are removed on startup. Default: `24`. |
@@ -257,6 +258,8 @@ ORACLE_DSN=localhost:1521/FREEPDB1
 ```
 
 The tool uses oracledb **thin mode** — no Oracle Instant Client is required.
+
+When a DB operation is attempted, missing `ORACLE_USER`, `ORACLE_PASSWORD`, or `ORACLE_DSN` now fails fast with a clear configuration error message.
 
 ### Source tables (SHAW→C360 validation)
 
