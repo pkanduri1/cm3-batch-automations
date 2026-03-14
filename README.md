@@ -44,6 +44,12 @@ Automated file parsing, validation, and comparison tool for CM3 batch processing
 - **Installation guide**: `docs/INSTALL.md` — local installation guide (Windows, Linux, VSCode)
 - **Testing**: `docs/TESTING_GUIDE.md`
 
+## 🔐 Configuration Change Control
+
+Configuration artifacts in `config/` should only be changed via pull requests with CODEOWNER approval.
+
+See `docs/CHANGE-MANAGEMENT.md` for required branch protection and approval workflow.
+
 ## Quick Start
 
 For Java multi-step ETL regression orchestration, see:

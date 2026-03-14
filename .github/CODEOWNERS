@@ -1,0 +1,4 @@
+# Configuration ownership
+config/mappings/     @mapping-owners-team
+config/rules/        @business-rules-owners-team
+config/test_suites/  @qa-lead

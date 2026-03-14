@@ -1,0 +1,26 @@
+name: Config Change Validation
+
+on:
+  pull_request:
+    paths:
+      - 'config/**'
+      - 'scripts/validate_changed_configs.py'
+      - '.github/workflows/config-change-validation.yml'
+
+jobs:
+  validate-config-changes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate changed config files
+        run: |
+          python scripts/validate_changed_configs.py
