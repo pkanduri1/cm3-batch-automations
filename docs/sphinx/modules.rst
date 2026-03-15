@@ -216,3 +216,8 @@ Reporting & Utilities
 .. automodule:: src.utils.archive
    :members:
    :undoc-members:
+
+.. automodule:: src.utils.audit_logger
+   :members:
+   :undoc-members:
+

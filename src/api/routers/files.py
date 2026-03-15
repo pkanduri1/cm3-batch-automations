@@ -32,6 +32,7 @@ from src.services.compare_job_store import CompareJobStore
 from src.services.retry_policy import execute_with_retries
 from src.services.metrics_registry import METRICS
 from src.utils.structured_logger import get_structured_logger, log_event
+from src.utils.audit_logger import get_audit_logger, file_sha256
 
 router = APIRouter()
 
@@ -62,6 +63,7 @@ MAPPINGS_DIR = Path("config/mappings")
 # Durable registry for async compare jobs.
 _COMPARE_JOB_STORE = CompareJobStore()
 _LOGGER = get_structured_logger("cm3.files")
+_AUDIT = get_audit_logger()
 
 
 @router.post("/detect", response_model=FileDetectionResult)
@@ -73,6 +75,17 @@ async def detect_format(file: UploadFile = File(...)):
     upload_path = UPLOADS_DIR / file.filename
     with open(upload_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
+
+    _AUDIT.emit(
+        event_type="file.upload",
+        actor="api",
+        detail={
+            "filename": file.filename,
+            "size_bytes": upload_path.stat().st_size,
+            "endpoint": "/api/v1/files/detect",
+            "input_file_hash": file_sha256(upload_path),
+        },
+    )
 
     try:
         detector = FormatDetector()
@@ -156,8 +169,20 @@ async def validate_file(
     with open(upload_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    mapping_file = MAPPINGS_DIR / f"{mapping_id}.json"
+    _AUDIT.emit(
+        event_type="api.test_run",
+        actor="api",
+        detail={
+            "endpoint": "/api/v1/files/validate",
+            "mapping_id": mapping_id,
+            "filename": file.filename,
+            "input_file_hash": file_sha256(upload_path),
+            "mapping_file_hash": file_sha256(mapping_file),
+        },
+    )
+
     try:
-        mapping_file = MAPPINGS_DIR / f"{mapping_id}.json"
         if not mapping_file.exists():
             raise HTTPException(status_code=404, detail=f"Mapping '{mapping_id}' not found")
 

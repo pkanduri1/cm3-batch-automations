@@ -1002,6 +1002,19 @@ with open("data.txt", "rb") as f:
 
 ---
 
+
+## Audit Logging (Splunk-ready)
+
+Set `AUDIT_LOG_PATH` to emit one-line JSON audit events for CLI/API test runs, auth failures, uploads, and cleanup operations.
+
+Example:
+
+```bash
+export AUDIT_LOG_PATH=logs/audit.log
+```
+
+See [Splunk Setup](splunk-setup.md) for forwarder and search examples.
+
 ## Troubleshooting
 
 ### API Server Won't Start

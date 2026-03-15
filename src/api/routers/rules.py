@@ -12,6 +12,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from src.config.ba_rules_template_converter import BARulesTemplateConverter
 from src.config.rules_template_converter import RulesTemplateConverter
+from src.utils.audit_logger import get_audit_logger, file_sha256
+
+_AUDIT = get_audit_logger()
 
 router = APIRouter()
 
@@ -50,6 +53,18 @@ async def upload_rules_template(
     upload_path = UPLOADS_DIR / file.filename
     with open(upload_path, "wb") as buf:
         shutil.copyfileobj(file.file, buf)
+
+    _AUDIT.emit(
+        event_type="file.upload",
+        actor="api",
+        detail={
+            "filename": file.filename,
+            "size_bytes": upload_path.stat().st_size,
+            "endpoint": "/api/v1/rules/upload",
+            "rules_type": rules_type,
+            "input_file_hash": file_sha256(upload_path),
+        },
+    )
 
     try:
         if rules_type == "technical":
