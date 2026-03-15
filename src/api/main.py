@@ -19,8 +19,10 @@ from src.api.routers.runs import router as runs_router
 from src.api.routers import rules as rules_router_mod
 from src.api.routers.api_tester import router as api_tester_router
 from src.utils.cleanup import cleanup_old_files
+from src.utils.audit_logger import get_audit_logger
 
 logger = logging.getLogger(__name__)
+_audit = get_audit_logger()
 
 FILE_RETENTION_HOURS = float(os.getenv("FILE_RETENTION_HOURS", "24"))
 _UPLOADS_DIR = Path(__file__).parent.parent.parent / "uploads"
@@ -36,6 +38,15 @@ async def lifespan(app: FastAPI):
             "Startup cleanup: removed %d files (%d bytes)",
             result["deleted_count"],
             result["deleted_bytes"],
+        )
+        _audit.emit(
+            event_type="file.cleanup",
+            actor="system",
+            detail={
+                "deleted_count": result["deleted_count"],
+                "deleted_bytes": result["deleted_bytes"],
+                "trigger": "startup",
+            },
         )
     yield
     # Shutdown: nothing needed
@@ -76,6 +87,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+
+
+class AuditMiddleware(BaseHTTPMiddleware):
+    """Emit audit events for API requests that trigger auth failures."""
+
+    async def dispatch(self, request: Request, call_next):
+        """Log auth failures (401/403) with client IP."""
+        response: Response = await call_next(request)
+        if response.status_code in (401, 403):
+            _audit.emit(
+                event_type="api.auth_failure",
+                actor="api",
+                source_ip=request.client.host if request.client else None,
+                detail={
+                    "path": str(request.url.path),
+                    "method": request.method,
+                    "status_code": response.status_code,
+                },
+            )
+        return response
+
+
+app.add_middleware(AuditMiddleware)
 
 # Include routers
 app.include_router(

@@ -50,3 +50,5 @@ This is the **single source of truth** for docs navigation.
 
 ## Redundancy Policy
 When two docs overlap, keep details in the canonical doc above and reduce other files to short pointers.
+
+- [Splunk Setup](splunk-setup.md)

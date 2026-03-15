@@ -15,7 +15,10 @@ import yaml
 
 from src.contracts.test_suite import TestConfig, TestSuiteConfig
 from src.reports.renderers.suite_renderer import SuiteReporter
+from src.utils.audit_logger import get_audit_logger, file_sha256
 from src.utils.params import resolve_params
+
+_AUDIT = get_audit_logger()
 
 try:
     from src.services.run_history_service import write_run_to_db as _db_write_run
@@ -519,13 +522,37 @@ def run_suite_from_path(
         **params,
     }
 
+
     results: list[dict[str, Any]] = []
+    run_input_hashes: list[dict[str, Any]] = []
+
     for test in suite.tests:
         resolved_file = resolve_params(test.file or "", merged_params)
+        resolved_mapping = resolve_params(test.mapping or "", merged_params)
+        run_input_hashes.append(
+            {
+                "test": test.name,
+                "input_file": resolved_file,
+                "input_file_hash": file_sha256(resolved_file),
+                "mapping_file": resolved_mapping,
+                "mapping_file_hash": file_sha256(resolved_mapping),
+            }
+        )
         result = _run_single_test(
             test, resolved_file, output_dir, run_id=run_id, params=merged_params
         )
         results.append(result)
+
+    _AUDIT.emit(
+        event_type="cli.test_run.started",
+        actor="cli",
+        detail={
+            "suite": suite.name,
+            "env": env or suite.environment,
+            "run_id": run_id,
+            "inputs": run_input_hashes,
+        },
+    )
 
     safe_suite_name = re.sub(r"[^\w\-]", "_", suite.name)
     suite_report_path = str(
@@ -572,6 +599,25 @@ def run_suite_from_path(
         env=env or suite.environment,
         archive_path=archive_path_str,
         timestamp=run_timestamp,
+    )
+
+    overall_status_label = _compute_overall_status(results)
+    passed = sum(1 for r in results if r.get("status") == "PASS")
+    failed = len(results) - passed
+    _AUDIT.emit(
+        event_type="cli.test_run.completed",
+        actor="cli",
+        detail={
+            "suite": suite.name,
+            "env": env or suite.environment,
+            "run_id": run_id,
+            "passed": passed,
+            "failed": failed,
+            "status": overall_status_label,
+            "report_path": suite_report_path,
+            "report_hash": file_sha256(suite_report_path),
+            "inputs": run_input_hashes,
+        },
     )
 
     return results

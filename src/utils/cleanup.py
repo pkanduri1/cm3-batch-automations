@@ -4,7 +4,10 @@ import time
 import logging
 from pathlib import Path
 
+from src.utils.audit_logger import get_audit_logger
+
 logger = logging.getLogger(__name__)
+_AUDIT = get_audit_logger()
 
 
 def cleanup_old_files(directory: "str | Path", max_age_hours: float = 24) -> dict:
@@ -30,7 +33,17 @@ def cleanup_old_files(directory: "str | Path", max_age_hours: float = 24) -> dic
     directory = Path(directory)
     if not directory.exists():
         logger.debug("cleanup_old_files: directory does not exist: %s", directory)
-        return result
+        _AUDIT.emit(
+        event_type="file.cleanup",
+        actor="system",
+        detail={
+            "directory": str(directory),
+            "deleted_count": result["deleted_count"],
+            "deleted_bytes": result["deleted_bytes"],
+            "error_count": len(result["errors"]),
+        },
+    )
+    return result
 
     cutoff = time.time() - max_age_hours * 3600
 
@@ -40,7 +53,17 @@ def cleanup_old_files(directory: "str | Path", max_age_hours: float = 24) -> dic
         msg = f"Cannot list directory {directory}: {exc}"
         logger.error(msg)
         result["errors"].append(msg)
-        return result
+        _AUDIT.emit(
+        event_type="file.cleanup",
+        actor="system",
+        detail={
+            "directory": str(directory),
+            "deleted_count": result["deleted_count"],
+            "deleted_bytes": result["deleted_bytes"],
+            "error_count": len(result["errors"]),
+        },
+    )
+    return result
 
     for entry in entries:
         # Never attempt to delete subdirectories.
@@ -75,4 +98,14 @@ def cleanup_old_files(directory: "str | Path", max_age_hours: float = 24) -> dic
             logger.error(msg)
             result["errors"].append(msg)
 
+    _AUDIT.emit(
+        event_type="file.cleanup",
+        actor="system",
+        detail={
+            "directory": str(directory),
+            "deleted_count": result["deleted_count"],
+            "deleted_bytes": result["deleted_bytes"],
+            "error_count": len(result["errors"]),
+        },
+    )
     return result
