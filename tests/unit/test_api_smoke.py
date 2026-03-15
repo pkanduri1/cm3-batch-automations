@@ -5,7 +5,10 @@ from fastapi.testclient import TestClient
 from src.api.main import app
 
 
-os.environ.setdefault("API_KEYS", "dev-key")
+_api_keys = os.getenv("API_KEYS", "")
+if "dev-key" not in {k.split(":", 1)[0].strip() for k in _api_keys.split(",") if k.strip()}:
+    os.environ["API_KEYS"] = f"{_api_keys},dev-key:admin" if _api_keys else "dev-key:admin"
+
 client = TestClient(app)
 API_HEADERS = {"X-API-Key": "dev-key"}
 
