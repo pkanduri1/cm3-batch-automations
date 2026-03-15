@@ -234,6 +234,14 @@ All configuration is loaded from the `.env` file in the project root. Copy `.env
 
 ---
 
+## Change Management Setup
+
+- Add `.github/CODEOWNERS` (included in this repository) and map paths to your GitHub teams.
+- Protect `main` branch and require CODEOWNER review for PRs touching `config/`.
+- Enable required checks including `Config Change Validation`.
+
+See `docs/CHANGE-MANAGEMENT.md` for the full workflow.
+
 ## Database Setup
 
 ### What requires the database

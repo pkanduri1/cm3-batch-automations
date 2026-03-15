@@ -1,0 +1,4 @@
+# Configuration ownership
+config/mappings/     @pkanduri1
+config/rules/        @pkanduri1
+config/test_suites/  @pkanduri1

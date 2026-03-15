@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import subprocess
 import time
 import uuid
 from datetime import datetime
@@ -21,6 +22,20 @@ try:
     from src.services.run_history_service import write_run_to_db as _db_write_run
 except ImportError:  # service not yet present in all environments
     _db_write_run = None  # type: ignore[assignment]
+
+
+def _current_git_sha() -> str:
+    """Return current git commit SHA or empty string if unavailable."""
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return proc.stdout.strip()
+    except Exception:
+        return ""
 
 
 def _run_api_check_test(test: TestConfig, params: dict) -> dict:
@@ -461,6 +476,7 @@ def _append_run_history(
         "skip_count":  sum(1 for r in results if r["status"] == "SKIPPED"),
         "total_count": len(results),
         "archive_path": archive_path,
+        "config_git_sha": _current_git_sha(),
     }
 
     existing: list[dict[str, Any]] = []
