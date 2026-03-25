@@ -8,7 +8,13 @@
   /* Apply saved theme before first paint to avoid flash */
   (function() {
     var t = localStorage.getItem('cm3-theme');
-    if (t === 'light' || t === 'dark') { document.documentElement.setAttribute('data-theme', t); }
+    if (t === 'light' || t === 'dark') {
+      document.documentElement.setAttribute('data-theme', t);
+    } else {
+      /* No stored preference — respect system preference */
+      var preferLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+      document.documentElement.setAttribute('data-theme', preferLight ? 'light' : 'dark');
+    }
   })();
 </script>
 <style>
@@ -64,6 +70,7 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    transition: background 0.3s, color 0.3s;
   }
 
   /* ── App header ─────────────────────────────────────────────────────── */
@@ -76,6 +83,7 @@
     height: 52px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    transition: background 0.3s, border-color 0.3s;
   }
   .header-left  { display: flex; align-items: center; gap: 10px; }
   header h1     { font-size: 16px; font-weight: 600; letter-spacing: 0.3px; color: var(--text-primary); }
@@ -117,6 +125,7 @@
     scrollbar-width: none;      /* Firefox */
     -ms-overflow-style: none;   /* IE/Edge */
     flex-shrink: 0;
+    transition: background 0.3s, border-color 0.3s;
   }
   nav.tabs::-webkit-scrollbar { display: none; }   /* Chrome/Safari */
 
@@ -164,6 +173,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 28px;
+    transition: background 0.3s, border-color 0.3s, color 0.3s;
   }
   .panel h2 { font-size: 16px; font-weight: 700; margin-bottom: 22px; color: #aac4ff; }
 
@@ -186,7 +196,7 @@
   .drop-zone:hover, .drop-zone.dragover {
     border-color: var(--blue);
     background: rgba(74, 158, 255, 0.07);
-    transform: scale(1.005);
+    transform: scale(1.02);
   }
   .drop-zone.dragover { border-style: solid; }
   .drop-zone .dz-icon { color: var(--muted); opacity: 0.6; }
@@ -797,6 +807,7 @@
     color: var(--text-secondary);
     display: flex;
     font-size: 11px;
+    transition: background 0.3s, border-color 0.3s, color 0.3s;
     gap: 6px;
     height: 28px;
     padding: 0 20px;
@@ -819,9 +830,184 @@
     nav.tabs { padding: 0 12px; }
     main     { padding: 0 12px; margin: 16px auto; }
   }
+
+  /* ── #125: Theme transition polish ─────────────────────────────────── */
+  input, select, textarea, button {
+    transition: background 0.3s, color 0.3s, border-color 0.3s;
+  }
+  .metric-card, .json-preview, .file-card, .step-num, .badge,
+  .drop-zone, .at-resp-body, .at-resp-status-line, .at-req-row,
+  .refresh-toggle, .at-textarea, .report-panel-bar,
+  .at-runner-summary, thead th, .runs-toolbar {
+    transition: background 0.3s, color 0.3s, border-color 0.3s;
+  }
+  table { transition: color 0.3s; }
+  tbody tr { transition: background 0.15s, color 0.3s; }
+
+  /* ── #125: Full light-theme coverage ───────────────────────────────── */
+  [data-theme="light"] .panel h2 { color: #1e40af; }
+  [data-theme="light"] .at-runner h3 { color: #1e40af; }
+  [data-theme="light"] .metric-card { background: var(--bg-tertiary); }
+  [data-theme="light"] .json-preview { background: #f3f4f6; color: var(--text-secondary); }
+  [data-theme="light"] .json-preview.has-content { color: var(--text-primary); }
+  [data-theme="light"] .jp-key, [data-theme="light"] .jh-key { color: #1e40af; }
+  [data-theme="light"] .jp-str, [data-theme="light"] .jh-str { color: #047857; }
+  [data-theme="light"] .jp-num, [data-theme="light"] .jh-num { color: #b45309; }
+  [data-theme="light"] .jp-bool, [data-theme="light"] .jp-null,
+  [data-theme="light"] .jh-bool, [data-theme="light"] .jh-null { color: #dc2626; }
+  [data-theme="light"] .file-card { background: rgba(37,99,235,0.06); border-color: rgba(37,99,235,0.2); }
+  [data-theme="light"] .step-num { background: var(--bg-tertiary); }
+  [data-theme="light"] .step.active .step-num { background: #2563eb; border-color: #2563eb; }
+  [data-theme="light"] .version-badge { background: rgba(37,99,235,0.1); border-color: rgba(37,99,235,0.3); color: #2563eb; }
+  [data-theme="light"] .method-GET { background: rgba(5,150,105,0.12); color: #047857; }
+  [data-theme="light"] .method-POST { background: rgba(37,99,235,0.12); color: #1d4ed8; }
+  [data-theme="light"] .method-PUT, [data-theme="light"] .method-PATCH { background: rgba(180,83,9,0.12); color: #b45309; }
+  [data-theme="light"] .method-DELETE { background: rgba(220,38,38,0.12); color: #dc2626; }
+  [data-theme="light"] .at-resp-body { background: #f3f4f6; }
+  [data-theme="light"] .at-req-row { background: #f3f4f6; }
+  [data-theme="light"] tbody tr:hover { background: rgba(0,0,0,0.04); }
+  [data-theme="light"] .at-req-row.drag-over { background: rgba(37,99,235,0.08); }
+  [data-theme="light"] .badge-pass { background: rgba(5,150,105,0.1); }
+  [data-theme="light"] .badge-fail { background: rgba(220,38,38,0.1); }
+  [data-theme="light"] .badge-partial { background: rgba(180,83,9,0.1); }
+  [data-theme="light"] .at-textarea { background: #f3f4f6; }
+  [data-theme="light"] .btn-secondary { background: var(--accent2); color: var(--text-primary); }
+  [data-theme="light"] .btn-secondary:hover:not(:disabled) { background: #c0cde4; }
+  [data-theme="light"] .drop-zone { background: transparent; }
+
+  /* ── #126: Drop-zone hover scale ───────────────────────────────────── */
+  .drop-zone {
+    transition: border-color 0.2s, background 0.2s, transform 0.2s ease;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    transform: scale(1.02);
+  }
+
+  /* ── #126: Button hover lift ───────────────────────────────────────── */
+  button.btn {
+    transition: opacity 0.15s, box-shadow 0.15s, transform 0.15s;
+  }
+  button.btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+  button.btn-primary:hover:not(:disabled) {
+    box-shadow: 0 6px 20px rgba(37,99,235,0.45);
+  }
+  .btn-theme:hover {
+    transform: translateY(-1px);
+  }
+  .btn-copy:hover {
+    transform: translateY(-1px);
+  }
+
+  /* ── #126: Skeleton loading pulse ──────────────────────────────────── */
+  @keyframes skeletonPulse {
+    0%   { opacity: 1; }
+    50%  { opacity: 0.4; }
+    100% { opacity: 1; }
+  }
+  .skeleton {
+    background: var(--accent);
+    border-radius: var(--radius);
+    animation: skeletonPulse 1.5s ease-in-out infinite;
+    color: transparent !important;
+    pointer-events: none;
+    user-select: none;
+  }
+  .skeleton * { visibility: hidden; }
+
+  /* ── #126: Toast notification system ───────────────────────────────── */
+  .toast-container {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .toast {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    color: var(--text-primary);
+    font-size: 13px;
+    padding: 10px 16px;
+    pointer-events: auto;
+    max-width: 360px;
+    transform: translateX(120%);
+    opacity: 0;
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.3s;
+  }
+  .toast.toast-visible {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  .toast.toast-exit {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  .toast-success { border-left: 3px solid var(--pass); }
+  .toast-error   { border-left: 3px solid var(--fail); }
+  .toast-info    { border-left: 3px solid var(--blue); }
+  .toast-warning { border-left: 3px solid var(--partial); }
+
+  /* ── #127: Skip link ───────────────────────────────────────────────── */
+  .skip-link {
+    position: absolute;
+    top: -100%;
+    left: 16px;
+    background: var(--blue);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    z-index: 10000;
+    text-decoration: none;
+    transition: top 0.15s;
+  }
+  .skip-link:focus {
+    top: 8px;
+  }
+
+  /* ── #127: Screen-reader only ──────────────────────────────────────── */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* ── #127: Focus-visible outlines ──────────────────────────────────── */
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  a:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+  /* Remove default outline when not using keyboard */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
 </style>
 </head>
 <body>
+
+<a class="skip-link" href="#panel-quick">Skip to main content</a>
+
+<!-- Toast container for notifications (#126) -->
+<div class="toast-container" id="toastContainer" aria-live="polite" aria-relevant="additions"></div>
 
 <header>
   <div class="header-left">
@@ -836,13 +1022,13 @@
   <div class="tabs-inner" id="tabsInner">
     <span class="tab-indicator" id="tabIndicator" aria-hidden="true"></span>
     <button class="active" id="tab-quick" role="tab" aria-selected="true"
-            onclick="switchTab('quick')">Quick Test</button>
+            aria-controls="panel-quick" onclick="switchTab('quick')">Quick Test</button>
     <button id="tab-runs" role="tab" aria-selected="false"
-            onclick="switchTab('runs')">Recent Runs</button>
+            aria-controls="panel-runs" onclick="switchTab('runs')">Recent Runs</button>
     <button id="tab-mapping" role="tab" aria-selected="false"
-            onclick="switchTab('mapping')">Mapping Generator</button>
+            aria-controls="panel-mapping" onclick="switchTab('mapping')">Mapping Generator</button>
     <button id="tab-tester" role="tab" aria-selected="false"
-            onclick="switchTab('tester')">API Tester</button>
+            aria-controls="panel-tester" onclick="switchTab('tester')">API Tester</button>
   </div>
 </nav>
 
@@ -863,7 +1049,7 @@
       <span class="dz-label">Drag &amp; drop or click to browse</span>
       <span class="dz-sub">Supports .txt, .csv, .dat, .pipe, fixed-width</span>
     </div>
-    <input type="file" id="fileInput">
+    <input type="file" id="fileInput" aria-label="Upload batch file">
 
     <!-- Primary file preview card -->
     <div class="file-card" id="primaryFileCard">
@@ -956,7 +1142,7 @@
             <span class="file-card-badge" id="secondaryFormatBadge"></span>
             <button class="file-card-remove" id="btnRemoveSecondary" aria-label="Remove file" title="Remove file">&times;</button>
           </div>
-          <input type="file" id="fileInput2">
+          <input type="file" id="fileInput2" aria-label="Upload second batch file">
         </div>
         <div style="display:flex;flex-direction:column;justify-content:flex-end">
           <button class="btn btn-secondary" id="btnCompare" disabled style="width:100%;justify-content:center"
@@ -1005,11 +1191,12 @@
     <div class="runs-toolbar">
       <span style="font-size:12px;color:var(--muted)" id="runsCount"></span>
       <div class="runs-toolbar-spacer"></div>
-      <div class="refresh-toggle" id="autoRefreshToggle" onclick="toggleAutoRefresh()" title="Toggle 30-second auto-refresh">
+      <div class="refresh-toggle" id="autoRefreshToggle" role="button" tabindex="0"
+           aria-expanded="false" onclick="toggleAutoRefresh()" title="Toggle 30-second auto-refresh">
         <div class="refresh-dot"></div>
         <span id="refreshToggleLabel">Auto-refresh off</span>
       </div>
-      <button class="btn btn-secondary" onclick="loadRunHistory()" style="font-size:12px;padding:6px 14px">Refresh</button>
+      <button class="btn btn-secondary" onclick="loadRunHistory()" style="font-size:12px;padding:6px 14px" aria-label="Refresh run history">Refresh</button>
     </div>
 
     <div class="table-wrap" id="runsTableWrap">
@@ -1056,7 +1243,7 @@
             <span class="dz-sub">.xlsx, .xls, .csv</span>
             <span class="dz-filename" id="mapFileName"></span>
           </div>
-          <input type="file" id="mapFileInput" accept=".xlsx,.xls,.csv">
+          <input type="file" id="mapFileInput" accept=".xlsx,.xls,.csv" aria-label="Upload mapping template">
           <div class="form-row">
             <label class="field-label" for="mapNameInput">Name</label>
             <input type="text" id="mapNameInput" class="text-input" placeholder="(optional — uses filename)">
@@ -1123,7 +1310,7 @@
             <span class="dz-sub">.xlsx, .xls, .csv</span>
             <span class="dz-filename" id="rulesFileName"></span>
           </div>
-          <input type="file" id="rulesFileInput" accept=".xlsx,.xls,.csv">
+          <input type="file" id="rulesFileInput" accept=".xlsx,.xls,.csv" aria-label="Upload rules template">
           <div class="form-row">
             <label class="field-label" for="rulesNameInput">Name</label>
             <input type="text" id="rulesNameInput" class="text-input" placeholder="(optional — uses filename)">
@@ -1164,16 +1351,16 @@
       <div>
         <div class="at-url-row">
           <!-- Color-coded method badge -->
-          <select id="atMethod" class="method-GET" onchange="atUpdateMethodColor(this)">
+          <select id="atMethod" class="method-GET" aria-label="HTTP method" onchange="atUpdateMethodColor(this)">
             <option>GET</option><option>POST</option><option>PUT</option>
             <option>PATCH</option><option>DELETE</option>
           </select>
           <input id="atBaseUrl" class="text-input at-url-input" type="text"
-                 placeholder="http://127.0.0.1:8000">
+                 placeholder="http://127.0.0.1:8000" aria-label="Base URL">
         </div>
         <div class="at-path-row">
           <input id="atPath" class="text-input at-path-input" type="text"
-                 placeholder="/api/v1/system/health">
+                 placeholder="/api/v1/system/health" aria-label="API path">
         </div>
 
         <!-- Horizontal tabs: Headers / Body / Assertions -->
@@ -1212,8 +1399,8 @@
         <div class="at-send-row">
           <button class="btn btn-primary" onclick="atSend()">Send</button>
           <input id="atReqName" class="text-input at-name-input" type="text"
-                 placeholder="Request name (for saving)">
-          <select id="atSuiteSel" class="at-suite-sel">
+                 placeholder="Request name (for saving)" aria-label="Request name">
+          <select id="atSuiteSel" class="at-suite-sel" aria-label="Save to suite">
             <option value="">&#x2014; save to suite &#x2014;</option>
           </select>
           <button class="btn btn-secondary" onclick="atSaveRequest()">Save</button>
@@ -1246,7 +1433,7 @@
     <div class="at-runner">
       <h3>Suite Runner</h3>
       <div class="at-runner-row">
-        <select id="atRunnerSuiteSel" style="flex:1" onchange="atLoadSuiteIntoRunner()">
+        <select id="atRunnerSuiteSel" style="flex:1" aria-label="Select suite to run" onchange="atLoadSuiteIntoRunner()">
           <option value="">&#x2014; select a suite &#x2014;</option>
         </select>
         <button class="btn btn-primary"   onclick="atRunSuite()">Run Suite</button>
@@ -2643,6 +2830,114 @@ window.addEventListener('load', function() {
 });
 // Also reposition on window resize (handles font scaling / zoom)
 window.addEventListener('resize', updateTabIndicator);
+
+// ===========================================================================
+// #125: System preference detection for theme
+// ===========================================================================
+(function() {
+  var stored = localStorage.getItem('cm3-theme');
+  if (!stored) {
+    // No stored preference — use system preference
+    var preferLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+    var systemTheme = preferLight ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', systemTheme);
+    var btn = document.getElementById('btnTheme');
+    if (btn) btn.textContent = systemTheme === 'dark' ? '\u2600' : '\u263D';
+  }
+  // Listen for live system preference changes when no stored preference
+  if (window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', function(e) {
+      if (localStorage.getItem('cm3-theme')) return; // user chose manually
+      var newTheme = e.matches ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', newTheme);
+      var btn = document.getElementById('btnTheme');
+      if (btn) {
+        btn.textContent = newTheme === 'dark' ? '\u2600' : '\u263D';
+        btn.setAttribute('aria-label', newTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
+      }
+    });
+  }
+})();
+
+// ===========================================================================
+// #126: Toast notification system
+// ===========================================================================
+function showToast(message, type, duration) {
+  type = type || 'info';
+  duration = duration || 4000;
+  var container = document.getElementById('toastContainer');
+  if (!container) return;
+
+  var toast = document.createElement('div');
+  toast.className = 'toast toast-' + type;
+  toast.textContent = message;
+
+  container.appendChild(toast);
+
+  // Trigger slide-in after DOM insertion
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      toast.classList.add('toast-visible');
+    });
+  });
+
+  // Auto-dismiss
+  var timer = setTimeout(function() {
+    dismissToast(toast);
+  }, duration);
+
+  // Allow click to dismiss
+  toast.addEventListener('click', function() {
+    clearTimeout(timer);
+    dismissToast(toast);
+  });
+}
+
+function dismissToast(toast) {
+  toast.classList.remove('toast-visible');
+  toast.classList.add('toast-exit');
+  toast.addEventListener('transitionend', function() {
+    if (toast.parentNode) toast.parentNode.removeChild(toast);
+  });
+}
+
+// ===========================================================================
+// #127: Keyboard support for collapsible/toggle elements
+// ===========================================================================
+// Auto-refresh toggle — Enter/Space
+(function() {
+  var toggle = document.getElementById('autoRefreshToggle');
+  if (toggle) {
+    toggle.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleAutoRefresh();
+      }
+    });
+  }
+})();
+
+// Update aria-expanded when toggling auto-refresh
+var _origToggleAutoRefresh = toggleAutoRefresh;
+toggleAutoRefresh = function() {
+  _origToggleAutoRefresh();
+  var toggle = document.getElementById('autoRefreshToggle');
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', String(!!_autoRefreshTimer));
+  }
+};
+
+// Compare toggle — add aria-expanded
+(function() {
+  var btn = document.getElementById('btnToggleCompare');
+  if (btn) {
+    btn.setAttribute('aria-expanded', 'false');
+    var origListener = null;
+    btn.addEventListener('click', function() {
+      btn.setAttribute('aria-expanded', String(compareMode));
+    });
+  }
+})();
 </script>
 </body>
 </html>
