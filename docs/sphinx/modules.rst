@@ -12,6 +12,10 @@ Core CLI
 Commands
 ~~~~~~~~
 
+.. automodule:: src.commands.db_compare
+   :members:
+   :undoc-members:
+
 .. automodule:: src.commands.watch_command
    :members:
    :undoc-members:
@@ -166,6 +170,10 @@ API Tester
 
 Services
 --------
+
+.. automodule:: src.services.db_file_compare_service
+   :members:
+   :undoc-members:
 
 .. automodule:: src.services.run_history_service
    :members:

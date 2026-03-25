@@ -22,9 +22,11 @@ from src.api.models.file import (
     FileValidationResult,
     FileCompareAsyncCreateResponse,
     FileCompareAsyncStatusResponse,
+    DbCompareResult,
 )
 from src.parsers.format_detector import FormatDetector
 from src.services.compare_service import run_compare_service
+from src.services.db_file_compare_service import compare_db_to_file
 from src.services.parse_service import run_parse_service
 from src.services.validate_service import run_validate_service
 from src.reports.renderers.comparison_renderer import HTMLReporter
@@ -373,3 +375,86 @@ async def compare_job_status(job_id: str):
         result=result,
         error=job.get("error"),
     )
+
+
+@router.post("/db-compare", response_model=DbCompareResult)
+async def db_compare(
+    actual_file: UploadFile = File(...),
+    query_or_table: str = Form(...),
+    mapping_id: str = Form(...),
+    key_columns: str = Form(""),
+    output_format: str = Form("json"),
+):
+    """Extract data from Oracle and compare against an uploaded actual batch file.
+
+    Runs the full DB extract → temp file → compare pipeline and returns a
+    unified result containing workflow metadata and comparison statistics.
+
+    Args:
+        actual_file: The actual batch file to compare against.
+        query_or_table: SQL SELECT statement or bare Oracle table name.
+        mapping_id: ID of the JSON mapping config (must exist in MAPPINGS_DIR).
+        key_columns: Comma-separated key column names for row matching.
+        output_format: Desired output format (``"json"`` or ``"html"``).
+
+    Returns:
+        DbCompareResult with workflow status, row counts, and diff statistics.
+
+    Raises:
+        HTTPException: 404 if the mapping is not found.
+        HTTPException: 500 if DB extraction or comparison fails.
+    """
+    mapping_file = MAPPINGS_DIR / f"{mapping_id}.json"
+    if not mapping_file.exists():
+        raise HTTPException(status_code=404, detail=f"Mapping '{mapping_id}' not found")
+
+    import json as _json
+    mapping_config = _json.loads(mapping_file.read_text(encoding="utf-8"))
+
+    upload_path = UPLOADS_DIR / f"dbcompare_{actual_file.filename}"
+    with open(upload_path, "wb") as buffer:
+        shutil.copyfileobj(actual_file.file, buffer)
+
+    try:
+        key_columns_list = [k.strip() for k in key_columns.split(",") if k.strip()]
+
+        result = compare_db_to_file(
+            query_or_table=query_or_table,
+            mapping_config=mapping_config,
+            actual_file=str(upload_path),
+            output_format=output_format,
+            key_columns=key_columns_list or None,
+        )
+
+        workflow = result.get("workflow", {})
+        compare = result.get("compare", {})
+
+        rows_with_diffs = compare.get(
+            "rows_with_differences", compare.get("differences", 0)
+        )
+
+        return DbCompareResult(
+            workflow_status=workflow.get("status", "unknown"),
+            db_rows_extracted=workflow.get("db_rows_extracted", 0),
+            query_or_table=workflow.get("query_or_table", query_or_table),
+            total_rows_file1=compare.get("total_rows_file1", 0),
+            total_rows_file2=compare.get("total_rows_file2", 0),
+            matching_rows=compare.get("matching_rows", 0),
+            only_in_file1=compare.get("only_in_file1", 0),
+            only_in_file2=compare.get("only_in_file2", 0),
+            differences=rows_with_diffs,
+            structure_compatible=compare.get("structure_compatible"),
+            structure_errors=compare.get("structure_errors"),
+            field_statistics=compare.get("field_statistics"),
+        )
+
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=f"DB extraction failed: {exc}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error running db-compare: {exc}")
+
+    finally:
+        if upload_path.exists():
+            upload_path.unlink()

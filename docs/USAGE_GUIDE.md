@@ -243,6 +243,85 @@ cm3-batch extract \
 - `-l, --limit`: Row limit (only for --table mode)
 - `-d, --delimiter`: Output delimiter (default: |)
 
+#### DB Extract → File Comparison (`db-compare`)
+
+Run an end-to-end workflow that extracts data from Oracle, writes it to a
+temporary file, and compares it against an actual batch file — all in one
+command.
+
+**Using a table name:**
+```bash
+cm3-batch db-compare \
+  --query-or-table SHAW_SRC_P327 \
+  --mapping config/mappings/p327_universal.json \
+  --actual-file outputs/actual/p327.txt \
+  --key-columns ACCT_NUM \
+  --output reports/db_compare_p327.json
+```
+
+**Using an inline SQL query:**
+```bash
+cm3-batch db-compare \
+  --query-or-table "SELECT ACCT_NUM, AMOUNT FROM SHAW_SRC_P327 WHERE STATUS = 'A'" \
+  --mapping config/mappings/p327_universal.json \
+  --actual-file outputs/actual/p327.txt \
+  --key-columns ACCT_NUM \
+  --output reports/db_compare_p327.json
+```
+
+**Options:**
+- `-q, --query-or-table`: SQL SELECT statement or bare Oracle table name (required)
+- `-m, --mapping`: JSON mapping config file (required)
+- `-f, --actual-file`: Actual batch file to compare against (required)
+- `-k, --key-columns`: Comma-separated key column names for row matching
+- `--output-format`: `json` (default) or `html`
+- `-o, --output`: File path to write the result report
+
+**Result summary printed to stdout:**
+```
+DB Extract → File Comparison Summary
+  Query / Table:      SHAW_SRC_P327
+  DB rows extracted:  5000
+  Actual file rows:   5000
+  Matching rows:      4998
+  Only in DB:         2
+  Only in file:       0
+  Rows with diffs:    0
+
+  FAIL
+```
+
+**API equivalent (`POST /api/v1/files/db-compare`):**
+```bash
+curl -X POST "http://localhost:8000/api/v1/files/db-compare" \
+  -F "query_or_table=SHAW_SRC_P327" \
+  -F "mapping_id=p327_universal" \
+  -F "key_columns=ACCT_NUM" \
+  -F "output_format=json" \
+  -F "actual_file=@outputs/actual/p327.txt"
+```
+
+Response shape:
+```json
+{
+  "workflow_status": "passed",
+  "db_rows_extracted": 5000,
+  "query_or_table": "SHAW_SRC_P327",
+  "total_rows_file1": 5000,
+  "total_rows_file2": 5000,
+  "matching_rows": 5000,
+  "only_in_file1": 0,
+  "only_in_file2": 0,
+  "differences": 0,
+  "structure_compatible": true
+}
+```
+
+> **Oracle credentials**: The `db-compare` command reads `ORACLE_USER`,
+> `ORACLE_PASSWORD`, and `ORACLE_DSN` from the `.env` file (same as all
+> other database commands). See [Oracle Connection Issues](#oracle-connection-issues)
+> for troubleshooting.
+
 ### 5. Business Rules (New!)
 
 Convert business rules from Excel template to JSON:

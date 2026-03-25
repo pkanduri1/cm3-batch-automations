@@ -204,6 +204,40 @@ def compare(file1, file2, keys, mapping, output, thresholds, detailed, chunk_siz
         sys.exit(1)
 
 
+@cli.command('db-compare')
+@click.option('--query-or-table', '-q', required=True,
+              help='SQL SELECT statement or bare Oracle table name')
+@click.option('--mapping', '-m', required=True, type=click.Path(exists=True),
+              help='JSON mapping config file')
+@click.option('--actual-file', '-f', required=True, type=click.Path(exists=True),
+              help='Actual batch file to compare against')
+@click.option('--key-columns', '-k', default='',
+              help='Comma-separated key column names for row matching')
+@click.option('--output-format', type=click.Choice(['json', 'html']), default='json',
+              show_default=True, help='Output format for the report')
+@click.option('--output', '-o', help='File path for the written report')
+def db_compare(query_or_table, mapping, actual_file, key_columns, output_format, output):
+    """Extract data from Oracle and compare against an actual batch file."""
+    logger = setup_logger('cm3-batch', log_to_file=False)
+
+    try:
+        from src.commands.db_compare import run_db_compare_command
+        run_db_compare_command(
+            query_or_table=query_or_table,
+            mapping=mapping,
+            actual_file=actual_file,
+            output_format=output_format,
+            key_columns=key_columns or None,
+            output=output,
+            logger=logger,
+        )
+    except SystemExit:
+        raise
+    except Exception as e:
+        logger.error(f"Error running db-compare: {e}")
+        sys.exit(1)
+
+
 @cli.command()
 def info():
     """Display system information and check dependencies."""

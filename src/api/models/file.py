@@ -71,6 +71,24 @@ class FileValidationResult(BaseModel):
     report_url: Optional[str] = None
 
 
+class DbCompareResult(BaseModel):
+    """Model for DB extract → file comparison result."""
+
+    workflow_status: str
+    db_rows_extracted: int
+    query_or_table: str
+    total_rows_file1: int
+    total_rows_file2: int
+    matching_rows: int
+    only_in_file1: int
+    only_in_file2: int
+    differences: int
+    report_url: Optional[str] = None
+    structure_compatible: Optional[bool] = None
+    structure_errors: Optional[List[Dict[str, Any]]] = None
+    field_statistics: Optional[Dict[str, Any]] = None
+
+
 class FileCompareAsyncCreateResponse(BaseModel):
     """Response when creating an async compare job."""
     job_id: str
