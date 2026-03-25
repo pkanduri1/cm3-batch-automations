@@ -14,3 +14,19 @@ steps:
     rules: null
 thresholds:
   max_errors: 0
+
+# --- Notifications (uncomment to enable) ---
+# notifications:
+#   on_failure:
+#     - type: email
+#       to:
+#         - qa-team@example.com
+#         - dev-lead@example.com
+#     - type: teams
+#       url: https://outlook.office.com/webhook/YOUR-TEAMS-WEBHOOK-URL
+#     - type: slack
+#       url: https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK
+#   on_success:
+#     - type: email
+#       to:
+#         - qa-team@example.com

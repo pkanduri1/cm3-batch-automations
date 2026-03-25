@@ -195,6 +195,10 @@ Services
    :members:
    :undoc-members:
 
+.. automodule:: src.services.notification_service
+   :members:
+   :undoc-members:
+
 Contracts & Adapters
 --------------------
 
