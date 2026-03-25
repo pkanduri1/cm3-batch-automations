@@ -18,6 +18,7 @@ from typing import Any
 import yaml
 
 from src.pipeline.suite_config import SuiteDefinition, StepDefinition
+from src.services.notification_service import notify_suite_result
 from src.services.validate_service import run_validate_service
 
 logger = logging.getLogger(__name__)
@@ -160,13 +161,18 @@ def run_suite_by_name(
         if step_result["status"] in ("failed", "error"):
             overall_failed = True
 
-    return {
+    result = {
         "suite_name": suite_name,
         "run_id": run_id,
         "status": "failed" if overall_failed else "passed",
         "message": "",
         "step_results": step_results,
     }
+
+    # Send notifications if configured (errors are caught internally).
+    notify_suite_result(suite_name, result, matched.notifications)
+
+    return result
 
 
 # ---------------------------------------------------------------------------

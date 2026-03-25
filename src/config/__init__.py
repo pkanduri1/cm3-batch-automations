@@ -1,6 +1,7 @@
 """Configuration management."""
 
 from .loader import ConfigLoader
+from .db_config import DbConfig, get_db_config, get_connection
 from .mapping_parser import MappingParser, MappingProcessor, MappingDocument, ColumnMapping
 from .models import (
     FieldConfig,
@@ -13,6 +14,10 @@ from .models import (
 
 __all__ = [
     "ConfigLoader",
+    # Database configuration (issue #48)
+    "DbConfig",
+    "get_db_config",
+    "get_connection",
     "MappingParser",
     "MappingProcessor",
     "MappingDocument",

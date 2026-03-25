@@ -1,16 +1,24 @@
-"""Oracle-backed persistence for test suite run history."""
+"""Oracle-backed persistence for test suite run history.
+
+The schema prefix (e.g. ``CM3INT``) is read from the ``ORACLE_SCHEMA``
+environment variable via :func:`~src.config.db_config.get_db_config`.
+"""
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from src.config.db_config import get_db_config
 from .connection import OracleConnection
 
 logger = logging.getLogger(__name__)
 
-_INSERT_RUN = """
-INSERT INTO CM3INT.CM3_RUN_HISTORY
+
+def _sql_insert_run(schema: str) -> str:
+    """Return the INSERT statement for run history, qualified by *schema*."""
+    return f"""
+INSERT INTO {schema}.CM3_RUN_HISTORY
   (RUN_ID, SUITE_NAME, ENVIRONMENT, RUN_TIMESTAMP, STATUS,
    PASS_COUNT, FAIL_COUNT, SKIP_COUNT, TOTAL_COUNT, REPORT_URL, ARCHIVE_PATH)
 VALUES
@@ -18,17 +26,23 @@ VALUES
    :pass_count, :fail_count, :skip_count, :total_count, :report_url, :archive_path)
 """
 
-_INSERT_TEST = """
-INSERT INTO CM3INT.CM3_RUN_TESTS
+
+def _sql_insert_test(schema: str) -> str:
+    """Return the INSERT statement for run tests, qualified by *schema*."""
+    return f"""
+INSERT INTO {schema}.CM3_RUN_TESTS
   (RUN_ID, TEST_NAME, TEST_TYPE, STATUS, ROW_COUNT, ERROR_COUNT, DURATION_SECS, REPORT_PATH)
 VALUES
   (:run_id, :test_name, :test_type, :status, :row_count, :error_count, :duration_secs, :report_path)
 """
 
-_FETCH_HISTORY = """
+
+def _sql_fetch_history(schema: str) -> str:
+    """Return the SELECT statement for recent run history, qualified by *schema*."""
+    return f"""
 SELECT RUN_ID, SUITE_NAME, ENVIRONMENT, RUN_TIMESTAMP, STATUS,
        PASS_COUNT, FAIL_COUNT, SKIP_COUNT, TOTAL_COUNT, REPORT_URL, ARCHIVE_PATH
-FROM CM3INT.CM3_RUN_HISTORY
+FROM {schema}.CM3_RUN_HISTORY
 ORDER BY RUN_TIMESTAMP DESC
 FETCH FIRST :limit ROWS ONLY
 """
@@ -71,7 +85,10 @@ class RunHistoryRepository:
     """Reads and writes suite run history to/from Oracle.
 
     Args:
-        conn: Optional OracleConnection to use. Defaults to OracleConnection.from_env().
+        conn: Optional OracleConnection to use. Defaults to
+            ``OracleConnection.from_env()``.
+        schema: Optional schema override.  Defaults to the ``ORACLE_SCHEMA``
+            environment variable (which itself defaults to ``ORACLE_USER``).
 
     Example::
 
@@ -81,18 +98,23 @@ class RunHistoryRepository:
         history = repo.fetch_history(limit=20)
     """
 
-    def __init__(self, conn: OracleConnection | None = None) -> None:
+    def __init__(
+        self,
+        conn: OracleConnection | None = None,
+        schema: str | None = None,
+    ) -> None:
         self._conn = conn if conn is not None else OracleConnection.from_env()
+        self._schema = schema if schema is not None else get_db_config().schema
 
     def insert_run(self, entry: dict[str, Any]) -> None:
-        """Insert one run summary row into CM3INT.CM3_RUN_HISTORY.
+        """Insert one run summary row into the CM3_RUN_HISTORY table.
 
         Args:
             entry: Dict with keys matching run_history.json entries.
         """
         with self._conn as conn:
             cursor = conn.cursor()
-            cursor.execute(_INSERT_RUN, {
+            cursor.execute(_sql_insert_run(self._schema), {
                 "run_id":        entry["run_id"],
                 "suite_name":    entry["suite_name"],
                 "environment":   entry["environment"],
@@ -108,7 +130,7 @@ class RunHistoryRepository:
             conn.commit()
 
     def insert_tests(self, run_id: str, results: list[dict[str, Any]]) -> None:
-        """Insert one row per test into CM3INT.CM3_RUN_TESTS.
+        """Insert one row per test into the CM3_RUN_TESTS table.
 
         Args:
             run_id: The parent run UUID.
@@ -131,11 +153,11 @@ class RunHistoryRepository:
         ]
         with self._conn as conn:
             cursor = conn.cursor()
-            cursor.executemany(_INSERT_TEST, rows)
+            cursor.executemany(_sql_insert_test(self._schema), rows)
             conn.commit()
 
     def fetch_history(self, limit: int = 20) -> list[dict[str, Any]]:
-        """Return the most recent run summaries from CM3INT.CM3_RUN_HISTORY.
+        """Return the most recent run summaries from the CM3_RUN_HISTORY table.
 
         Args:
             limit: Maximum number of rows to return (default 20).
@@ -146,7 +168,7 @@ class RunHistoryRepository:
         """
         with self._conn as conn:
             cursor = conn.cursor()
-            cursor.execute(_FETCH_HISTORY, {"limit": limit})
+            cursor.execute(_sql_fetch_history(self._schema), {"limit": limit})
             cols = [d[0].lower() for d in cursor.description]
             rows = cursor.fetchall()
 

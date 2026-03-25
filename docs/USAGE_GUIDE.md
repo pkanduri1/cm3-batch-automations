@@ -1165,15 +1165,14 @@ python -m json.tool config/mappings/my_mapping.json
 ### Oracle Connection Issues
 
 ```bash
-# Test Oracle client
-python -c "import cx_Oracle; print(cx_Oracle.clientversion())"
+# Verify oracledb is installed (thin mode — no Instant Client needed)
+python -c "import oracledb; print(oracledb.__version__)"
 
 # Check environment variables
-echo $ORACLE_HOME
-echo $LD_LIBRARY_PATH
+echo $ORACLE_USER $ORACLE_DSN
 
-# Test connection
-python -c "import cx_Oracle; conn = cx_Oracle.connect('user/pass@dsn'); print('Connected')"
+# Test connection using centralised config
+python -c "from src.config.db_config import get_connection; c = get_connection(); print('Connected'); c.close()"
 ```
 
 ### File Parsing Errors
@@ -1196,10 +1195,11 @@ python src/config/universal_mapping_parser.py config/mappings/my_mapping.json
 Create a `.env` file in the project root:
 
 ```bash
-# Oracle Database
-ORACLE_USER=your_username
-ORACLE_PASSWORD=your_password
-ORACLE_DSN=hostname:port/service_name
+# Oracle Database Connection
+ORACLE_USER=CM3INT                       # Default: CM3INT
+ORACLE_PASSWORD=your_password_here       # Required for any DB operation
+ORACLE_DSN=localhost:1521/FREEPDB1       # Default: localhost:1521/FREEPDB1
+ORACLE_SCHEMA=CM3INT                     # Default: value of ORACLE_USER
 
 # API Configuration
 API_PORT=8000
@@ -1209,6 +1209,29 @@ API_WORKERS=4
 # Logging
 LOG_LEVEL=INFO
 LOG_DIR=logs
+```
+
+### Database Configuration
+
+All Oracle connection parameters are read from environment variables in one
+place (`src/config/db_config.py`).  No Oracle Instant Client is required --
+connections use **oracledb thin mode**.
+
+| Variable | Default | Description |
+|---|---|---|
+| `ORACLE_USER` | `CM3INT` | Database username |
+| `ORACLE_PASSWORD` | *(none)* | Database password -- **required** before any DB call |
+| `ORACLE_DSN` | `localhost:1521/FREEPDB1` | Easy Connect string (`host:port/service`) |
+| `ORACLE_SCHEMA` | value of `ORACLE_USER` | Schema prefix for SQL table references (e.g. `CM3INT.CM3_RUN_HISTORY`) |
+
+If `ORACLE_PASSWORD` is not set and a command attempts a database connection,
+it will fail immediately with a clear error message rather than hanging on a
+network timeout.
+
+**Quick connection test:**
+
+```bash
+python -c "from src.config.db_config import get_connection; c = get_connection(); print('Connected'); c.close()"
 ```
 
 ---
@@ -1348,6 +1371,51 @@ thresholds:
 | `file_pattern` | yes | File path or glob pattern passed to the validate service |
 | `mapping` | no | Path to mapping JSON config |
 | `rules` | no | Path to rules config JSON |
+
+### Notifications
+
+Suites can optionally send notifications when they complete.  Add a
+`notifications` block to the suite YAML with `on_failure` and/or
+`on_success` target lists.
+
+**Supported channels:**
+
+| Type | Required fields | Description |
+|------|----------------|-------------|
+| `email` | `to` (list of addresses) | Sends plain-text email via SMTP |
+| `teams` | `url` (webhook URL) | Posts a MessageCard to Microsoft Teams |
+| `slack` | `url` (webhook URL) | Posts a message to a Slack channel |
+
+**Example configuration:**
+
+```yaml
+notifications:
+  on_failure:
+    - type: email
+      to:
+        - qa-team@example.com
+        - dev-lead@example.com
+    - type: teams
+      url: https://outlook.office.com/webhook/YOUR-TEAMS-WEBHOOK-URL
+    - type: slack
+      url: https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK
+  on_success:
+    - type: email
+      to:
+        - qa-team@example.com
+```
+
+**Email environment variables:**
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SMTP_HOST` | Yes | — | SMTP server hostname |
+| `SMTP_PORT` | No | `587` | SMTP server port |
+| `SMTP_FROM` | Yes | — | Sender email address |
+| `SMTP_USER` | No | — | SMTP auth username |
+| `SMTP_PASSWORD` | No | — | SMTP auth password |
+
+Notification failures are logged as warnings but never crash the suite run.
 
 ### CLI commands
 
