@@ -1274,25 +1274,64 @@ LOG_DIR=logs
 
 ### Database Configuration
 
+The tool ships with a pluggable database adapter layer.  The active backend is
+selected by the `DB_ADAPTER` environment variable (default: `oracle`).
+
+#### Choosing an adapter
+
+| `DB_ADAPTER` | Driver | Use case |
+|---|---|---|
+| `oracle` (default) | `oracledb` (thin mode — no Instant Client needed) | Production Oracle environments |
+| `postgresql` | `psycopg2` (`pip install psycopg2-binary`) | PostgreSQL databases |
+| `sqlite` | built-in `sqlite3` | Local dev, testing, CI without a DB server |
+
+Set the adapter in `.env`:
+
+```bash
+# Use PostgreSQL instead of Oracle
+DB_ADAPTER=postgresql
+DB_HOST=myserver
+DB_PORT=5432
+DB_NAME=mydb
+DB_USER=myuser
+DB_PASSWORD=secret
+
+# Or SQLite (no server required — good for smoke tests)
+DB_ADAPTER=sqlite
+DB_PATH=/path/to/local.db   # omit for in-memory
+```
+
+#### Oracle connection variables
+
 All Oracle connection parameters are read from environment variables in one
 place (`src/config/db_config.py`).  No Oracle Instant Client is required --
 connections use **oracledb thin mode**.
 
 | Variable | Default | Description |
 |---|---|---|
-| `ORACLE_USER` | `CM3INT` | Database username |
-| `ORACLE_PASSWORD` | *(none)* | Database password -- **required** before any DB call |
+| `DB_ADAPTER` | `oracle` | Adapter type: `oracle`, `postgresql`, or `sqlite` |
+| `ORACLE_USER` | `CM3INT` | Oracle database username |
+| `ORACLE_PASSWORD` | *(none)* | Oracle database password -- **required** before any DB call |
 | `ORACLE_DSN` | `localhost:1521/FREEPDB1` | Easy Connect string (`host:port/service`) |
 | `ORACLE_SCHEMA` | value of `ORACLE_USER` | Schema prefix for SQL table references (e.g. `CM3INT.CM3_RUN_HISTORY`) |
+| `DB_HOST` | *(none)* | Generic host for non-Oracle adapters |
+| `DB_PORT` | *(none)* | Generic port for non-Oracle adapters |
+| `DB_NAME` | *(none)* | Generic database name for non-Oracle adapters |
 
-If `ORACLE_PASSWORD` is not set and a command attempts a database connection,
+If `ORACLE_PASSWORD` is not set and a command attempts an Oracle connection,
 it will fail immediately with a clear error message rather than hanging on a
 network timeout.
 
-**Quick connection test:**
+**Quick Oracle connection test:**
 
 ```bash
 python -c "from src.config.db_config import get_connection; c = get_connection(); print('Connected'); c.close()"
+```
+
+**Quick adapter factory test:**
+
+```bash
+python -c "from src.database.adapters import get_database_adapter; print(type(get_database_adapter()))"
 ```
 
 ---
@@ -1519,6 +1558,105 @@ curl -X POST http://cm3-server:8000/api/v1/schedules/run \
   -d '{"suite_name": "daily-validation"}'
 # Returns 202 with run_id, status, and step_results
 ```
+
+### ETL Pipeline Gate Orchestration (`run-etl-pipeline`)
+
+The `run-etl-pipeline` command executes a sequence of named validation gates
+declared in a YAML config file.  Each gate can run `validate`, `compare`,
+`db_compare`, or `reconcile` steps, iterate over multiple source feeds, and
+enforce pass/fail thresholds.  Blocking gates halt the pipeline on failure;
+non-blocking gates record the failure and continue.
+
+**Quickstart:**
+
+```bash
+valdo run-etl-pipeline \
+  --config config/pipelines/example_etl.yaml \
+  --run-date 20260326 \
+  --output reports/pipeline_run.json
+```
+
+**Pipeline YAML structure:**
+
+```yaml
+name: nightly-batch-etl
+description: ETL validation gates
+
+sources:
+  - name: customers
+    mapping: config/mappings/customer_batch_universal.json
+    rules: config/rules/customer_rules.json
+    input_path: data/samples/customers.txt
+
+gates:
+  - name: input_validation
+    for_each: source        # run steps once per source
+    blocking: true          # halt pipeline on failure
+    steps:
+      - type: validate
+        file: "{source.input_path}"
+        mapping: "{source.mapping}"
+        rules: "{source.rules}"
+        thresholds:
+          max_error_pct: 5.0
+          min_rows: 1
+
+  - name: pre_load_reconciliation
+    blocking: true
+    steps:
+      - type: db_compare
+        query: "SELECT * FROM STAGING WHERE BATCH_DATE = '{run_date}'"
+        file: output/concatenated_all.txt
+        mapping: config/mappings/customer_batch_universal.json
+        key_columns: [ACCT-KEY]
+        thresholds:
+          max_errors: 0
+
+  - name: post_load_check
+    blocking: false         # report failure but continue
+    steps:
+      - type: db_compare
+        query: "SELECT * FROM TARGET_ACCOUNTS WHERE LOAD_DATE = '{run_date}'"
+        file: output/concatenated_all.txt
+        mapping: config/mappings/target_system.json
+        key_columns: [ACCT-KEY]
+```
+
+**Template variables** available in any string field:
+
+| Placeholder | Resolves to |
+|-------------|-------------|
+| `{source.name}` | Source `name` field |
+| `{source.mapping}` | Source `mapping` path |
+| `{source.input_path}` | Source `input_path` |
+| `{source.output_pattern}` | Source `output_pattern` |
+| `{run_date}` | Value of `--run-date` flag |
+| `{key}` | Any key in the `--params` JSON object |
+
+**Threshold config** (all fields default to `-1` = disabled):
+
+| Field | Meaning |
+|-------|---------|
+| `max_error_pct` | Maximum error % (errors / rows × 100) |
+| `max_errors` | Maximum absolute error count |
+| `min_rows` | Minimum row count in processed file |
+
+**CI integration** — the command exits with code `1` when the pipeline fails,
+making it a natural gate in Azure DevOps / GitHub Actions / GitLab CI:
+
+```yaml
+# GitHub Actions example
+- name: Validate ETL batch
+  run: |
+    valdo run-etl-pipeline \
+      --config config/pipelines/nightly_etl.yaml \
+      --run-date ${{ env.RUN_DATE }} \
+      --output reports/pipeline_${{ env.RUN_DATE }}.json
+```
+
+An example pipeline config is provided at `config/pipelines/example_etl.yaml`.
+
+---
 
 ### Pipeline Templates
 

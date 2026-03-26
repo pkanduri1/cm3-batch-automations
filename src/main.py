@@ -960,6 +960,38 @@ def submit_task(intent, payload, task_id, trace_id, idempotency_key, priority, d
     click.echo(json.dumps(result.model_dump(), indent=2))
 
 
+@cli.command('run-etl-pipeline')
+@click.option('--config', required=True, type=click.Path(exists=True),
+              help='Pipeline YAML config file (see config/pipelines/)')
+@click.option('--run-date', default=None, show_default=True,
+              help='Run date string (e.g. 20260326) injected as {run_date} in templates')
+@click.option('--params', default='{}', show_default=True,
+              help='JSON object of extra template parameters (e.g. \'{"env": "staging"}\')')
+@click.option('--output', '-o', default=None,
+              help='Optional output file path for the JSON result report')
+def run_etl_pipeline(config, run_date, params, output):
+    """Execute ETL pipeline validation gates from a YAML config.
+
+    Reads a pipeline definition YAML, runs each gate in sequence
+    (validate, compare, db_compare, reconcile), evaluates thresholds,
+    and exits non-zero on failure so CI/CD can gate on this command.
+
+    Example:
+
+        valdo run-etl-pipeline --config config/pipelines/nightly_etl.yaml
+            --run-date 20260326 --output reports/pipeline_run.json
+    """
+    logger = setup_logger('valdo', log_to_file=False)
+    try:
+        from src.commands.etl_pipeline_command import run_etl_pipeline_command
+        run_etl_pipeline_command(config, run_date, params, output, logger)
+    except SystemExit:
+        raise
+    except Exception as e:
+        logger.error(f"Error running ETL pipeline: {e}")
+        sys.exit(1)
+
+
 @cli.command()
 @click.option('--host', default='0.0.0.0', show_default=True,
               help='Bind address for the server')
