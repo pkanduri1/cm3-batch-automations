@@ -1136,6 +1136,203 @@
   :focus:not(:focus-visible) {
     outline: none;
   }
+
+  /* ── Help sidebar ────────────────────────────────────────────────────── */
+  .help-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 900;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  .help-overlay.open { opacity: 1; visibility: visible; }
+
+  .help-sidebar {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: min(520px, 85vw);
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border);
+    z-index: 950;
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    box-shadow: -8px 0 40px rgba(0,0,0,0.15);
+  }
+  .help-sidebar.open { transform: translateX(0); }
+
+  .help-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .help-sidebar-header h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .help-sidebar-header h3 svg { opacity: 0.6; }
+  .help-sidebar-close {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 18px;
+    width: 32px; height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
+  }
+  .help-sidebar-close:hover {
+    color: var(--text-primary);
+    background: rgba(231,76,60,0.08);
+    border-color: rgba(231,76,60,0.3);
+  }
+
+  .help-sidebar-search {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .help-sidebar-search input {
+    width: 100%;
+    background: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 13px;
+    padding: 8px 12px 8px 32px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .help-sidebar-search input:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+  }
+  .help-sidebar-search input::placeholder { color: var(--muted); }
+  .help-sidebar-search-wrap { position: relative; }
+  .help-sidebar-search-wrap svg {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    color: var(--muted); pointer-events: none;
+  }
+
+  .help-sidebar-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 24px 40px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text-primary);
+    scroll-behavior: smooth;
+  }
+  .help-sidebar-body::-webkit-scrollbar { width: 6px; }
+  .help-sidebar-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Markdown-rendered content styling */
+  .help-sidebar-body h1 {
+    font-size: 22px; font-weight: 700; margin: 28px 0 12px 0;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+  }
+  .help-sidebar-body h1:first-child { margin-top: 0; }
+  .help-sidebar-body h2 {
+    font-size: 17px; font-weight: 700; margin: 24px 0 10px 0;
+    color: var(--blue);
+  }
+  .help-sidebar-body h3 {
+    font-size: 14px; font-weight: 600; margin: 18px 0 8px 0;
+    color: var(--text-primary);
+  }
+  .help-sidebar-body p { margin: 8px 0; }
+  .help-sidebar-body ul, .help-sidebar-body ol {
+    margin: 8px 0; padding-left: 22px;
+  }
+  .help-sidebar-body li { margin: 4px 0; }
+  .help-sidebar-body code {
+    background: rgba(74,158,255,0.1);
+    border: 1px solid rgba(74,158,255,0.15);
+    border-radius: 4px;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 12px;
+    padding: 1px 5px;
+    color: var(--blue);
+  }
+  .help-sidebar-body pre {
+    background: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    margin: 12px 0;
+    overflow-x: auto;
+    padding: 14px 16px;
+  }
+  .help-sidebar-body pre code {
+    background: none; border: none; padding: 0; color: var(--text-primary);
+  }
+  .help-sidebar-body table {
+    border-collapse: collapse; width: 100%; margin: 12px 0;
+    font-size: 13px;
+  }
+  .help-sidebar-body th, .help-sidebar-body td {
+    border: 1px solid var(--border); padding: 6px 10px; text-align: left;
+  }
+  .help-sidebar-body th {
+    background: var(--accent); font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .help-sidebar-body img { max-width: 100%; border-radius: 8px; margin: 8px 0; }
+  .help-sidebar-body blockquote {
+    border-left: 3px solid var(--blue); margin: 12px 0;
+    padding: 8px 16px; color: var(--text-secondary);
+    background: rgba(74,158,255,0.04); border-radius: 0 8px 8px 0;
+  }
+  .help-sidebar-body hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+  .help-sidebar-body a { color: var(--blue); text-decoration: none; }
+  .help-sidebar-body a:hover { text-decoration: underline; }
+
+  .help-loading {
+    text-align: center; padding: 40px; color: var(--muted);
+  }
+  .help-error {
+    text-align: center; padding: 40px; color: var(--fail);
+  }
+
+  /* Help button in header */
+  .btn-help {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    width: 32px; height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    flex-shrink: 0;
+  }
+  .btn-help:hover {
+    color: var(--text-primary);
+    border-color: var(--blue);
+    background: rgba(37,99,235,0.08);
+  }
+  .header-right { display: flex; align-items: center; gap: 8px; }
 </style>
 </head>
 <body>
@@ -1150,9 +1347,38 @@
     <h1>Valdo</h1>
     <span class="version-badge">v2.0</span>
   </div>
-  <button class="btn-theme" id="btnTheme" aria-label="Toggle light/dark theme"
-          data-tooltip="Switch between light and dark theme">&#9728;</button>
+  <div class="header-right">
+    <button class="btn-help" id="btnHelp" aria-label="Open usage guide"
+            data-tooltip="Usage &amp; operations guide">?</button>
+    <button class="btn-theme" id="btnTheme" aria-label="Toggle light/dark theme"
+            data-tooltip="Switch between light and dark theme">&#9728;</button>
+  </div>
 </header>
+
+<!-- Help sidebar overlay -->
+<div class="help-overlay" id="helpOverlay"></div>
+<aside class="help-sidebar" id="helpSidebar" role="dialog" aria-label="Usage Guide">
+  <div class="help-sidebar-header">
+    <h3>
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/>
+      </svg>
+      Usage Guide
+    </h3>
+    <button class="help-sidebar-close" id="btnHelpClose" aria-label="Close guide">&times;</button>
+  </div>
+  <div class="help-sidebar-search">
+    <div class="help-sidebar-search-wrap">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="m21 21-4.35-4.35"/>
+      </svg>
+      <input type="text" id="helpSearch" placeholder="Search guide..." aria-label="Search usage guide">
+    </div>
+  </div>
+  <div class="help-sidebar-body" id="helpBody">
+    <div class="help-loading">Loading usage guide...</div>
+  </div>
+</aside>
 
 <nav class="tabs" role="tablist" id="tabNav">
   <div class="tabs-inner" id="tabsInner">
@@ -3073,6 +3299,227 @@ toggleAutoRefresh = function() {
       btn.setAttribute('aria-expanded', String(compareMode));
     });
   }
+})();
+
+// ===========================================================================
+// Help sidebar
+// ===========================================================================
+(function() {
+  var overlay = document.getElementById('helpOverlay');
+  var sidebar = document.getElementById('helpSidebar');
+  var btnOpen = document.getElementById('btnHelp');
+  var btnClose = document.getElementById('btnHelpClose');
+  var body = document.getElementById('helpBody');
+  var searchInput = document.getElementById('helpSearch');
+  var guideHtml = '';
+  var loaded = false;
+
+  function openHelp() {
+    overlay.classList.add('open');
+    sidebar.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    if (!loaded) loadGuide();
+    setTimeout(function() { searchInput.focus(); }, 350);
+  }
+
+  function closeHelp() {
+    overlay.classList.remove('open');
+    sidebar.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  btnOpen.addEventListener('click', openHelp);
+  btnClose.addEventListener('click', closeHelp);
+  overlay.addEventListener('click', closeHelp);
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && sidebar.classList.contains('open')) closeHelp();
+  });
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // Simple markdown to safe DOM elements (no innerHTML with untrusted content)
+  function renderMarkdownToDOM(md, container) {
+    while (container.firstChild) container.removeChild(container.firstChild);
+    var lines = md.split('\n');
+    var inCode = false;
+    var codeBlock = null;
+    var listEl = null;
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+
+      // Code blocks
+      if (line.match(/^```/)) {
+        if (inCode) {
+          container.appendChild(codeBlock);
+          codeBlock = null;
+          inCode = false;
+        } else {
+          codeBlock = document.createElement('pre');
+          var codeEl = document.createElement('code');
+          codeBlock.appendChild(codeEl);
+          inCode = true;
+        }
+        continue;
+      }
+      if (inCode) {
+        codeBlock.querySelector('code').textContent += line + '\n';
+        continue;
+      }
+
+      // Close list if line is not a list item
+      if (listEl && !line.match(/^\s*[-*] /)) {
+        container.appendChild(listEl);
+        listEl = null;
+      }
+
+      // Headings
+      var headingMatch = line.match(/^(#{1,3}) (.+)/);
+      if (headingMatch) {
+        var level = headingMatch[1].length;
+        var hEl = document.createElement('h' + level);
+        // Generate ID for anchor links (e.g. "1. Getting Started" → "1-getting-started")
+        var headingId = headingMatch[2].toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '');
+        hEl.id = headingId;
+        appendInlineContent(hEl, headingMatch[2]);
+        container.appendChild(hEl);
+        continue;
+      }
+
+      // HR
+      if (line.match(/^---+$/)) {
+        container.appendChild(document.createElement('hr'));
+        continue;
+      }
+
+      // List items
+      var listMatch = line.match(/^\s*[-*] (.+)/);
+      if (listMatch) {
+        if (!listEl) listEl = document.createElement('ul');
+        var li = document.createElement('li');
+        appendInlineContent(li, listMatch[1]);
+        listEl.appendChild(li);
+        continue;
+      }
+
+      // Empty lines
+      if (line.trim() === '') continue;
+
+      // Paragraphs
+      var p = document.createElement('p');
+      appendInlineContent(p, line);
+      container.appendChild(p);
+    }
+
+    if (codeBlock) container.appendChild(codeBlock);
+    if (listEl) container.appendChild(listEl);
+  }
+
+  // Render inline markdown (bold, code, links) as safe DOM nodes
+  function appendInlineContent(parent, text) {
+    // Split on patterns: `code`, **bold**, [text](url)
+    var regex = /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/;
+    var parts = text.split(regex);
+    for (var i = 0; i < parts.length; i++) {
+      var part = parts[i];
+      if (!part) continue;
+      if (part.match(/^`([^`]+)`$/)) {
+        var code = document.createElement('code');
+        code.textContent = part.slice(1, -1);
+        parent.appendChild(code);
+      } else if (part.match(/^\*\*([^*]+)\*\*$/)) {
+        var strong = document.createElement('strong');
+        strong.textContent = part.slice(2, -2);
+        parent.appendChild(strong);
+      } else if (part.match(/^\[([^\]]+)\]\(([^)]+)\)$/)) {
+        var linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+        var a = document.createElement('a');
+        a.textContent = linkMatch[1];
+        var href = linkMatch[2];
+        if (href.charAt(0) === '#') {
+          // Anchor link — scroll within sidebar
+          a.href = 'javascript:void(0)';
+          a.setAttribute('data-anchor', href.slice(1));
+          a.addEventListener('click', (function(anchor) {
+            return function(e) {
+              e.preventDefault();
+              var target = document.getElementById(anchor);
+              if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            };
+          })(href.slice(1)));
+        } else {
+          a.href = href;
+          a.target = '_blank';
+          a.rel = 'noopener';
+        }
+        parent.appendChild(a);
+      } else {
+        parent.appendChild(document.createTextNode(part));
+      }
+    }
+  }
+
+  function loadGuide() {
+    body.textContent = '';
+    var loadMsg = document.createElement('div');
+    loadMsg.className = 'help-loading';
+    loadMsg.textContent = 'Loading usage guide...';
+    body.appendChild(loadMsg);
+
+    fetch('/api/v1/guide?format=markdown')
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(function(md) {
+        guideHtml = md;
+        renderMarkdownToDOM(md, body);
+        loaded = true;
+      })
+      .catch(function() {
+        body.textContent = '';
+        var errDiv = document.createElement('div');
+        errDiv.className = 'help-error';
+        errDiv.textContent = 'Could not load usage guide. Ensure the server is running.';
+        body.appendChild(errDiv);
+      });
+  }
+
+  // Search with highlight
+  searchInput.addEventListener('input', function() {
+    var q = searchInput.value.trim().toLowerCase();
+    if (!q || !guideHtml) {
+      renderMarkdownToDOM(guideHtml, body);
+      return;
+    }
+    renderMarkdownToDOM(guideHtml, body);
+    var walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, null, false);
+    var textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    for (var j = 0; j < textNodes.length; j++) {
+      var node = textNodes[j];
+      var idx = node.textContent.toLowerCase().indexOf(q);
+      if (idx >= 0) {
+        var mark = document.createElement('mark');
+        mark.style.background = 'rgba(74,158,255,0.3)';
+        mark.style.borderRadius = '2px';
+        mark.style.padding = '0 1px';
+        var after = node.splitText(idx);
+        var rest = after.splitText(q.length);
+        mark.textContent = after.textContent;
+        after.parentNode.replaceChild(mark, after);
+      }
+    }
+    var firstMark = body.querySelector('mark');
+    if (firstMark) firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
 })();
 </script>
 </body>

@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 import logging
 import os
@@ -126,6 +126,19 @@ app.mount("/uploads", StaticFiles(directory=str(_UPLOADS_DIR)), name="uploads")
 _REPORTS_DIR = Path(__file__).parent.parent.parent / "reports"
 _REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/reports", StaticFiles(directory=str(_REPORTS_DIR)), name="reports")
+
+_DOCS_DIR = Path(__file__).parent.parent.parent / "docs"
+
+
+@app.get("/api/v1/guide", tags=["Docs"])
+async def get_usage_guide(format: str = "markdown"):
+    """Serve the usage and operations guide as markdown text."""
+    guide_path = _DOCS_DIR / "USAGE_AND_OPERATIONS_GUIDE.md"
+    if not guide_path.exists():
+        return PlainTextResponse("# Usage Guide\n\nGuide not found.", status_code=404)
+    content = guide_path.read_text(encoding="utf-8")
+    return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
+
 
 # Root endpoint
 @app.get("/", tags=["Root"])
