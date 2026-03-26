@@ -15,9 +15,12 @@ across CLI, Web UI, REST API, and CI/CD environments.
 6. [Configuration Reference](#6-configuration-reference)
 7. [CI Pipeline Integration](#7-ci-pipeline-integration)
 8. [Database Integration](#8-database-integration)
-9. [Operations Guide](#9-operations-guide)
-10. [FAQ](#10-faq)
-11. [Troubleshooting](#11-troubleshooting)
+9. [ETL Pipeline Testing](#9-etl-pipeline-testing)
+10. [Data Masking](#10-data-masking)
+11. [AI Prompt Library](#11-ai-prompt-library)
+12. [Operations Guide](#12-operations-guide)
+13. [FAQ](#13-faq)
+14. [Troubleshooting](#14-troubleshooting)
 
 ---
 
@@ -753,6 +756,67 @@ valdo submit-task \
 | `--deadline` | now | ISO timestamp deadline |
 | `--machine-errors` | off | Emit JSON error output |
 
+### infer-mapping
+
+Auto-generate a draft mapping configuration from a sample data file. Valdo
+analyses the file to detect the format (fixed-width, pipe-delimited, CSV, TSV),
+identify field boundaries, and infer data types.
+
+```bash
+valdo infer-mapping \
+  --file data/samples/unknown_file.txt \
+  --output config/mappings/draft_mapping.json
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--file, -f` | (required) | Sample data file to analyse |
+| `--format, -t` | auto-detect | Override format detection: `fixed_width`, `pipe_delimited`, `csv`, `tsv` |
+| `--output, -o` | stdout | Output JSON file path (prints to stdout if omitted) |
+| `--sample-lines` | `100` | Number of lines to analyse for inference |
+
+#### How It Works
+
+1. Valdo reads the first N lines (default 100) of the sample file.
+2. It detects the format automatically (or uses your `--format` override).
+3. For delimited files, it splits on the delimiter and names fields `FIELD_1`,
+   `FIELD_2`, etc.
+4. For fixed-width files, it analyses character-position frequency to detect
+   field boundaries.
+5. Data types are inferred by sampling values: numeric, date, or string.
+6. The output is a complete mapping JSON ready for review and editing.
+
+#### Common examples
+
+**Infer mapping and print to stdout (for quick inspection):**
+
+```bash
+valdo infer-mapping -f data/samples/mystery_batch.txt
+```
+
+**Infer mapping with format override and save to file:**
+
+```bash
+valdo infer-mapping \
+  -f data/samples/pipe_file.txt \
+  -t pipe_delimited \
+  --sample-lines 200 \
+  -o config/mappings/pipe_file_draft.json
+```
+
+Expected output:
+
+```
+Draft mapping written to: config/mappings/pipe_file_draft.json
+Fields inferred: 14
+Format detected: pipe_delimited
+```
+
+Review the draft, adjust field names and types as needed, then use it with
+`valdo validate`.
+
+---
+
 ### Other Commands
 
 | Command | Description |
@@ -761,10 +825,13 @@ valdo submit-task \
 | `convert-rules` | Convert Excel/CSV rules template to JSON |
 | `convert-suite` | Convert Excel test suite to YAML |
 | `extract` | Extract data from Oracle to file |
+| `infer-mapping` | Auto-generate a draft mapping JSON from a sample data file |
+| `mask` | Mask PII fields in batch files using configurable strategies |
 | `reconcile` | Reconcile a mapping with database schema |
 | `reconcile-all` | Reconcile all mappings in a directory (with optional drift detection) |
 | `generate-oracle-expected` | Generate expected files from Oracle SQL |
 | `run-pipeline` | Run a source-system orchestration profile |
+| `run-etl-pipeline` | Execute ETL pipeline validation gates from a YAML config |
 | `gx-checkpoint1` | Run Great Expectations Checkpoint 1 |
 | `watch` | Watch a directory for trigger files and run matching suites |
 | `list-runs` | List archived test suite runs |
@@ -1425,6 +1492,14 @@ cp .env.example .env
 | `API_KEYS` | `key-dev-abc123` | Comma-separated API keys. Optional role suffix: `key:role` |
 | `ALLOWED_ORIGINS` | `http://localhost,http://127.0.0.1` | CORS allowed origins (comma-separated) |
 | `FILE_RETENTION_HOURS` | `24` | Auto-delete uploaded files older than this |
+| `DB_ADAPTER` | `oracle` | Database backend: `oracle`, `postgresql`, or `sqlite` |
+| `DB_HOST` | `localhost` | PostgreSQL server hostname (used when `DB_ADAPTER=postgresql`) |
+| `DB_PORT` | `5432` | PostgreSQL server port (used when `DB_ADAPTER=postgresql`) |
+| `DB_NAME` | `postgres` | Database name or SQLite file path (used when `DB_ADAPTER=postgresql` or `sqlite`) |
+| `DB_USER` | `postgres` | PostgreSQL username (used when `DB_ADAPTER=postgresql`) |
+| `DB_PASSWORD` | (none) | PostgreSQL password (used when `DB_ADAPTER=postgresql`) |
+| `AUDIT_LOG_PATH` | `logs/audit.jsonl` | Path to the structured JSONL audit log file |
+| `CM3_ENVIRONMENT` | `DEV` | Environment tag included in every audit event |
 | `SMTP_HOST` | (none) | SMTP server hostname for email notifications |
 | `SMTP_PORT` | `587` | SMTP server port |
 | `SMTP_FROM` | (none) | Sender email address |
@@ -2135,28 +2210,379 @@ The rules file can define cross-row checks like:
 
 ---
 
-### 8.8 Database Support Roadmap
+### 8.8 Pluggable Database Adapters
 
-**Current support:** Oracle only, via the `oracledb` Python driver in thin mode.
+Valdo supports multiple database backends through a pluggable adapter
+architecture. Each adapter implements the same interface
+(`DatabaseAdapter`), so all database commands (`db-compare`, `extract`,
+`reconcile`, `reconcile-all`, `generate-oracle-expected`) work identically
+regardless of which backend is active. Your mapping files, rules, and
+comparison workflows remain the same.
 
-**Planned database support** (tracked in issue #151):
+#### Supported Adapters
 
-| Database | Status | Driver |
-|---|---|---|
-| Oracle | Supported | `oracledb` (thin mode) |
-| PostgreSQL | Planned | `psycopg2` / `asyncpg` |
-| SQL Server | Planned | `pyodbc` |
-| MySQL | Planned | `mysql-connector-python` |
-| SQLite | Planned | `sqlite3` (stdlib) |
+| Database | `DB_ADAPTER` value | Driver | Status |
+|---|---|---|---|
+| Oracle | `oracle` (default) | `oracledb` (thin mode) | Supported |
+| PostgreSQL | `postgresql` | `psycopg2` | Supported |
+| SQLite | `sqlite` | `sqlite3` (stdlib) | Supported |
 
-The architecture uses a pluggable `DatabaseAdapter` interface. Each database
-backend implements the same extraction and connection contract, so switching
-databases requires only a configuration change -- your mapping files, rules,
-and comparison workflows remain the same.
+#### Selecting an Adapter
+
+Set the `DB_ADAPTER` environment variable in your `.env` file or shell:
+
+```bash
+# Use Oracle (default -- same as omitting DB_ADAPTER)
+export DB_ADAPTER=oracle
+
+# Use PostgreSQL
+export DB_ADAPTER=postgresql
+
+# Use SQLite
+export DB_ADAPTER=sqlite
+```
+
+All database commands automatically use the active adapter. No code or
+command-line changes are needed.
+
+#### PostgreSQL Setup
+
+Set these environment variables when using `DB_ADAPTER=postgresql`:
+
+```bash
+DB_ADAPTER=postgresql
+DB_HOST=pg-server.example.com    # default: localhost
+DB_PORT=5432                     # default: 5432
+DB_NAME=valdo_db                 # default: postgres
+DB_USER=valdo_user               # default: postgres
+DB_PASSWORD=secret
+```
+
+Install the driver:
+
+```bash
+pip install psycopg2-binary
+```
+
+Then run database commands as usual:
+
+```bash
+valdo db-compare \
+  --query-or-table "SELECT * FROM customers" \
+  --mapping config/mappings/customer_mapping.json \
+  --actual-file data/actual/customers.txt
+```
+
+#### SQLite Setup
+
+SQLite requires no external driver (uses Python's built-in `sqlite3`).
+Set these environment variables:
+
+```bash
+DB_ADAPTER=sqlite
+DB_NAME=path/to/local.db    # default: :memory: (in-memory database)
+```
+
+Using `:memory:` creates an ephemeral in-memory database, ideal for unit
+tests and CI pipelines that need a database backend without infrastructure.
+
+```bash
+# Example: extract from a SQLite database
+DB_ADAPTER=sqlite DB_NAME=test.db valdo extract \
+  --query "SELECT * FROM test_table" \
+  --output data/extracts/test_output.txt
+```
 
 ---
 
-## 9. Operations Guide
+## 9. ETL Pipeline Testing
+
+The `run-etl-pipeline` command executes multi-gate ETL validation pipelines
+defined in YAML. It is designed for CI/CD integration -- the command exits
+non-zero when any blocking gate fails, so pipelines can gate deployments on
+data quality.
+
+### CLI Usage
+
+```bash
+valdo run-etl-pipeline \
+  --config config/pipelines/example_etl.yaml \
+  --run-date 20260326 \
+  --output reports/pipeline_run.json
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--config` | (required) | Path to the pipeline YAML configuration file |
+| `--run-date` | (none) | Run date string injected as `{run_date}` in templates |
+| `--params` | `{}` | JSON object of extra template parameters |
+| `--output, -o` | (none) | Optional file path for the JSON result report |
+
+### Pipeline YAML Config Format
+
+A pipeline config defines **sources** (the data feeds to validate) and
+**gates** (ordered validation stages). Each gate contains one or more steps
+and can iterate over all sources with `for_each: source`.
+
+```yaml
+name: nightly-etl-pipeline
+description: Validate ETL outputs for the nightly batch run.
+
+sources:
+  - name: customers
+    mapping: config/mappings/customer_mapping.json
+    rules: config/rules/customer_rules.json
+    input_path: data/incoming/customers_{run_date}.txt
+    output_pattern: output/customers_*.txt
+
+  - name: accounts
+    mapping: config/mappings/account_mapping.json
+    rules: config/rules/account_rules.json
+    input_path: data/incoming/accounts_{run_date}.txt
+    output_pattern: output/accounts_*.txt
+
+gates:
+  - name: input_validation
+    stage: gate1
+    description: Validate raw source files before staging
+    for_each: source
+    blocking: true
+    steps:
+      - type: validate
+        file: "{source.input_path}"
+        mapping: "{source.mapping}"
+        rules: "{source.rules}"
+        thresholds:
+          max_error_pct: 5.0
+          min_rows: 1
+
+  - name: output_validation
+    stage: gate3
+    description: Validate transformed output files
+    for_each: source
+    blocking: true
+    steps:
+      - type: validate
+        file: "{source.output_pattern}"
+        mapping: "{source.mapping}"
+        thresholds:
+          max_error_pct: 0.0
+
+  - name: post_load_check
+    stage: gate5
+    description: Verify loaded records (non-blocking)
+    blocking: false
+    steps:
+      - type: db_compare
+        query: "SELECT * FROM loaded_data WHERE batch_date = '{run_date}'"
+        file: output/final_{run_date}.txt
+        mapping: config/mappings/customer_mapping.json
+        key_columns:
+          - ACCT-KEY
+```
+
+### Template Variable Expansion
+
+Template variables use `{...}` syntax and are expanded before each step
+executes:
+
+| Variable | Source | Example value |
+|---|---|---|
+| `{source.name}` | Current source in `for_each` loop | `customers` |
+| `{source.mapping}` | Source mapping path | `config/mappings/customer_mapping.json` |
+| `{source.input_path}` | Source input file path | `data/incoming/customers_20260326.txt` |
+| `{source.output_pattern}` | Glob for output files | `output/customers_*.txt` |
+| `{source.rules}` | Source rules path | `config/rules/customer_rules.json` |
+| `{run_date}` | Value of `--run-date` flag | `20260326` |
+
+Extra parameters passed via `--params '{"env": "staging"}'` are also available
+as `{env}`.
+
+### Blocking vs Non-Blocking Gates
+
+- **`blocking: true`** (default) -- if the gate fails, the pipeline stops
+  immediately and reports overall status as `failed`. Use for critical quality
+  gates (e.g. input validation, output validation).
+- **`blocking: false`** -- if the gate fails, the failure is recorded but
+  execution continues. Use for informational checks (e.g. post-load
+  verification) where you want visibility without halting the pipeline.
+
+### CI Integration Example (Azure DevOps)
+
+```yaml
+# azure-pipelines.yml
+trigger:
+  - main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.11'
+
+  - script: pip install valdo-automations
+    displayName: Install Valdo
+
+  - script: |
+      valdo run-etl-pipeline \
+        --config config/pipelines/nightly_etl.yaml \
+        --run-date $(Build.BuildNumber) \
+        --output $(Build.ArtifactStagingDirectory)/pipeline_report.json
+    displayName: Run ETL validation gates
+
+  - publish: $(Build.ArtifactStagingDirectory)/pipeline_report.json
+    artifact: etl-validation-report
+    condition: always()
+```
+
+The command exits non-zero on failure, so the Azure DevOps pipeline step
+will fail automatically if any blocking gate does not pass.
+
+---
+
+## 10. Data Masking
+
+The `valdo mask` command replaces sensitive (PII) field values in batch files
+with safe alternatives, producing dev/test-safe copies of production data.
+
+### CLI Usage
+
+```bash
+valdo mask \
+  --file data/production/customers.txt \
+  --mapping config/mappings/customer_mapping.json \
+  --rules config/masking/customer_masking.json \
+  --output data/dev/customers_masked.txt
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--file, -f` | (required) | Input batch file to mask |
+| `--mapping, -m` | (required) | Mapping JSON file (defines field positions) |
+| `--rules, -r` | (none) | Masking rules JSON (strategy per field). If omitted, all fields are preserved |
+| `--output, -o` | (required) | Output file path for the masked data |
+
+### Masking Strategies
+
+Six strategies are available. Each field in the masking rules JSON maps to
+one strategy:
+
+| Strategy | Description | Example input | Example output |
+|---|---|---|---|
+| `preserve` | Keep the original value unchanged | `ON` | `ON` |
+| `preserve_format` | Replace characters but keep the pattern (digits stay digits, letters stay letters) | `2026-01-15` | `7391-08-42` |
+| `deterministic_hash` | SHA-based hash truncated to field length. Same input always produces the same output | `ACCT00123` | `a7f3c9e2b1` |
+| `random_range` | Replace with a random number in `[min, max]` | `50000` | `27341` |
+| `redact` | Replace entire value with `*` characters | `123-45-6789` | `***********` |
+| `fake_name` | Replace with a realistic fake name | `John Smith` | `Maria Garcia` |
+
+### Masking Rules JSON Format
+
+```json
+{
+  "description": "Masking rules for customer batch files",
+  "fields": {
+    "CUSTOMER-NAME": {
+      "strategy": "fake_name"
+    },
+    "SSN": {
+      "strategy": "redact"
+    },
+    "ACCT-NUM": {
+      "strategy": "deterministic_hash",
+      "length": 18
+    },
+    "BALANCE-AMT": {
+      "strategy": "random_range",
+      "min": 0,
+      "max": 999999
+    },
+    "EXPIRATION-DATE": {
+      "strategy": "preserve_format"
+    },
+    "LOCATION-CODE": {
+      "strategy": "preserve"
+    }
+  }
+}
+```
+
+Fields not listed in the rules are preserved unchanged by default.
+
+### Use Case: Creating PII-Free Test Data
+
+Production batch files often contain real customer names, account numbers,
+and social security numbers. Regulations (GDPR, PIPEDA, CCPA) prohibit
+using this data in non-production environments.
+
+The masking workflow:
+
+1. Get a production batch file (or extract one with `valdo extract`).
+2. Create masking rules that redact or randomise PII fields.
+3. Run `valdo mask` to produce a safe copy.
+4. Use the masked file for development, testing, and CI validation.
+
+`deterministic_hash` is particularly useful for join keys: the same input
+always produces the same hash, so relationships between files are preserved
+(e.g. customer ID in a customer file maps to the same masked ID in a
+transaction file).
+
+---
+
+## 11. AI Prompt Library
+
+Valdo includes a set of reusable LLM prompts in the `prompts/` directory that
+help teams generate mapping and rules CSV templates from specification
+documents.
+
+### What It Solves
+
+Teams typically receive batch file specifications as Excel spreadsheets, PDFs,
+or Word documents containing natural-language field descriptions, COBOL picture
+clauses, and business rules in free text. Manually translating these into
+Valdo's CSV template format can take hours.
+
+These prompts let any LLM (GitHub Copilot, GitLab Duo, Claude, ChatGPT,
+Gemini) perform the translation in seconds.
+
+### Available Prompts
+
+| Prompt | Input | Output | File |
+|---|---|---|---|
+| **Mapping CSV** | Spec doc with fields, positions, types | `mapping_template.csv` for upload | `prompts/generate-mapping-csv.md` |
+| **Rules CSV** | Spec doc with validation logic, required flags | `rules_template.csv` for upload | `prompts/generate-rules-csv.md` |
+| **Both** | Full spec doc | Both CSVs in one go | `prompts/generate-both.md` |
+
+### Workflow
+
+1. Open your mapping specification (Excel, PDF, text).
+2. Copy the content (or paste as a table).
+3. Paste the appropriate prompt into your LLM tool.
+4. Paste the spec content after the prompt.
+5. The LLM generates a CSV.
+6. Save the output as a `.csv` file.
+7. Upload to Valdo's Web UI (Mapping Generator tab) or use
+   `valdo convert-mappings`.
+8. Valdo converts to JSON -- done.
+
+### Tips
+
+- **Large specs**: If your spec has 100+ fields, paste in batches of 20-30
+  fields per prompt.
+- **Multiple record types**: If your file has different record types (Header,
+  Detail, Trailer), process each type separately.
+- **Review output**: Always review the generated CSV before uploading -- AI
+  may misinterpret ambiguous specs.
+- **Iterative refinement**: After the first generation, ask follow-up
+  questions like "add cross-row rules for sequential numbering."
+
+For full details, see `prompts/README.md`.
+
+---
+
+## 12. Operations Guide
 
 ### Docker Deployment
 
@@ -2266,6 +2692,51 @@ Structured log events from the `src.utils.structured_logger` module emit JSON
 fields including `trace_id`, `job_id`, and `status` for correlation in
 centralized logging systems (ELK, Splunk, CloudWatch).
 
+### Audit Logger
+
+Valdo emits structured audit events to a JSONL file for compliance and
+operational traceability. Every validation run, file upload, authentication
+failure, and cleanup event is logged.
+
+#### Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `AUDIT_LOG_PATH` | `logs/audit.jsonl` | Path to the JSONL audit log file |
+| `CM3_ENVIRONMENT` | `DEV` | Environment tag included in every event |
+
+#### JSONL Event Format
+
+Each line in the audit log is a self-contained JSON object:
+
+```json
+{
+  "event": "test_run_completed",
+  "timestamp": "2026-03-26T14:30:00.000000+00:00",
+  "run_id": "a1b2c3d4e5f6...",
+  "environment": "PROD",
+  "triggered_by": "api",
+  "file": "customers.txt",
+  "file_hash": "sha256:abc123...",
+  "result": {"total_rows": 15000, "error_count": 0}
+}
+```
+
+Recognised event types: `test_run_started`, `test_run_completed`,
+`file_uploaded`, `file_cleanup`, `auth_failure`, `suite_step_completed`.
+
+#### Splunk Integration
+
+The JSONL format is directly compatible with Splunk Universal Forwarder using
+`sourcetype=_json`. See `docs/splunk-setup.md` for detailed configuration
+steps including:
+
+- Universal Forwarder `inputs.conf` configuration
+- Index and sourcetype setup
+- Example SPL queries for dashboards
+
+---
+
 ### Performance Tuning
 
 #### Chunked Processing
@@ -2304,7 +2775,7 @@ Control retention with `FILE_RETENTION_HOURS` (default: 24 hours).
 
 ---
 
-## 10. FAQ
+## 13. FAQ
 
 ### What file formats does Valdo support?
 
@@ -2402,7 +2873,7 @@ failed and why, open the full HTML or JSON report.
 
 ---
 
-## 11. Troubleshooting
+## 14. Troubleshooting
 
 ### Common Errors
 

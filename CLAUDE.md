@@ -9,7 +9,7 @@
 - API: `src/api/main.py` (FastAPI app at port 8000)
 - Web UI: `src/reports/static/ui.html` (served at `/ui`)
 
-**Test suite:** 897 unit tests + 46 E2E Playwright tests = 943 total, 84% coverage
+**Test suite:** 976 unit tests + 46 E2E Playwright tests = 1022 total, 84% coverage
 
 **Active branch:** `main`
 
@@ -28,6 +28,7 @@
 | `valdo infer-mapping` | Auto-generate mapping draft from sample file |
 | `valdo mask` | Mask PII in batch files (6 strategies) |
 | `valdo parse` | Parse and inspect a batch file |
+| `valdo run-etl-pipeline` | Execute ETL pipeline validation gates from YAML config |
 | `valdo serve` | Start the FastAPI server |
 | `valdo schedule` | List/run scheduled test suites |
 | `valdo submit-task` | Submit a canonical task request |
@@ -62,6 +63,9 @@
 - GitLab CI: `ci/templates/gitlab-valdo-validate.yml`
 - Docker: `Dockerfile` with `valdo` entrypoint
 - Webhook: `POST /api/v1/webhook/validate` for async validation
+
+### ETL Pipeline Runner (`valdo run-etl-pipeline`)
+Multi-gate validation pipelines defined in YAML. Supports template variable expansion, blocking/non-blocking gates, per-step thresholds, and CI/CD integration (exits non-zero on failure).
 
 ### Data Masking (`valdo mask`)
 6 strategies: preserve, preserve_format, deterministic_hash, random_range, redact, fake_name
@@ -155,8 +159,9 @@ src/
   services/          # Business logic layer
   validators/        # Rule engine, field validator, cross-row validator
   config/            # Mapping/rules converters, DB config, Pydantic models
-  database/          # Oracle connection, reconciliation, run history, adapters
-  pipeline/          # Suite runner, suite config
+  database/          # Oracle connection, reconciliation, run history
+    adapters/        # Pluggable DB adapters (oracle, postgresql, sqlite)
+  pipeline/          # Suite runner, suite config, ETL pipeline runner
   parsers/           # Fixed-width, pipe-delimited, CSV/TSV parsers
   reports/
     renderers/       # HTML/JSON report generators
@@ -167,6 +172,7 @@ config/
   rules/             # Generated rules JSON files
   suites/            # Test suite YAML definitions
   masking/           # Masking rules JSON
+  pipelines/         # ETL pipeline YAML definitions
 prompts/             # AI prompt library for LLM-assisted config generation
 docs/
   USAGE_AND_OPERATIONS_GUIDE.md  # Comprehensive guide (2400+ lines)
@@ -177,7 +183,7 @@ docs/
   splunk-setup.md                # Audit log integration
   sphinx/                        # Auto-generated API reference
 tests/
-  unit/              # 897 unit tests (pytest)
+  unit/              # 976 unit tests (pytest)
   e2e/               # 46 Playwright E2E tests
 ci/
   templates/         # Azure DevOps + GitLab CI reusable templates
@@ -223,6 +229,7 @@ Configurable via environment variables (defaults for local dev):
 | `ORACLE_PASSWORD` | (required) | Oracle password |
 | `ORACLE_DSN` | `localhost:1521/FREEPDB1` | Oracle connection string |
 | `ORACLE_SCHEMA` | = `ORACLE_USER` | Schema prefix for SQL |
+| `DB_ADAPTER` | `oracle` | Database backend: `oracle`, `postgresql`, or `sqlite` |
 | `SECRETS_PROVIDER` | `env` | `env`, `vault`, or `azure` |
 | `API_KEYS` | (none) | API auth keys (`key:role` format) |
 | `AUDIT_LOG_PATH` | `logs/audit.jsonl` | Structured audit log path |
@@ -231,4 +238,5 @@ Configurable via environment variables (defaults for local dev):
 
 ## Open Issues
 
-- **#151** — Pluggable database adapters (PostgreSQL, SQL Server, MySQL, SQLite)
+No critical open issues. Issue #151 (pluggable database adapters) has been
+completed -- Oracle, PostgreSQL, and SQLite adapters are now supported.
