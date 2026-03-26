@@ -61,22 +61,23 @@ Convert the spec's data types and format codes to Valdo types:
 **Input spec (pipe-separated):**
 ```
 Transformation|Column|Definition|Data Type|Position|Format|Length|Required|Valid Values|Notes
-Default to '00040'|BK-NUM-ERT|Bank identifier|Numeric|1|9(5)|5|Y|Bank Control Table|CTM: BN
-Default to '001'|APP-ERT|Application code|Numeric|6|9(3)|3|Y|Application Control Table|CTM: AP
-LN-NUM-ERT = BR + CUS + LN|LN-NUM-ERT|Account number|String|9||18|Y||
-|EFF-DAT-ERT|Effective date|Date|160|MM/DD/CCYY|10|Y||
-Nullable|FILLER|Filler|String|30||130|N/A||Initialize to spaces
+Default to '00040'|BANK-CODE|Bank identifier code|Numeric|1|9(5)|5|Y|Bank Control Table|
+Default to '001'|APPL-CODE|Application identifier|Numeric|6|9(3)|3|Y|Application Control Table|
+BRANCH + CUST + LOAN|ACCT-KEY|Account key (composite)|String|9||18|Y||
+|TXN-DATE|Transaction effective date|Date|160|MM/DD/CCYY|10|Y||
+Nullable|FILLER-01|Filler for alignment|String|30||130|N/A||Initialize to spaces
+Default to '32010'|TXN-TYPE|Transaction type code|Numeric|170|9(5)|5|Y|32010|
 ```
 
 **Output CSV:**
 ```csv
 field_name,data_type,position,length,target_name,required,format,transformation,valid_values,description
-BK-NUM-ERT,Numeric,1,5,bk_num_ert,Yes,9(5),Default to '00040',,Bank identifier
-APP-ERT,Numeric,6,3,app_ert,Yes,9(3),Default to '001',,Application code
-LN-NUM-ERT,String,9,18,ln_num_ert,Yes,,BR + CUS + LN,,Account number
-FILLER,String,30,130,filler,No,,Initialize to spaces,,Filler for account key
-EFF-DAT-ERT,Date,160,10,eff_dat_ert,Yes,MM/DD/CCYY,,,Effective date of transaction
-TRN-COD-ERT,Numeric,170,5,trn_cod_ert,Yes,9(5),Default to '32010',32010,Transaction code
+BANK-CODE,Numeric,1,5,bank_code,Yes,9(5),Default to '00040',,Bank identifier code
+APPL-CODE,Numeric,6,3,appl_code,Yes,9(3),Default to '001',,Application identifier
+ACCT-KEY,String,9,18,acct_key,Yes,,BRANCH + CUST + LOAN,,Account key (composite)
+FILLER-01,String,30,130,filler_01,No,,Initialize to spaces,,Filler for alignment
+TXN-DATE,Date,160,10,txn_date,Yes,MM/DD/CCYY,,,Transaction effective date
+TXN-TYPE,Numeric,170,5,txn_type,Yes,9(5),Default to '32010',32010,Transaction type code
 ```
 
 ---

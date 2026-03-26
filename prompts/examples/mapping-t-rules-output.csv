@@ -1,23 +1,23 @@
 Rule ID,Rule Name,Field,Type,Severity,Enabled,Message,Value
-R001,bk_num_not_empty,BK-NUM-ERT,not_empty,error,Yes,Bank number must not be empty,
-R002,bk_num_numeric,BK-NUM-ERT,numeric,error,Yes,Bank number must be numeric,
-R003,bk_num_length,BK-NUM-ERT,exact_length,error,Yes,Bank number must be exactly 5 digits,5
-R004,app_not_empty,APP-ERT,not_empty,error,Yes,Application code must not be empty,
-R005,app_numeric,APP-ERT,numeric,error,Yes,Application code must be numeric,
-R006,ln_num_not_empty,LN-NUM-ERT,not_empty,error,Yes,Account number must not be empty,
-R007,ln_num_length,LN-NUM-ERT,exact_length,error,Yes,Account number must be exactly 18 characters,18
-R008,eff_dat_not_empty,EFF-DAT-ERT,not_empty,error,Yes,Effective date must not be empty,
-R009,eff_dat_format,EFF-DAT-ERT,date_format,error,Yes,Effective date must be MM/DD/CCYY format,MM/DD/CCYY
-R010,trn_cod_not_empty,TRN-COD-ERT,not_empty,error,Yes,Transaction code must not be empty,
-R011,trn_cod_numeric,TRN-COD-ERT,numeric,error,Yes,Transaction code must be numeric,
-R012,trn_cod_valid,TRN-COD-ERT,valid_values,error,Yes,Transaction code must be 32010,32010
-R013,bat_itm_not_empty,BAT-ITM-NUM-ERT,not_empty,error,Yes,Batch item number must not be empty,
-R014,bat_itm_numeric,BAT-ITM-NUM-ERT,numeric,error,Yes,Batch item number must be numeric,
-R015,trn_cnt_not_empty,TRN-CNT-ERT,not_empty,error,Yes,Transaction count must not be empty,
-R016,trn_cnt_numeric,TRN-CNT-ERT,numeric,error,Yes,Transaction count must be numeric,
-R017,trn_mor_dta_not_empty,TRN-MOR-DTA-FLG-ERT,not_empty,error,Yes,More data flag must not be empty,
-CR001,unique_account,LN-NUM-ERT,cross_row:unique,error,Yes,Account number must be unique across all rows,
-CR002,unique_account_batch,LN-NUM-ERT|BAT-ITM-NUM-ERT,cross_row:unique_composite,error,Yes,Account + batch item combination must be unique,
-CR003,sequential_batch_items,LN-NUM-ERT>BAT-ITM-NUM-ERT,cross_row:sequential,error,Yes,Batch items must be sequential (1 2 3...) per account,1
-CR004,consistent_bank,LN-NUM-ERT>BK-NUM-ERT,cross_row:consistent,error,Yes,Bank number must be the same for all rows with the same account,
-CR005,txn_count_matches,LN-NUM-ERT>TRN-CNT-ERT,cross_row:group_count,error,Yes,Transaction count must match actual number of records per account,
+R001,bank_code_not_empty,BANK-CODE,not_empty,error,Yes,Bank code must not be empty,
+R002,bank_code_numeric,BANK-CODE,numeric,error,Yes,Bank code must be numeric,
+R003,bank_code_length,BANK-CODE,exact_length,error,Yes,Bank code must be exactly 5 digits,5
+R004,appl_code_not_empty,APPL-CODE,not_empty,error,Yes,Application code must not be empty,
+R005,appl_code_numeric,APPL-CODE,numeric,error,Yes,Application code must be numeric,
+R006,acct_key_not_empty,ACCT-KEY,not_empty,error,Yes,Account key must not be empty,
+R007,acct_key_length,ACCT-KEY,exact_length,error,Yes,Account key must be exactly 18 characters,18
+R008,txn_date_not_empty,TXN-DATE,not_empty,error,Yes,Transaction date must not be empty,
+R009,txn_date_format,TXN-DATE,date_format,error,Yes,Transaction date must be MM/DD/CCYY format,MM/DD/CCYY
+R010,txn_type_not_empty,TXN-TYPE,not_empty,error,Yes,Transaction type must not be empty,
+R011,txn_type_numeric,TXN-TYPE,numeric,error,Yes,Transaction type must be numeric,
+R012,txn_type_valid,TXN-TYPE,valid_values,error,Yes,Transaction type must be 32010,32010
+R013,batch_seq_not_empty,BATCH-SEQ,not_empty,error,Yes,Batch sequence must not be empty,
+R014,batch_seq_numeric,BATCH-SEQ,numeric,error,Yes,Batch sequence must be numeric,
+R015,txn_count_not_empty,TXN-COUNT,not_empty,error,Yes,Transaction count must not be empty,
+R016,txn_count_numeric,TXN-COUNT,numeric,error,Yes,Transaction count must be numeric,
+R017,more_data_not_empty,MORE-DATA-FLAG,not_empty,error,Yes,More data flag must not be empty,
+CR001,unique_account,ACCT-KEY,cross_row:unique,error,Yes,Account key must be unique across all rows,
+CR002,unique_account_batch,ACCT-KEY|BATCH-SEQ,cross_row:unique_composite,error,Yes,Account + batch sequence must be unique,
+CR003,sequential_batch,ACCT-KEY>BATCH-SEQ,cross_row:sequential,error,Yes,Batch sequence must be 1 2 3... per account,1
+CR004,consistent_bank,ACCT-KEY>BANK-CODE,cross_row:consistent,error,Yes,Bank code must be the same for all rows with same account,
+CR005,txn_count_matches,ACCT-KEY>TXN-COUNT,cross_row:group_count,error,Yes,Transaction count must match actual records per account,

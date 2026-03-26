@@ -90,33 +90,33 @@ Extract these rules from the specification:
 **Input spec (pipe-separated):**
 ```
 Transformation|Column|Definition|Data Type|Position|Format|Length|Required|Valid Values|Notes
-Default to '00040'|BK-NUM-ERT|Bank identifier|Numeric|1|9(5)|5|Y|Bank Control Table|
-Default to '001'|APP-ERT|Application code|Numeric|6|9(3)|3|Y|Application Control Table|
-LN-NUM-ERT = BR + CUS + LN|LN-NUM-ERT|Account number|String|9||18|Y||
-Default to '32010'|TRN-COD-ERT|Transaction code|Numeric|170|9(5)|5|Y|32010|
-if 1st in batch then '1'; if nth then 'n'|BAT-ITM-NUM-ERT|Sequential batch item|Numeric|175|9(9)|9|Y||
-|TRN-CNT-ERT|Transaction count|Numeric|187|9(4)|4|Y||
+Default to '00040'|BANK-CODE|Bank identifier code|Numeric|1|9(5)|5|Y|Bank Control Table|
+Default to '001'|APPL-CODE|Application identifier|Numeric|6|9(3)|3|Y|Application Control Table|
+BRANCH + CUST + LOAN|ACCT-KEY|Account key (composite)|String|9||18|Y||
+Default to '32010'|TXN-TYPE|Transaction type code|Numeric|170|9(5)|5|Y|32010|
+if 1st in batch then '1'; if nth then 'n'|BATCH-SEQ|Sequential batch item|Numeric|175|9(9)|9|Y||
+|TXN-COUNT|Transaction count|Numeric|187|9(4)|4|Y||
 ```
 
 **Output CSV:**
 ```csv
 Rule ID,Rule Name,Field,Type,Severity,Enabled,Message,Value
-R001,bk_num_not_empty,BK-NUM-ERT,not_empty,error,Yes,Bank number must not be empty,
-R002,bk_num_numeric,BK-NUM-ERT,numeric,error,Yes,Bank number must be numeric,
-R003,app_not_empty,APP-ERT,not_empty,error,Yes,Application code must not be empty,
-R004,app_numeric,APP-ERT,numeric,error,Yes,Application code must be numeric,
-R005,ln_num_not_empty,LN-NUM-ERT,not_empty,error,Yes,Account number must not be empty,
-R006,ln_num_length,LN-NUM-ERT,exact_length,error,Yes,Account number must be exactly 18 characters,18
-R007,trn_cod_not_empty,TRN-COD-ERT,not_empty,error,Yes,Transaction code must not be empty,
-R008,trn_cod_valid,TRN-COD-ERT,valid_values,error,Yes,Transaction code must be 32010,32010
-R009,bat_itm_not_empty,BAT-ITM-NUM-ERT,not_empty,error,Yes,Batch item number must not be empty,
-R010,bat_itm_numeric,BAT-ITM-NUM-ERT,numeric,error,Yes,Batch item number must be numeric,
-R011,trn_cnt_not_empty,TRN-CNT-ERT,not_empty,error,Yes,Transaction count must not be empty,
-R012,trn_cnt_numeric,TRN-CNT-ERT,numeric,error,Yes,Transaction count must be numeric,
-CR001,unique_account,LN-NUM-ERT,cross_row:unique,error,Yes,Account number must be unique across all rows,
-CR002,sequential_batch_items,LN-NUM-ERT>BAT-ITM-NUM-ERT,cross_row:sequential,error,Yes,Batch items must be sequential (1 2 3...) per account,1
-CR003,txn_count_matches,LN-NUM-ERT>TRN-CNT-ERT,cross_row:group_count,error,Yes,Transaction count must match actual records per account,
-CR004,consistent_bank,LN-NUM-ERT>BK-NUM-ERT,cross_row:consistent,error,Yes,Bank number must be consistent for same account,
+R001,bank_code_not_empty,BANK-CODE,not_empty,error,Yes,Bank code must not be empty,
+R002,bank_code_numeric,BANK-CODE,numeric,error,Yes,Bank code must be numeric,
+R003,appl_code_not_empty,APPL-CODE,not_empty,error,Yes,Application code must not be empty,
+R004,appl_code_numeric,APPL-CODE,numeric,error,Yes,Application code must be numeric,
+R005,acct_key_not_empty,ACCT-KEY,not_empty,error,Yes,Account key must not be empty,
+R006,acct_key_length,ACCT-KEY,exact_length,error,Yes,Account key must be exactly 18 characters,18
+R007,txn_type_not_empty,TXN-TYPE,not_empty,error,Yes,Transaction type must not be empty,
+R008,txn_type_valid,TXN-TYPE,valid_values,error,Yes,Transaction type must be 32010,32010
+R009,batch_seq_not_empty,BATCH-SEQ,not_empty,error,Yes,Batch sequence must not be empty,
+R010,batch_seq_numeric,BATCH-SEQ,numeric,error,Yes,Batch sequence must be numeric,
+R011,txn_count_not_empty,TXN-COUNT,not_empty,error,Yes,Transaction count must not be empty,
+R012,txn_count_numeric,TXN-COUNT,numeric,error,Yes,Transaction count must be numeric,
+CR001,unique_account,ACCT-KEY,cross_row:unique,error,Yes,Account key must be unique across all rows,
+CR002,sequential_batch,ACCT-KEY>BATCH-SEQ,cross_row:sequential,error,Yes,Batch sequence must be 1 2 3... per account,1
+CR003,txn_count_matches,ACCT-KEY>TXN-COUNT,cross_row:group_count,error,Yes,Transaction count must match actual records per account,
+CR004,consistent_bank,ACCT-KEY>BANK-CODE,cross_row:consistent,error,Yes,Bank code must be consistent for same account,
 ```
 
 ---

@@ -1,12 +1,18 @@
-Transformation|Column|Definition|Data Type|Position|Format|Length|Required|Valid Vales|Notes
-Default to '00040' for Consumer Create Tranert records only for Accounts which were charged-off yesterday (chrgoff_dt = batch date). i.e. IF Charge-Off if CHG-OFF-CD = '1' and M-DATE-PAID-OFF = Batch Date|BK-NUM-ERT|A number, defined on the Bank Control Operation tables, which identifies the bank to which the account is to be associated.|Numeric|1.0|9(5)|5.0|Y|Bank Control Table|CTM: BN
-Default to '00040' for Consumer Create Tranert records only for Accounts which were charged-off yesterday (chrgoff_dt = batch date). i.e. IF Charge-Off if CHG-OFF-CD = '1' and M-DATE-PAID-OFF = Batch Date|BK-NUM-ERT|A number, defined on the Bank Control Operation tables, which identifies the bank to which the account is to be associated.|Numeric|1.0|9(5)|5.0|Y|Bank Control Table|CTM: BN
-Default to '001'|APP-ERT|The application to which the account is to be associated.|Numeric|6.0|9(3)|3.0|Y|Application Control Table|CTM: AP
-LN-NUM-ERT = BR + CUS + LN|LN-NUM-ERT|The account number that is associated with the account.|String|9.0||18.0|Y||
-Nullable --> Leave Blank|REF-NUM-ERT|The applicable reference number for the transaction.|String|27.0||3.0|N/A||Initialize to spaces
-Nullable --> Leave Blank|FILLER|Filler for account key|String|30.0||130.0|N/A||Initialize to spaces
-|EFF-DAT-ERT|The date the transaction was effective.|Date|160.0|MM/DD/CCYY|10.0|Y||
-Default to '32010'|TRN-COD-ERT|The transaction code for the transaction.|Numeric|170.0|9(5)|5.0|Y|32010.0|
-if 1st account in batch then '1'; if 2nd account in batch then '2'; . . . if nth account in batch then 'n';|BAT-ITM-NUM-ERT|The sequential number for this item within the batch.|Numeric|175.0|9(9)|9.0|Y||
-Nullable --> Leave Blank|INP-SRC-COD-ERT|The source of the transaction.|Numeric|184.0|9(3)|3.0|N/A||Initialize to spaces
-Nullable --> Leave Blank|TRN-CNT-ERT|The total number of transactions in the batch.|Numeric|187.0|9(3)|3.0|N/A||Initialize to spaces
+# Example Input: Transaction Batch Mapping Specification
+
+This is a sample specification document (pipe-separated). In practice, this would come from an Excel, PDF, or Word document.
+
+```
+Transformation|Column|Definition|Data Type|Position|Format|Length|Required|Valid Values|Notes
+Default to '00040' for accounts charged-off yesterday|BANK-CODE|Bank identifier code|Numeric|1|9(5)|5|Y|Bank Control Table|
+Default to '001'|APPL-CODE|Application identifier|Numeric|6|9(3)|3|Y|Application Control Table|
+BRANCH + CUST + LOAN|ACCT-KEY|Account key (composite)|String|9||18|Y||
+Nullable --> Leave Blank|REF-CODE|Reference code|String|27||3|N/A||Initialize to spaces
+Nullable --> Leave Blank|FILLER-01|Filler for key alignment|String|30||130|N/A||Initialize to spaces
+|TXN-DATE|Transaction effective date|Date|160|MM/DD/CCYY|10|Y||
+Default to '32010'|TXN-TYPE|Transaction type code|Numeric|170|9(5)|5|Y|32010|
+if 1st account in batch then '1'; if 2nd then '2'; if nth then 'n'|BATCH-SEQ|Sequential batch item number|Numeric|175|9(9)|9|Y||
+Nullable --> Leave Blank|SRC-CODE|Source system code|Numeric|184|9(3)|3|N/A||Initialize to spaces
+|TXN-COUNT|Transaction count per group|Numeric|187|9(4)|4|Y||
+Default to '1'|MORE-DATA-FLAG|Continuation flag|String|191||1|Y||
+```
