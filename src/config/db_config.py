@@ -1,4 +1,4 @@
-"""Centralised Oracle database configuration.
+"""Centralised database configuration.
 
 Reads connection parameters from environment variables (or a pluggable secrets
 provider) with sensible defaults for local development.  All database code
@@ -11,16 +11,25 @@ which honours the ``SECRETS_PROVIDER`` env var (default ``env``).  See
 
 Environment variables
 ---------------------
+``DB_ADAPTER``
+    Database adapter to use: ``oracle`` (default), ``postgresql``, or
+    ``sqlite``.
 ``ORACLE_USER``
-    Database username.  Default: ``CM3INT``.
+    Oracle database username.  Default: ``CM3INT``.
 ``ORACLE_PASSWORD``
-    Database password.  **No default** -- must be set before connecting.
+    Oracle database password.  **No default** -- must be set before connecting.
     Resolved through the active secrets provider.
 ``ORACLE_DSN``
     Oracle Easy Connect string.  Default: ``localhost:1521/FREEPDB1``.
 ``ORACLE_SCHEMA``
     Schema prefix used in SQL statements (e.g. ``CM3INT.TABLE``).
     Default: value of ``ORACLE_USER`` (or ``CM3INT`` if unset).
+``DB_HOST``
+    Generic database host for non-Oracle adapters (e.g. PostgreSQL).
+``DB_PORT``
+    Generic database port for non-Oracle adapters.
+``DB_NAME``
+    Generic database name / catalog for non-Oracle adapters.
 ``SECRETS_PROVIDER``
     Secrets backend: ``env`` (default), ``vault``, or ``azure``.
 """
@@ -38,23 +47,35 @@ from src.utils.secrets import get_secrets_provider
 
 _DEFAULT_USER = "CM3INT"
 _DEFAULT_DSN = "localhost:1521/FREEPDB1"
+_DEFAULT_ADAPTER = "oracle"
 
 
 @dataclass(frozen=True)
 class DbConfig:
-    """Immutable container for Oracle connection parameters.
+    """Immutable container for database connection parameters.
 
     Attributes:
-        user: Database username.
-        password: Database password (may be empty when only reading config).
+        user: Oracle database username.
+        password: Oracle database password (may be empty when only reading
+            config).
         dsn: Oracle Easy Connect string (``host:port/service``).
         schema: Schema qualifier for SQL table references.
+        db_adapter: Adapter type: ``"oracle"`` (default), ``"postgresql"``,
+            or ``"sqlite"``.
+        db_host: Generic host for non-Oracle adapters.  ``None`` when unset.
+        db_port: Generic port for non-Oracle adapters.  ``None`` when unset.
+        db_name: Generic database name for non-Oracle adapters.  ``None``
+            when unset.
     """
 
     user: str
     password: str
     dsn: str
     schema: str
+    db_adapter: str = _DEFAULT_ADAPTER
+    db_host: Optional[str] = None
+    db_port: Optional[str] = None
+    db_name: Optional[str] = None
 
 
 def get_db_config() -> DbConfig:
@@ -62,6 +83,8 @@ def get_db_config() -> DbConfig:
 
     Falls back to sensible defaults for local development when variables are
     not set.  ``ORACLE_SCHEMA`` defaults to the resolved ``ORACLE_USER``.
+    Generic ``DB_*`` variables are included for non-Oracle adapters and
+    default to ``None`` when not set.
 
     Returns:
         Populated :class:`DbConfig` instance.
@@ -69,14 +92,27 @@ def get_db_config() -> DbConfig:
     Example::
 
         cfg = get_db_config()
-        print(cfg.user, cfg.dsn)
+        print(cfg.user, cfg.dsn, cfg.db_adapter)
     """
     secrets = get_secrets_provider()
     user = secrets.get_secret("ORACLE_USER", default=_DEFAULT_USER)
     password = secrets.get_secret("ORACLE_PASSWORD", default="")
     dsn = secrets.get_secret("ORACLE_DSN", default=_DEFAULT_DSN)
     schema = secrets.get_secret("ORACLE_SCHEMA", default=user)
-    return DbConfig(user=user, password=password, dsn=dsn, schema=schema)
+    db_adapter = os.environ.get("DB_ADAPTER", _DEFAULT_ADAPTER)
+    db_host = os.environ.get("DB_HOST") or None
+    db_port = os.environ.get("DB_PORT") or None
+    db_name = os.environ.get("DB_NAME") or None
+    return DbConfig(
+        user=user,
+        password=password,
+        dsn=dsn,
+        schema=schema,
+        db_adapter=db_adapter,
+        db_host=db_host,
+        db_port=db_port,
+        db_name=db_name,
+    )
 
 
 def get_connection(config: DbConfig | None = None) -> oracledb.Connection:

@@ -55,6 +55,37 @@ Database
    :members:
    :undoc-members:
 
+Database Adapters
+~~~~~~~~~~~~~~~~~
+
+.. automodule:: src.database.adapters
+   :members:
+   :undoc-members:
+
+.. automodule:: src.database.adapters.base
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: src.database.adapters.factory
+   :members:
+   :undoc-members:
+
+.. automodule:: src.database.adapters.oracle_adapter
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: src.database.adapters.postgresql_adapter
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: src.database.adapters.sqlite_adapter
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Parsers
 -------
 
@@ -226,6 +257,18 @@ Pipeline
 --------
 
 .. automodule:: src.pipeline.suite_config
+   :members:
+   :undoc-members:
+
+.. automodule:: src.pipeline.etl_config
+   :members:
+   :undoc-members:
+
+.. automodule:: src.pipeline.etl_pipeline_runner
+   :members:
+   :undoc-members:
+
+.. automodule:: src.commands.etl_pipeline_command
    :members:
    :undoc-members:
 
