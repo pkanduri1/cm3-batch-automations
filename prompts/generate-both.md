@@ -4,11 +4,15 @@ Copy this entire prompt, then paste your specification document content below th
 
 This generates **both** the mapping CSV and rules CSV in one pass.
 
+**Important:** If your specification is an Excel workbook with multiple sheets/tabs, specify which sheet contains the field mapping you want to convert. Common mapping sheets include record type names (e.g. "100", "200", "ORI", "CUS", "Batch Header"), while sheets like "Revision History", "Overview", "Filter Criteria", and lookup tables should be skipped.
+
+**Tell me:** Which sheet/tab should I use? (e.g. "Use sheet: ORI" or "Use sheet: Batch Header")
+
 ---
 
 ## Instructions
 
-You are converting a batch file specification document into two CSV files for the **Valdo** file validation tool:
+You are converting a batch file specification document into two CSV files for the **Valdo** file validation tool. The user will provide content from a specific sheet/tab — focus only on that data:
 
 1. **Mapping CSV** — defines the file structure (fields, positions, types, lengths)
 2. **Rules CSV** — defines validation rules (required checks, format checks, cross-row checks)

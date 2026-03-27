@@ -2,11 +2,15 @@
 
 Copy this entire prompt, then paste your specification document content below the `---` line.
 
+**Important:** If your specification is an Excel workbook with multiple sheets/tabs, specify which sheet contains the field mapping you want to convert. Common mapping sheets include record type names (e.g. "100", "200", "ORI", "CUS", "Batch Header"), while sheets like "Revision History", "Overview", "Filter Criteria", and lookup tables should be skipped.
+
+**Tell me:** Which sheet/tab should I use? (e.g. "Use sheet: 100" or "Use sheet: Batch Header")
+
 ---
 
 ## Instructions
 
-You are converting a batch file specification document into a CSV mapping template for the **Valdo** file validation tool.
+You are converting a batch file specification document into a CSV mapping template for the **Valdo** file validation tool. The user will provide content from a specific sheet/tab of their workbook — focus only on that data.
 
 ### Output Format
 

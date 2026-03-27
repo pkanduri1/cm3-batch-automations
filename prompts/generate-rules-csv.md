@@ -2,11 +2,13 @@
 
 Copy this entire prompt, then paste your specification document content below the `---` line.
 
+**Important:** If your specification is an Excel workbook with multiple sheets/tabs, specify which sheet contains the field mapping you want to extract rules from. Use the same sheet you used for the mapping CSV (e.g. "Use sheet: 100" or "Use sheet: Batch Header").
+
 ---
 
 ## Instructions
 
-You are converting a batch file specification document into a business rules CSV template for the **Valdo** file validation tool. Extract validation rules from the spec's Required flags, Valid Values, Format codes, Transformation logic, and Notes.
+You are converting a batch file specification document into a business rules CSV template for the **Valdo** file validation tool. The user will provide content from a specific sheet/tab of their workbook. Extract validation rules from the spec's Required flags, Valid Values, Format codes, Transformation logic, and Notes.
 
 ### Output Format
 
