@@ -366,6 +366,63 @@ class ScaleTransform(Transform):
 
 
 @dataclass
+class PadTransform(Transform):
+    """Pad a source value to a target width without truncating.
+
+    When the source value is already at or longer than *length*, it is returned
+    unchanged — pad never truncates.
+
+    Attributes:
+        length: Target width in characters.  ``0`` is a no-op.
+        pad_char: Character used to fill the padding.  Defaults to ``' '`` (space).
+        direction: ``'right'`` pads on the right (RPAD); ``'left'`` pads on the
+            left (LPAD).  Defaults to ``'right'``.
+        type: Always ``'pad'``.
+
+    Example::
+
+        PadTransform(length=5)                           # RPAD with spaces
+        PadTransform(length=5, pad_char='0', direction='left')  # LPAD with zeros
+    """
+
+    length: int = 0
+    pad_char: str = " "
+    direction: str = "right"
+    type: str = field(default="pad", init=False)
+
+    def __post_init__(self) -> None:
+        self.type = "pad"
+
+
+@dataclass
+class TruncateTransform(Transform):
+    """Truncate a source value to at most *length* characters.
+
+    Attributes:
+        length: Maximum number of characters to keep.  ``0`` is effectively a
+            no-op (the empty string is returned) — used as a sentinel for
+            ``"Truncate decimal places"`` style annotations.
+        from_end: When ``False`` (default) keep the first ``length`` characters
+            (``source[:length]``).  When ``True`` keep the last ``length``
+            characters (``source[-length:]``).  If the source is shorter than
+            ``length`` it is returned unchanged regardless.
+        type: Always ``'truncate'``.
+
+    Example::
+
+        TruncateTransform(length=8)               # keep first 8 chars
+        TruncateTransform(length=4, from_end=True) # keep last 4 chars
+    """
+
+    length: int = 0
+    from_end: bool = False
+    type: str = field(default="truncate", init=False)
+
+    def __post_init__(self) -> None:
+        self.type = "truncate"
+
+
+@dataclass
 class ConditionalTransform(Transform):
     """Apply one of two transforms depending on whether a condition holds.
 

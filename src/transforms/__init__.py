@@ -9,7 +9,8 @@ adds ``ConditionalTransform`` for IF/ELSE dispatch.  Phase 3e adds
 row-counter tracking.  Phase 4a adds ``DateFormatTransform`` for date
 string reformatting.  Phase 4b adds ``NumericFormatTransform`` for
 signed zero-padded numeric output.  Phase 4c adds ``ScaleTransform`` for
-multiply/divide numeric scaling.
+multiply/divide numeric scaling.  Phase 4d adds ``PadTransform`` and
+``TruncateTransform`` for explicit padding and truncation operations.
 
 Exported names
 --------------
@@ -49,6 +50,10 @@ Exported names
 ``ScaleTransform``
     Multiply a numeric source value by a fixed factor (supports divide via
     fractional factors).
+``PadTransform``
+    Pad a source value to a target width (LPAD/RPAD) without truncating.
+``TruncateTransform``
+    Truncate a source value to at most N characters.
 ``parse_transform``
     Parse a free-text transform description into a typed ``Transform``.
 ``apply_transform``
@@ -71,9 +76,11 @@ from src.transforms.models import (
     InCondition,
     NullCheckCondition,
     NumericFormatTransform,
+    PadTransform,
     ScaleTransform,
     SequentialNumberTransform,
     Transform,
+    TruncateTransform,
 )
 from src.transforms.sequential_counter import SequentialCounter
 from src.transforms.transform_engine import apply_transform
@@ -96,6 +103,8 @@ __all__ = [
     "SequentialCounter",
     "NumericFormatTransform",
     "ScaleTransform",
+    "PadTransform",
+    "TruncateTransform",
     "parse_transform",
     "apply_transform",
     "evaluate_condition",

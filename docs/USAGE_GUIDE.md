@@ -2014,6 +2014,8 @@ spreadsheets.
 | `blank` | `BlankTransform` | Always output blank / space-filled result |
 | `constant` | `ConstantTransform` | Always output a fixed constant, ignoring source |
 | `scale` | `ScaleTransform` | Multiply source by a numeric factor (use `factor < 1` for division) |
+| `pad` | `PadTransform` | Pad source to a target width (left or right); never truncates |
+| `truncate` | `TruncateTransform` | Truncate source to at most N characters (from start or end) |
 
 ### Parsing mapping text
 
@@ -2061,6 +2063,10 @@ Recognised patterns include:
 - `Date format CCYYMMDD` / `Format as CCYYMMDD` → same as above
 - `Multiply by N` — multiply source by N; result formatted as integer string by default
 - `Divide by N` — divide source by N; decimal places inferred from magnitude of N
+- `Left pad to N with '0'` / `LPAD to N with '0'` → `PadTransform(direction='left')`
+- `Right pad to N` / `Pad to N with spaces` → `PadTransform(direction='right')`
+- `Truncate to N` / `Truncate to N chars` / `Truncate to N characters` → `TruncateTransform`
+- `Truncate decimal places` → `TruncateTransform(length=0)` (no-op sentinel)
 
 Any unrecognised text (including complex conditional expressions) returns
 `Transform(type='noop')` so callers can safely fall back to a direct copy.

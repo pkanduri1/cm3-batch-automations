@@ -30,9 +30,11 @@ from src.transforms.models import (
     DefaultTransform,
     FieldMapTransform,
     NumericFormatTransform,
+    PadTransform,
     ScaleTransform,
     SequentialNumberTransform,
     Transform,
+    TruncateTransform,
 )
 
 # Sentinel used to detect the absence of a meaningful source value.
@@ -233,6 +235,23 @@ def apply_transform(
                     result = f"{scaled:.{transform.decimal_places}f}"
                 else:
                     result = str(scaled)
+
+    elif isinstance(transform, PadTransform):
+        if transform.length <= 0 or len(raw_source) >= transform.length:
+            result = raw_source
+        elif transform.direction == "left":
+            result = _lpad(raw_source, transform.length, transform.pad_char)
+        else:
+            result = raw_source + transform.pad_char * (transform.length - len(raw_source))
+
+    elif isinstance(transform, TruncateTransform):
+        n = transform.length
+        if n <= 0 or len(raw_source) <= n:
+            result = raw_source
+        elif transform.from_end:
+            result = raw_source[-n:]
+        else:
+            result = raw_source[:n]
 
     elif isinstance(transform, ConditionalTransform):
         branch = (

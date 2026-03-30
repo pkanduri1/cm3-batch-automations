@@ -18,6 +18,8 @@ from src.transforms.models import (
     EqualityCondition,
     InCondition,
     ConditionalTransform,
+    PadTransform,
+    TruncateTransform,
 )
 
 
@@ -826,3 +828,68 @@ class TestScaleTransformEngine:
         t = ScaleTransform(factor=2, decimal_places=0)
         result = apply_transform("50", t)
         assert result == "100"
+
+
+# ---------------------------------------------------------------------------
+# PadTransform
+# ---------------------------------------------------------------------------
+
+class TestPadTransformEngine:
+    """PadTransform pads a value to a target length without truncating."""
+
+    def test_right_pad_short_value(self):
+        """Right-pad a value shorter than length with spaces."""
+        result = apply_transform("ABC", PadTransform(length=6))
+        assert result == "ABC   "
+
+    def test_left_pad_short_value_with_zeros(self):
+        """Left-pad a value shorter than length with '0'."""
+        result = apply_transform("123", PadTransform(length=5, pad_char="0", direction="left"))
+        assert result == "00123"
+
+    def test_value_already_at_length_unchanged(self):
+        """Value exactly at target length is returned as-is."""
+        result = apply_transform("HELLO", PadTransform(length=5))
+        assert result == "HELLO"
+
+    def test_value_longer_than_length_not_truncated(self):
+        """Pad never truncates — value longer than length is returned unchanged."""
+        result = apply_transform("TOOLONG", PadTransform(length=4))
+        assert result == "TOOLONG"
+
+    def test_field_length_applied_after_padding(self):
+        """field_length fitting is applied after padding."""
+        # Padded to 5 chars, then fit to field_length=8 (right-padded with spaces)
+        result = apply_transform("AB", PadTransform(length=5), field_length=8)
+        assert result == "AB      "
+        assert len(result) == 8
+
+
+# ---------------------------------------------------------------------------
+# TruncateTransform
+# ---------------------------------------------------------------------------
+
+class TestTruncateTransformEngine:
+    """TruncateTransform cuts a value to at most N characters."""
+
+    def test_truncate_long_value(self):
+        """Value longer than length is truncated from the right."""
+        result = apply_transform("ABCDEFGH", TruncateTransform(length=4))
+        assert result == "ABCD"
+
+    def test_truncate_shorter_value_unchanged(self):
+        """Value shorter than length is returned unchanged."""
+        result = apply_transform("AB", TruncateTransform(length=5))
+        assert result == "AB"
+
+    def test_truncate_from_end_keeps_last_n_chars(self):
+        """from_end=True keeps the last N characters."""
+        result = apply_transform("ABCDEFGH", TruncateTransform(length=3, from_end=True))
+        assert result == "FGH"
+
+    def test_field_length_applied_after_truncation(self):
+        """field_length fitting is applied after truncation."""
+        # Truncated to 3, then fit to field_length=6 (right-padded with spaces)
+        result = apply_transform("ABCDEF", TruncateTransform(length=3), field_length=6)
+        assert result == "ABC   "
+        assert len(result) == 6
