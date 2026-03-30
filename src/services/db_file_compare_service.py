@@ -175,9 +175,22 @@ def compare_db_to_file(
     db_rows_extracted = len(df)
 
     # --- Optionally apply field transforms to each row ----------------------
+    transform_details: list | None = None
     if apply_transforms:
         engine = TransformEngine(mapping_config)
-        transformed_rows = [engine.apply(row) for row in df.to_dict(orient="records")]
+        raw_rows = df.to_dict(orient="records")
+        transformed_rows = []
+        transform_details = []
+        for raw_row in raw_rows:
+            transformed = engine.apply(raw_row)
+            transformed_rows.append(transformed)
+            for field_name in transformed:
+                transform_details.append({
+                    "field": field_name,
+                    "source_value": str(raw_row.get(field_name, "")),
+                    "transformed_value": str(transformed.get(field_name, "")),
+                    "file_value": "",  # populated post-comparison if available
+                })
         df = pd.DataFrame(transformed_rows)
 
     # --- Write DB data to temp file -----------------------------------------
@@ -203,7 +216,7 @@ def compare_db_to_file(
     # --- Build unified result ------------------------------------------------
     workflow_status = _determine_workflow_status(compare_result)
 
-    return {
+    result: dict[str, Any] = {
         "workflow": {
             "status": workflow_status,
             "db_rows_extracted": db_rows_extracted,
@@ -211,3 +224,6 @@ def compare_db_to_file(
         },
         "compare": compare_result,
     }
+    if transform_details is not None:
+        result["transform_details"] = transform_details
+    return result
