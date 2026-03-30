@@ -13,6 +13,9 @@ Recognises patterns found in real Shaw→C360 mapping spreadsheets:
 - ``LPAD(FIELD,N) + FIELD2`` (left-padded concatenation)
 - ``FIELD_NAME`` (bare uppercase identifier — direct field map)
 - ``IF <cond> THEN <branch> [ELSE <branch>]`` (conditional, Phase 3d)
+- ``Convert to CCYYMMDD`` / ``Convert to YYYYMMDD`` (date format, Phase 4a)
+- ``Convert to MM/DD/CCYY`` (date format, Phase 4a)
+- ``Date format CCYYMMDD`` / ``Format as CCYYMMDD`` (date format, Phase 4a)
 
 Conditional conditions supported:
 
@@ -40,6 +43,7 @@ from src.transforms.models import (
     ConcatTransform,
     ConditionalTransform,
     ConstantTransform,
+    DateFormatTransform,
     DefaultTransform,
     EqualityCondition,
     FieldMapTransform,
@@ -138,26 +142,45 @@ _SEQUENTIAL_RE = re.compile(
 )
 
 # ---------------------------------------------------------------------------
+# Phase 4a: date format conversion patterns
+# ---------------------------------------------------------------------------
+
+# Maps a date-format token to (input_format, output_format) tuples.
+_DATE_FORMAT_MAP = {
+    "CCYYMMDD": ("%Y-%m-%d", "%Y%m%d"),
+    "YYYYMMDD": ("%Y-%m-%d", "%Y%m%d"),
+    "MM/DD/CCYY": ("%Y-%m-%d", "%m/%d/%Y"),
+    "MM/DD/YYYY": ("%Y-%m-%d", "%m/%d/%Y"),
+}
+
+# "Convert to CCYYMMDD" / "Date format CCYYMMDD" / "Format as CCYYMMDD"
+_DATE_FORMAT_RE = re.compile(
+    r"^(?:convert\s+to|date\s+format|format\s+as)\s+(\S+)$",
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
 # Phase 4b: numeric format patterns
 # ---------------------------------------------------------------------------
 
-# "+9(N)" — signed COBOL picture clause (e.g. "+9(12)" → length=13, signed=True)
+# "+9(N)" — signed COBOL picture clause
 _SIGNED_PICTURE_RE = re.compile(r"^\+9\((\d+)\)$", re.IGNORECASE)
 
-# "9(N)" — unsigned COBOL picture clause (e.g. "9(8)" → length=8, signed=False)
+# "9(N)" — unsigned COBOL picture clause
 _UNSIGNED_PICTURE_RE = re.compile(r"^9\((\d+)\)$", re.IGNORECASE)
 
-# "Signed numeric, length N" → length=N, signed=True
+# "Signed numeric, length N"
 _SIGNED_NUMERIC_RE = re.compile(
     r"^signed\s+numeric\s*,\s*length\s+(\d+)$",
     re.IGNORECASE,
 )
 
-# "Zero-pad to N" → length=N, signed=False
+# "Zero-pad to N"
 _ZERO_PAD_RE = re.compile(r"^zero-?pad\s+to\s+(\d+)$", re.IGNORECASE)
 
-# "Pad to N digits" → length=N, signed=False
+# "Pad to N digits"
 _PAD_TO_DIGITS_RE = re.compile(r"^pad\s+to\s+(\d+)\s+digits$", re.IGNORECASE)
+
 
 # ---------------------------------------------------------------------------
 # Phase 3d: conditional IF/THEN/ELSE patterns
@@ -417,6 +440,15 @@ def parse_transform(text: Optional[str]) -> Transform:
 
     if _SEQUENTIAL_RE.match(t):
         return SequentialNumberTransform()
+
+    # --- Phase 4a: date format conversion ---
+
+    m = _DATE_FORMAT_RE.match(t)
+    if m:
+        token = m.group(1).upper()
+        if token in _DATE_FORMAT_MAP:
+            input_fmt, output_fmt = _DATE_FORMAT_MAP[token]
+            return DateFormatTransform(input_format=input_fmt, output_format=output_fmt)
 
     # --- Blank / space patterns (check before generic "pass" pattern) ---
 
