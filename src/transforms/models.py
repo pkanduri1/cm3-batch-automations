@@ -120,3 +120,26 @@ class FieldMapTransform(Transform):
 
     def __post_init__(self) -> None:
         self.type = "field_map"
+
+
+@dataclass
+class NullCheckCondition:
+    """Condition that tests whether a named field is null (absent or blank).
+
+    A field is considered null when it is absent from the row dict, ``None``,
+    or a whitespace-only string.  Set ``negate=True`` to invert the test to
+    *IS NOT NULL*.
+
+    Attributes:
+        field: The row field name to inspect.
+        negate: When ``False`` (default) the condition is *IS NULL*; when
+            ``True`` the condition is *IS NOT NULL*.
+        type: Always ``'null_check'``.
+    """
+
+    field: str
+    negate: bool = False
+    type: str = field(default="null_check", init=False)
+
+    def __post_init__(self) -> None:
+        self.type = "null_check"

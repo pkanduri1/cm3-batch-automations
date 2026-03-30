@@ -2,7 +2,8 @@
 
 Provides a parser that converts free-text mapping descriptions into typed
 ``Transform`` objects, and an engine that applies those objects to source
-field values.
+field values.  Phase 3a adds condition models and an evaluator that will
+power conditional IF/ELSE transforms in later phases.
 
 Exported names
 --------------
@@ -20,12 +21,18 @@ Exported names
     Concatenate multiple source fields, with optional per-field left-padding.
 ``FieldMapTransform``
     Map a named source field directly to the target field.
+``NullCheckCondition``
+    Condition that tests whether a named field is null/blank (or IS NOT NULL
+    when ``negate=True``).
 ``parse_transform``
     Parse a free-text transform description into a typed ``Transform``.
 ``apply_transform``
     Apply a ``Transform`` to a source value, returning the output string.
+``evaluate_condition``
+    Evaluate a condition object against a row dict, returning ``bool``.
 """
 
+from src.transforms.condition_evaluator import evaluate_condition
 from src.transforms.models import (
     BlankTransform,
     ConcatPart,
@@ -33,6 +40,7 @@ from src.transforms.models import (
     ConstantTransform,
     DefaultTransform,
     FieldMapTransform,
+    NullCheckCondition,
     Transform,
 )
 from src.transforms.transform_engine import apply_transform
@@ -46,6 +54,8 @@ __all__ = [
     "ConcatPart",
     "ConcatTransform",
     "FieldMapTransform",
+    "NullCheckCondition",
     "parse_transform",
     "apply_transform",
+    "evaluate_condition",
 ]
