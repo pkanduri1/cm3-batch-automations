@@ -27,6 +27,7 @@ from src.transforms.models import (
     ConstantTransform,
     DefaultTransform,
     FieldMapTransform,
+    ScaleTransform,
     SequentialNumberTransform,
     Transform,
 )
@@ -162,6 +163,21 @@ def apply_transform(
             if transform.pad_length is not None:
                 raw = raw.zfill(transform.pad_length)
             result = raw
+
+    elif isinstance(transform, ScaleTransform):
+        if _is_absent(raw_source):
+            result = transform.default_value
+        else:
+            try:
+                numeric = float(raw_source)
+            except (ValueError, TypeError):
+                result = transform.default_value
+            else:
+                scaled = numeric * transform.factor
+                if transform.decimal_places >= 0:
+                    result = f"{scaled:.{transform.decimal_places}f}"
+                else:
+                    result = str(scaled)
 
     elif isinstance(transform, ConditionalTransform):
         branch = (
