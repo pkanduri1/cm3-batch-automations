@@ -6,7 +6,8 @@ field values.  Phase 3a adds condition models and an evaluator; Phase 3b
 extends conditions with equality and multi-value (IN) checks.  Phase 3c
 adds ``ConditionalTransform`` for IF/ELSE dispatch.  Phase 3e adds
 ``SequentialNumberTransform`` and ``SequentialCounter`` for stateful
-row-counter tracking.
+row-counter tracking.  Phase 4d adds ``PadTransform`` and
+``TruncateTransform`` for explicit padding and truncation operations.
 
 Exported names
 --------------
@@ -39,6 +40,10 @@ Exported names
     Assign an incrementing sequence number to each processed record.
 ``SequentialCounter``
     Stateful counter manager for ``SequentialNumberTransform`` instances.
+``PadTransform``
+    Pad a source value to a target width (LPAD/RPAD) without truncating.
+``TruncateTransform``
+    Truncate a source value to at most N characters.
 ``parse_transform``
     Parse a free-text transform description into a typed ``Transform``.
 ``apply_transform``
@@ -59,8 +64,10 @@ from src.transforms.models import (
     FieldMapTransform,
     InCondition,
     NullCheckCondition,
+    PadTransform,
     SequentialNumberTransform,
     Transform,
+    TruncateTransform,
 )
 from src.transforms.sequential_counter import SequentialCounter
 from src.transforms.transform_engine import apply_transform
@@ -80,6 +87,8 @@ __all__ = [
     "ConditionalTransform",
     "SequentialNumberTransform",
     "SequentialCounter",
+    "PadTransform",
+    "TruncateTransform",
     "parse_transform",
     "apply_transform",
     "evaluate_condition",

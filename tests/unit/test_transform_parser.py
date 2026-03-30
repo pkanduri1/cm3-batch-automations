@@ -18,6 +18,8 @@ from src.transforms.models import (
     FieldMapTransform,
     InCondition,
     NullCheckCondition,
+    PadTransform,
+    TruncateTransform,
 )
 
 
@@ -494,3 +496,93 @@ class TestSequentialTransformParser:
         result = parse_transform("sequence")
         assert isinstance(result, SequentialNumberTransform)
         assert result.type == "sequential"
+
+
+# ---------------------------------------------------------------------------
+# PadTransform parser
+# ---------------------------------------------------------------------------
+
+class TestPadTransformParser:
+    """parse_transform recognises LPAD/RPAD/pad-to-N patterns."""
+
+    def test_left_pad_with_zero(self):
+        """'Left pad to 5 with '0'' → PadTransform(length=5, pad_char='0', direction='left')."""
+        result = parse_transform("Left pad to 5 with '0'")
+        assert isinstance(result, PadTransform)
+        assert result.length == 5
+        assert result.pad_char == "0"
+        assert result.direction == "left"
+
+    def test_lpad_alias(self):
+        """'LPAD to 10 with '0'' is accepted as left pad."""
+        result = parse_transform("LPAD to 10 with '0'")
+        assert isinstance(result, PadTransform)
+        assert result.length == 10
+        assert result.pad_char == "0"
+        assert result.direction == "left"
+
+    def test_right_pad_default_space(self):
+        """'Right pad to 8' → PadTransform(length=8, pad_char=' ', direction='right')."""
+        result = parse_transform("Right pad to 8")
+        assert isinstance(result, PadTransform)
+        assert result.length == 8
+        assert result.pad_char == " "
+        assert result.direction == "right"
+
+    def test_pad_to_n_with_spaces(self):
+        """'Pad to 10 with spaces' → PadTransform(length=10, pad_char=' ', direction='right')."""
+        result = parse_transform("Pad to 10 with spaces")
+        assert isinstance(result, PadTransform)
+        assert result.length == 10
+        assert result.pad_char == " "
+        assert result.direction == "right"
+
+    def test_pad_type_attribute(self):
+        """Parsed PadTransform has type='pad'."""
+        result = parse_transform("Left pad to 3 with '0'")
+        assert isinstance(result, PadTransform)
+        assert result.type == "pad"
+
+
+# ---------------------------------------------------------------------------
+# TruncateTransform parser
+# ---------------------------------------------------------------------------
+
+class TestTruncateTransformParser:
+    """parse_transform recognises truncate-to-N patterns."""
+
+    def test_truncate_to_n(self):
+        """'Truncate to 10' → TruncateTransform(length=10)."""
+        result = parse_transform("Truncate to 10")
+        assert isinstance(result, TruncateTransform)
+        assert result.length == 10
+
+    def test_truncate_to_n_chars(self):
+        """'Truncate to 8 chars' → TruncateTransform(length=8)."""
+        result = parse_transform("Truncate to 8 chars")
+        assert isinstance(result, TruncateTransform)
+        assert result.length == 8
+
+    def test_truncate_to_n_characters(self):
+        """'Truncate to 12 characters' → TruncateTransform(length=12)."""
+        result = parse_transform("Truncate to 12 characters")
+        assert isinstance(result, TruncateTransform)
+        assert result.length == 12
+
+    def test_truncate_decimal_places(self):
+        """'Truncate decimal places' → TruncateTransform(length=0) (special noop)."""
+        result = parse_transform("Truncate decimal places")
+        assert isinstance(result, TruncateTransform)
+        assert result.length == 0
+
+    def test_truncate_case_insensitive(self):
+        """'TRUNCATE TO 5' (all-caps) is recognised."""
+        result = parse_transform("TRUNCATE TO 5")
+        assert isinstance(result, TruncateTransform)
+        assert result.length == 5
+
+    def test_truncate_type_attribute(self):
+        """Parsed TruncateTransform has type='truncate'."""
+        result = parse_transform("Truncate to 7")
+        assert isinstance(result, TruncateTransform)
+        assert result.type == "truncate"

@@ -45,8 +45,10 @@ from src.transforms.models import (
     FieldMapTransform,
     InCondition,
     NullCheckCondition,
+    PadTransform,
     SequentialNumberTransform,
     Transform,
+    TruncateTransform,
 )
 
 # ---------------------------------------------------------------------------
@@ -133,6 +135,40 @@ _FIELD_MAP_RE = re.compile(r"^[A-Z][A-Z0-9_\-]+$")
 # Matches: "Sequential", "sequential number", "sequence" (case-insensitive)
 _SEQUENTIAL_RE = re.compile(
     r"^(?:sequential(?:\s+number)?|sequence)$",
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
+# Phase 4d: pad and truncate patterns
+# ---------------------------------------------------------------------------
+
+# "Left pad to N with 'C'" / "LPAD to N with 'C'" — left-pad with pad_char
+_LEFT_PAD_RE = re.compile(
+    r"^(?:left\s+pad|lpad)\s+to\s+(\d+)(?:\s+with\s+['\"]?(.))?",
+    re.IGNORECASE,
+)
+
+# "Right pad to N" / "Right pad to N with 'C'" — right-pad
+_RIGHT_PAD_RE = re.compile(
+    r"^right\s+pad\s+to\s+(\d+)(?:\s+with\s+['\"]?(.)['\"]?)?",
+    re.IGNORECASE,
+)
+
+# "Pad to N with spaces" / "Pad to N" — generic right-pad
+_PAD_SPACES_RE = re.compile(
+    r"^pad\s+to\s+(\d+)(?:\s+with\s+spaces)?",
+    re.IGNORECASE,
+)
+
+# "Truncate to N" / "Truncate to N chars" / "Truncate to N characters"
+_TRUNCATE_N_RE = re.compile(
+    r"^truncate\s+to\s+(\d+)(?:\s+chars?(?:acters?)?)?$",
+    re.IGNORECASE,
+)
+
+# "Truncate decimal places" — special annotation, treated as noop-length TruncateTransform
+_TRUNCATE_DECIMAL_RE = re.compile(
+    r"^truncate\s+decimal\s+places?$",
     re.IGNORECASE,
 )
 
@@ -410,6 +446,34 @@ def parse_transform(text: Optional[str]) -> Transform:
     m = _DEFAULT_UNQUOTED_RE.match(t)
     if m:
         return DefaultTransform(value=m.group(1).strip())
+
+    # --- Phase 4d: pad patterns ---
+
+    m = _LEFT_PAD_RE.match(t)
+    if m:
+        length = int(m.group(1))
+        pad_char = m.group(2) if m.group(2) else " "
+        return PadTransform(length=length, pad_char=pad_char, direction="left")
+
+    m = _RIGHT_PAD_RE.match(t)
+    if m:
+        length = int(m.group(1))
+        pad_char = m.group(2) if m.group(2) else " "
+        return PadTransform(length=length, pad_char=pad_char, direction="right")
+
+    m = _PAD_SPACES_RE.match(t)
+    if m:
+        length = int(m.group(1))
+        return PadTransform(length=length, pad_char=" ", direction="right")
+
+    # --- Phase 4d: truncate patterns ---
+
+    if _TRUNCATE_DECIMAL_RE.match(t):
+        return TruncateTransform(length=0)
+
+    m = _TRUNCATE_N_RE.match(t)
+    if m:
+        return TruncateTransform(length=int(m.group(1)))
 
     # --- Phase 2: concatenation (two or more fields joined by +) ---
 
