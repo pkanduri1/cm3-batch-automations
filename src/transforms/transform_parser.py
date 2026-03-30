@@ -45,6 +45,7 @@ from src.transforms.models import (
     FieldMapTransform,
     InCondition,
     NullCheckCondition,
+    SequentialNumberTransform,
     Transform,
 )
 
@@ -124,6 +125,16 @@ _CONCAT_EXPR_RE = re.compile(
 # no whitespace, at least 2 chars to avoid false positives on short acronyms
 # that look like constants.
 _FIELD_MAP_RE = re.compile(r"^[A-Z][A-Z0-9_\-]+$")
+
+# ---------------------------------------------------------------------------
+# Phase 3e: sequential numbering pattern
+# ---------------------------------------------------------------------------
+
+# Matches: "Sequential", "sequential number", "sequence" (case-insensitive)
+_SEQUENTIAL_RE = re.compile(
+    r"^(?:sequential(?:\s+number)?|sequence)$",
+    re.IGNORECASE,
+)
 
 # ---------------------------------------------------------------------------
 # Phase 3d: conditional IF/THEN/ELSE patterns
@@ -354,6 +365,11 @@ def parse_transform(text: Optional[str]) -> Transform:
     conditional = _parse_conditional(t)
     if conditional is not None:
         return conditional
+
+    # --- Phase 3e: sequential numbering ---
+
+    if _SEQUENTIAL_RE.match(t):
+        return SequentialNumberTransform()
 
     # --- Blank / space patterns (check before generic "pass" pattern) ---
 

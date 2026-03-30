@@ -456,3 +456,75 @@ class TestConditionalTransformEngine:
         assert apply_transform(None, outer, row={"type": "A"}) == "TYPE_A"
         assert apply_transform(None, outer, row={"type": "B"}) == "TYPE_B"
         assert apply_transform(None, outer, row={"type": "C"}) == "OTHER"
+
+
+# ---------------------------------------------------------------------------
+# SequentialNumberTransform (Phase 3e)
+# ---------------------------------------------------------------------------
+
+
+class TestSequentialTransformEngine:
+    """apply_transform behaviour for SequentialNumberTransform."""
+
+    def test_without_counter_returns_str_start(self):
+        """Without a counter, apply_transform returns str(start) on every call."""
+        from src.transforms.models import SequentialNumberTransform
+
+        t = SequentialNumberTransform(start=1)
+        assert apply_transform(None, t) == "1"
+        # Stateless: second call still returns the same start value.
+        assert apply_transform(None, t) == "1"
+
+    def test_without_counter_custom_start(self):
+        """Stateless fallback uses configured start."""
+        from src.transforms.models import SequentialNumberTransform
+
+        t = SequentialNumberTransform(start=42)
+        assert apply_transform(None, t) == "42"
+
+    def test_with_counter_increments(self):
+        """With a counter, successive apply_transform calls increment."""
+        from src.transforms.models import SequentialNumberTransform
+        from src.transforms.sequential_counter import SequentialCounter
+        from src.transforms.transform_engine import apply_transform as _apply
+
+        counter = SequentialCounter()
+        t = SequentialNumberTransform(start=1)
+        assert _apply(None, t, counter=counter) == "1"
+        assert _apply(None, t, counter=counter) == "2"
+        assert _apply(None, t, counter=counter) == "3"
+
+    def test_with_counter_custom_step(self):
+        """Counter honours the step attribute."""
+        from src.transforms.models import SequentialNumberTransform
+        from src.transforms.sequential_counter import SequentialCounter
+        from src.transforms.transform_engine import apply_transform as _apply
+
+        counter = SequentialCounter()
+        t = SequentialNumberTransform(start=0, step=5)
+        assert _apply(None, t, counter=counter) == "0"
+        assert _apply(None, t, counter=counter) == "5"
+        assert _apply(None, t, counter=counter) == "10"
+
+    def test_field_length_padding_applied_to_sequential_value(self):
+        """field_length right-pads the sequential value."""
+        from src.transforms.models import SequentialNumberTransform
+        from src.transforms.sequential_counter import SequentialCounter
+        from src.transforms.transform_engine import apply_transform as _apply
+
+        counter = SequentialCounter()
+        t = SequentialNumberTransform(start=7)
+        result = _apply(None, t, field_length=5, counter=counter)
+        assert result == "7    "
+        assert len(result) == 5
+
+    def test_zero_padded_sequential_with_pad_length(self):
+        """pad_length zero-pads the sequential value before field_length fitting."""
+        from src.transforms.models import SequentialNumberTransform
+        from src.transforms.sequential_counter import SequentialCounter
+        from src.transforms.transform_engine import apply_transform as _apply
+
+        counter = SequentialCounter()
+        t = SequentialNumberTransform(start=1, pad_length=5)
+        assert _apply(None, t, counter=counter) == "00001"
+        assert _apply(None, t, counter=counter) == "00002"

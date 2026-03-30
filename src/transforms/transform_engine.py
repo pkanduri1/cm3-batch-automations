@@ -27,6 +27,7 @@ from src.transforms.models import (
     ConstantTransform,
     DefaultTransform,
     FieldMapTransform,
+    SequentialNumberTransform,
     Transform,
 )
 
@@ -83,6 +84,7 @@ def apply_transform(
     transform: Transform,
     field_length: int = 0,
     row: Optional[dict] = None,
+    counter: "Optional[object]" = None,
 ) -> str:
     """Apply *transform* to *source_value* and return the output string.
 
@@ -96,6 +98,12 @@ def apply_transform(
         row: Optional mapping of field names to values for transforms that
             reference other fields (e.g. :class:`ConcatTransform`,
             :class:`FieldMapTransform`).
+        counter: Optional
+            :class:`~src.transforms.sequential_counter.SequentialCounter`
+            instance.  Required for stateful
+            :class:`~src.transforms.models.SequentialNumberTransform`
+            processing.  When ``None``, sequential transforms return
+            ``str(transform.start)`` as a stateless fallback.
 
     Returns:
         The transformed string, fitted to ``field_length`` when positive.
@@ -145,6 +153,16 @@ def apply_transform(
     elif isinstance(transform, FieldMapTransform):
         result = safe_row.get(transform.source_field, "")
 
+    elif isinstance(transform, SequentialNumberTransform):
+        if counter is not None:
+            result = counter.next_value(transform)
+        else:
+            # Stateless fallback: always emit str(start).
+            raw = str(transform.start)
+            if transform.pad_length is not None:
+                raw = raw.zfill(transform.pad_length)
+            result = raw
+
     elif isinstance(transform, ConditionalTransform):
         branch = (
             transform.then_transform
@@ -152,7 +170,9 @@ def apply_transform(
             else transform.else_transform
         )
         # Recurse without applying _fit here; the recursive call handles fitting.
-        return apply_transform(source_value, branch, field_length=field_length, row=row)
+        return apply_transform(
+            source_value, branch, field_length=field_length, row=row, counter=counter
+        )
 
     else:
         # Noop — pass through.

@@ -8,6 +8,7 @@ the parameters specific to their behaviour.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Optional
 
 
 @dataclass
@@ -215,6 +216,39 @@ class InCondition:
 
     def __post_init__(self) -> None:
         self.type = "in_condition"
+
+
+@dataclass
+class SequentialNumberTransform(Transform):
+    """Assign an incrementing sequence number to each record processed.
+
+    The counter is stateful and managed externally by a
+    :class:`~src.transforms.sequential_counter.SequentialCounter`.  When no
+    counter is supplied to :func:`~src.transforms.transform_engine.apply_transform`
+    the transform falls back to returning ``str(start)`` on every call.
+
+    Attributes:
+        start: The value emitted for the first record.  Defaults to ``1``.
+        step: Amount to add to the counter after each emission.  Defaults to ``1``.
+        pad_length: When set, the numeric string is zero-padded (with ``'0'``)
+            to this total width.  Values already at or exceeding ``pad_length``
+            are never truncated.  Defaults to ``None`` (no padding).
+        type: Always ``'sequential'``.
+
+    Example::
+
+        t = SequentialNumberTransform(start=1, step=1, pad_length=5)
+        # First record  → "00001"
+        # Second record → "00002"
+    """
+
+    start: int = 1
+    step: int = 1
+    pad_length: Optional[int] = None
+    type: str = field(default="sequential", init=False)
+
+    def __post_init__(self) -> None:
+        self.type = "sequential"
 
 
 @dataclass

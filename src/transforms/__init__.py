@@ -4,7 +4,9 @@ Provides a parser that converts free-text mapping descriptions into typed
 ``Transform`` objects, and an engine that applies those objects to source
 field values.  Phase 3a adds condition models and an evaluator; Phase 3b
 extends conditions with equality and multi-value (IN) checks.  Phase 3c
-adds ``ConditionalTransform`` for IF/ELSE dispatch.
+adds ``ConditionalTransform`` for IF/ELSE dispatch.  Phase 3e adds
+``SequentialNumberTransform`` and ``SequentialCounter`` for stateful
+row-counter tracking.
 
 Exported names
 --------------
@@ -33,6 +35,10 @@ Exported names
     (or NOT IN when ``negate=True``).
 ``ConditionalTransform``
     Apply then_transform or else_transform depending on a condition.
+``SequentialNumberTransform``
+    Assign an incrementing sequence number to each processed record.
+``SequentialCounter``
+    Stateful counter manager for ``SequentialNumberTransform`` instances.
 ``parse_transform``
     Parse a free-text transform description into a typed ``Transform``.
 ``apply_transform``
@@ -53,8 +59,10 @@ from src.transforms.models import (
     FieldMapTransform,
     InCondition,
     NullCheckCondition,
+    SequentialNumberTransform,
     Transform,
 )
+from src.transforms.sequential_counter import SequentialCounter
 from src.transforms.transform_engine import apply_transform
 from src.transforms.transform_parser import parse_transform
 
@@ -70,6 +78,8 @@ __all__ = [
     "EqualityCondition",
     "InCondition",
     "ConditionalTransform",
+    "SequentialNumberTransform",
+    "SequentialCounter",
     "parse_transform",
     "apply_transform",
     "evaluate_condition",

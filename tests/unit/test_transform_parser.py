@@ -441,3 +441,56 @@ class TestConditionalTransformParser:
         assert isinstance(result.then_transform, FieldMapTransform)
         assert isinstance(result.else_transform, DefaultTransform)
         assert result.else_transform.value == "+000000000000000000"
+
+
+# ---------------------------------------------------------------------------
+# SequentialNumberTransform patterns (Phase 3e)
+# ---------------------------------------------------------------------------
+
+
+class TestSequentialTransformParser:
+    """Parser recognises sequential numbering patterns."""
+
+    def test_sequential_keyword(self):
+        """'Sequential' maps to SequentialNumberTransform."""
+        from src.transforms.models import SequentialNumberTransform
+
+        result = parse_transform("Sequential")
+        assert isinstance(result, SequentialNumberTransform)
+
+    def test_sequential_number_phrase(self):
+        """'sequential number' maps to SequentialNumberTransform."""
+        from src.transforms.models import SequentialNumberTransform
+
+        result = parse_transform("sequential number")
+        assert isinstance(result, SequentialNumberTransform)
+
+    def test_sequence_keyword(self):
+        """'sequence' maps to SequentialNumberTransform."""
+        from src.transforms.models import SequentialNumberTransform
+
+        result = parse_transform("sequence")
+        assert isinstance(result, SequentialNumberTransform)
+
+    def test_sequential_case_insensitive_upper(self):
+        """'SEQUENTIAL' (all caps) maps to SequentialNumberTransform."""
+        from src.transforms.models import SequentialNumberTransform
+
+        result = parse_transform("SEQUENTIAL")
+        assert isinstance(result, SequentialNumberTransform)
+
+    def test_sequential_default_start(self):
+        """Parsed SequentialNumberTransform has default start=1."""
+        from src.transforms.models import SequentialNumberTransform
+
+        result = parse_transform("Sequential")
+        assert isinstance(result, SequentialNumberTransform)
+        assert result.start == 1
+
+    def test_sequential_type_attribute(self):
+        """Parsed SequentialNumberTransform has type='sequential'."""
+        from src.transforms.models import SequentialNumberTransform
+
+        result = parse_transform("sequence")
+        assert isinstance(result, SequentialNumberTransform)
+        assert result.type == "sequential"
