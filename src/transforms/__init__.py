@@ -82,8 +82,10 @@ from src.transforms.models import (
     Transform,
     TruncateTransform,
 )
+from src.transforms.multi_record_transform_engine import MultiRecordTransformEngine
 from src.transforms.sequential_counter import SequentialCounter
 from src.transforms.transform_engine import apply_transform
+from src.transforms.transform_mismatch_reporter import TransformMismatchReporter
 from src.transforms.transform_orchestrator import TransformEngine
 from src.transforms.transform_parser import parse_transform
 
@@ -107,6 +109,8 @@ __all__ = [
     "PadTransform",
     "TruncateTransform",
     "TransformEngine",
+    "MultiRecordTransformEngine",
+    "TransformMismatchReporter",
     "parse_transform",
     "apply_transform",
     "evaluate_condition",
