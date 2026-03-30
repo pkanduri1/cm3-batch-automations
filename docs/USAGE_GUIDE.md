@@ -15,8 +15,9 @@ This guide provides practical examples for using Valdo in both **CLI mode** and 
 2. [CLI Usage](#cli-usage)
 3. [API Usage](#api-usage)
 4. [Universal Mapping](#universal-mapping)
-5. [Common Workflows](#common-workflows)
-6. [Troubleshooting](#troubleshooting)
+5. [Transformation Engine](#transformation-engine)
+6. [Common Workflows](#common-workflows)
+7. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -1995,3 +1996,149 @@ python -m src.main submit-task \
 ```
 
 If input is invalid, CLI exits non-zero and prints machine-readable errors when `--machine-errors` is set.
+
+---
+
+## Transformation Engine
+
+The `src.transforms` package provides a two-stage pipeline for applying
+field-level transformations that appear as free-text annotations in mapping
+spreadsheets.
+
+### Transform types
+
+| Type | Class | Behaviour |
+|------|-------|-----------|
+| `noop` | `Transform` | Pass source value through unchanged |
+| `default` | `DefaultTransform` | Use source when present; fall back to configured value |
+| `blank` | `BlankTransform` | Always output blank / space-filled result |
+| `constant` | `ConstantTransform` | Always output a fixed constant, ignoring source |
+| `scale` | `ScaleTransform` | Multiply source by a numeric factor (use `factor < 1` for division) |
+| `pad` | `PadTransform` | Pad source to a target width (left or right); never truncates |
+| `truncate` | `TruncateTransform` | Truncate source to at most N characters (from start or end) |
+
+### Parsing mapping text
+
+`parse_transform(text)` converts a free-text mapping cell into a typed object.
+
+```python
+from src.transforms import parse_transform
+
+t = parse_transform("Default to '100030'")
+# DefaultTransform(value='100030', type='default')
+
+t = parse_transform("Nullable --> Leave Blank")
+# BlankTransform(fill_char=' ', fill_value='', type='blank')
+
+t = parse_transform("Pass '000'")
+# ConstantTransform(value='000', type='constant')
+
+t = parse_transform("Hard-code to 'USD'")
+# ConstantTransform(value='USD', type='constant')
+
+t = parse_transform("Initialize to spaces")
+# BlankTransform(fill_char=' ', fill_value='', type='blank')
+
+t = parse_transform("Multiply by 100")
+# ScaleTransform(factor=100.0, decimal_places=0, type='scale')
+
+t = parse_transform("Divide by 100")
+# ScaleTransform(factor=0.01, decimal_places=2, type='scale')
+
+t = parse_transform(None)
+# Transform(type='noop')
+```
+
+Recognised patterns include:
+
+- `Default to 'VALUE'` / `Default to VALUE` / `Default = VALUE`
+- `Nullable --> Leave Blank` / `Nullable --> 'FILL'`
+- `Leave Blank` / `Leave blank <spaces>`
+- `Pass Blank <spaces>`
+- `Initialize to spaces`
+- `Pass 'VALUE'`
+- `Hard-code to 'VALUE'` / `Hard-Code to 'VALUE'` / `Hardcode to 'VALUE'`
+- `Convert to CCYYMMDD` / `Convert to YYYYMMDD` → ISO date (`YYYY-MM-DD`) to `YYYYMMDD`
+- `Convert to MM/DD/CCYY` → ISO date to `MM/DD/YYYY`
+- `Date format CCYYMMDD` / `Format as CCYYMMDD` → same as above
+- `Multiply by N` — multiply source by N; result formatted as integer string by default
+- `Divide by N` — divide source by N; decimal places inferred from magnitude of N
+- `Left pad to N with '0'` / `LPAD to N with '0'` → `PadTransform(direction='left')`
+- `Right pad to N` / `Pad to N with spaces` → `PadTransform(direction='right')`
+- `Truncate to N` / `Truncate to N chars` / `Truncate to N characters` → `TruncateTransform`
+- `Truncate decimal places` → `TruncateTransform(length=0)` (no-op sentinel)
+
+Any unrecognised text (including complex conditional expressions) returns
+`Transform(type='noop')` so callers can safely fall back to a direct copy.
+
+### Scale transforms
+
+`ScaleTransform` multiplies a numeric source value by a configurable factor.
+It is designed for unit conversions found in real-world batch mappings such as
+"Multiply by 100" (convert dollars to cents) or "Divide by 100" (convert cents
+to dollars).
+
+```python
+from src.transforms import apply_transform
+from src.transforms.models import ScaleTransform
+
+# Dollars → cents (integer output)
+t = ScaleTransform(factor=100, decimal_places=0)
+apply_transform("123.45", t)  # '12345'
+
+# Cents → dollars (2 decimal places)
+t = ScaleTransform(factor=0.01, decimal_places=2)
+apply_transform("12345", t)  # '123.45'
+
+# Absent / blank source returns default_value
+t = ScaleTransform(factor=100, decimal_places=0, default_value="0")
+apply_transform("", t)   # '0'
+apply_transform(None, t) # '0'
+
+# Non-numeric source also returns default_value
+apply_transform("N/A", t) # '0'
+```
+
+When `decimal_places=-1` (the default), the raw `str(float)` result is used,
+which may include trailing `.0`.  Set `decimal_places=0` to suppress the
+decimal point entirely.
+
+### Applying a transform
+
+`apply_transform(source_value, transform, field_length=0)` executes the
+transform and returns a string.  Pass `field_length` to right-pad or
+right-truncate the result to an exact width.
+
+```python
+from src.transforms import apply_transform, parse_transform
+from src.transforms.models import ConstantTransform, DefaultTransform
+
+# Constant — ignores source
+apply_transform("ANYTHING", ConstantTransform(value="000"))
+# '000'
+
+# Default — uses source when present
+apply_transform("REAL", DefaultTransform(value="FB"))
+# 'REAL'
+
+# Default — falls back when source is absent/whitespace
+apply_transform("  ", DefaultTransform(value="FB"))
+# 'FB'
+
+# Padding / truncation
+apply_transform("AB", parse_transform("Pass as is"), field_length=5)
+# 'AB   '
+
+apply_transform("ABCDEF", parse_transform("Pass as is"), field_length=4)
+# 'ABCD'
+```
+
+### API location
+
+| Symbol | Module |
+|--------|--------|
+| `Transform`, `DefaultTransform`, `BlankTransform`, `ConstantTransform` | `src.transforms.models` |
+| `DateFormatTransform` | `src.transforms.models` |
+| `parse_transform` | `src.transforms.transform_parser` |
+| `apply_transform` | `src.transforms.transform_engine` |
+| All of the above (re-exported) | `src.transforms` |

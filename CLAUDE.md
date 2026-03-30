@@ -131,19 +131,21 @@ Follow these 12 steps in order for every feature or bug fix:
 
 ```bash
 # Run full unit suite
-pytest tests/unit/ -q
+python3 -m pytest tests/unit/ -q
 
 # Run with coverage
-pytest tests/unit/ --cov=src --cov-report=term-missing -q
+python3 -m pytest tests/unit/ --cov=src --cov-report=term-missing -q
 
 # Run E2E tests (requires running server)
-pytest tests/e2e/ --browser chromium
+python3 -m pytest tests/e2e/ --browser chromium
 
 # Build Sphinx docs
 cd docs/sphinx && make html
 ```
 
 **Coverage target:** ≥80%
+
+> **Note:** Running a subset of tests (e.g. a single file) always reports 0% coverage and fails the coverage gate — always run `tests/unit/` for a valid coverage check.
 
 ---
 
