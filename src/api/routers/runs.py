@@ -3,9 +3,12 @@
 import uuid
 import asyncio
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Any, List, Optional
+
+from src.api.auth import require_api_key
+from src.services import summary_service
 
 router = APIRouter(prefix="/api/v1/runs", tags=["runs"])
 
@@ -80,6 +83,26 @@ async def trigger_run(request: TriggerRequest):
 
     asyncio.create_task(_run())
     return TriggerResponse(run_id=run_id, status="queued", message=f"Suite run queued as {run_id}")
+
+
+@router.get("/summaries")
+async def get_summaries(_: Any = Depends(require_api_key)) -> List[dict]:
+    """Return per-suite summary cards data for the dashboard.
+
+    Aggregates the full run history into one summary object per suite,
+    including last-run status, 30-day pass rate, average quality score,
+    and a 7-day trend direction.
+
+    Args:
+        _: Auth context injected by ``require_api_key`` dependency.
+
+    Returns:
+        List of suite summary dicts sorted by ``last_run_at`` descending.
+        Each dict contains: ``suite_name``, ``last_run_status``,
+        ``last_run_at``, ``pass_rate_30d``, ``avg_quality_score``,
+        ``trend_direction``.  Returns ``[]`` when no history exists.
+    """
+    return summary_service.get_suite_summaries()
 
 
 @router.get("/{run_id}")

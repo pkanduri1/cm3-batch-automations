@@ -1,7 +1,38 @@
 """Service layer for persisting run history to Oracle DB."""
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
 from typing import Any
+
+_RUN_HISTORY_PATH = Path("reports") / "run_history.json"
+
+
+def load_run_history() -> list[dict[str, Any]]:
+    """Load run history from Oracle DB or the JSON fallback file.
+
+    Tries the database path first when ``ORACLE_USER`` is set, then falls
+    back to reading ``reports/run_history.json``.  Returns all available
+    entries — callers are responsible for any time-window filtering.
+
+    Returns:
+        List of run history entry dicts, each containing at minimum:
+        ``run_id``, ``suite_name``, ``timestamp``, ``status``.
+        Returns an empty list if no data source is available.
+    """
+    if os.getenv("ORACLE_USER"):
+        try:
+            return fetch_history_from_db(limit=1000)
+        except Exception:
+            pass
+
+    if not _RUN_HISTORY_PATH.exists():
+        return []
+    try:
+        return json.loads(_RUN_HISTORY_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return []
 
 
 def write_run_to_db(
