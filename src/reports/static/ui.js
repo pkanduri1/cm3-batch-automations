@@ -8,6 +8,8 @@ var _autoRefreshTimer = null;
 var _runsData = [];
 var _runsSortCol = 'timestamp';
 var _runsSortDir = 'desc';
+var _trendDays = 7;
+var _trendSuite = '';
 
 // ---------------------------------------------------------------------------
 // Tab switching — animated panels + sliding underline indicator
@@ -37,6 +39,8 @@ function switchTab(name) {
     btn.setAttribute('aria-selected', String(t === name));
   });
   updateTabIndicator();
+  // Reload trend chart whenever the Recent Runs tab is activated (#249)
+  if (name === 'runs') { loadTrendChart(); }
 }
 
 /**
@@ -785,6 +789,11 @@ async function loadRunHistory() {
     _runsData = await resp.json();
     buildRunsTable(_runsData);
     _fetchBaselineStatuses();
+    // Populate trend chart suite selector with unique suite names (#249)
+    var _suiteNames = Array.from(new Set(
+      _runsData.map(function(r) { return r.suite_name || r.suite || ''; }).filter(Boolean)
+    )).sort();
+    _populateTrendSuiteSelector(_suiteNames);
   } catch (err) {
     while (wrap.firstChild) { wrap.removeChild(wrap.firstChild); }
     var p = document.createElement('p');
@@ -810,10 +819,72 @@ function toggleAutoRefresh() {
     toggle.classList.remove('active');
     label.textContent = 'Auto-refresh off';
   } else {
-    _autoRefreshTimer = setInterval(loadRunHistory, 30000);
+    _autoRefreshTimer = setInterval(function() { loadRunHistory(); loadTrendChart(); }, 30000);
     toggle.classList.add('active');
     label.textContent = 'Auto-refresh on (30s)';
   }
+}
+
+// ===========================================================================
+// Trend Chart — fetch + wiring (#249)
+// ===========================================================================
+/**
+ * Set the active day-range for the trend chart and reload it.
+ *
+ * Updates button active state and triggers a fresh fetch.
+ *
+ * @param {number} days - Number of days to display (7, 14, or 30).
+ */
+function setTrendDays(days) {
+  _trendDays = days;
+  document.querySelectorAll('.trend-day-btn').forEach(function(btn) {
+    btn.classList.toggle('active', parseInt(btn.getAttribute('data-days')) === days);
+  });
+  loadTrendChart();
+}
+
+/**
+ * Fetch trend data from the API and render it into the #trendsChart container.
+ *
+ * Uses the current values of _trendDays and the #trendSuiteSelect element.
+ * Safe to call before the DOM element exists — returns early if container is absent.
+ */
+function loadTrendChart() {
+  var container = document.getElementById('trendsChart');
+  if (!container) { return; }
+
+  var suite = document.getElementById('trendSuiteSelect') ?
+    document.getElementById('trendSuiteSelect').value : '';
+
+  var url = '/api/v1/runs/trend?days=' + _trendDays;
+  if (suite) { url += '&suite=' + encodeURIComponent(suite); }
+
+  container.textContent = 'Loading\u2026';
+
+  fetch(url, { headers: window._apiKey ? { 'X-API-Key': window._apiKey } : {} })
+    .then(function(r) { return r.ok ? r.json() : []; })
+    .then(function(data) { renderTrendChart(data, container); })
+    .catch(function() { container.textContent = 'Failed to load trend data.'; });
+}
+
+/**
+ * Populate the suite filter <select> in the trend chart section.
+ *
+ * Always preserves the leading "All suites" option and rebuilds the rest
+ * from the provided list.
+ *
+ * @param {string[]} suites - Unique suite names extracted from run history.
+ */
+function _populateTrendSuiteSelector(suites) {
+  var sel = document.getElementById('trendSuiteSelect');
+  if (!sel) { return; }
+  sel.innerHTML = '<option value="">All suites</option>';
+  (suites || []).forEach(function(s) {
+    var opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = s;
+    sel.appendChild(opt);
+  });
 }
 
 // ===========================================================================
@@ -1751,7 +1822,14 @@ setInterval(checkHealth, HEALTH_INTERVAL_MS);
 loadMappings();
 loadRules();
 loadRunHistory();
+loadTrendChart();
 _applyBaselineColVisibility();
+
+// Wire trend suite selector change event (#249)
+(function() {
+  var trendSel = document.getElementById('trendSuiteSelect');
+  if (trendSel) { trendSel.addEventListener('change', loadTrendChart); }
+})();
 
 // ===========================================================================
 // API TESTER
