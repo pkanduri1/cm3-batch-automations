@@ -262,6 +262,10 @@ Services
    :members:
    :undoc-members:
 
+.. automodule:: src.services.error_extractor
+   :members:
+   :undoc-members:
+
 Contracts & Adapters
 --------------------
 
