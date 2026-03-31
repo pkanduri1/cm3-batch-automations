@@ -301,3 +301,55 @@ class TestDefaultConstructor:
             repo = RunHistoryRepository()
             assert repo._engine is mock_engine
             assert repo._schema_prefix == "TEST."
+
+
+# ---------------------------------------------------------------------------
+# quality_score wiring — issue #239
+# ---------------------------------------------------------------------------
+
+
+SAMPLE_ENTRY_WITH_QUALITY_SCORE = {
+    **SAMPLE_ENTRY,
+    "quality_score": 95.5,
+}
+
+SAMPLE_ENTRY_WITHOUT_QUALITY_SCORE = {
+    k: v for k, v in SAMPLE_ENTRY.items()
+    # no quality_score key
+}
+
+
+class TestInsertRunQualityScore:
+    """Verify quality_score is included in the INSERT params for CM3_RUN_HISTORY."""
+
+    def test_quality_score_passed_when_present(self):
+        """insert_run must include quality_score=95.5 in the DB params."""
+        mock_engine, mock_conn = _make_mock_engine()
+        repo = _make_repo(mock_engine)
+        repo.insert_run(SAMPLE_ENTRY_WITH_QUALITY_SCORE)
+        _, params = mock_conn.execute.call_args.args
+        assert "quality_score" in params
+        assert params["quality_score"] == 95.5
+
+    def test_quality_score_is_none_when_absent(self):
+        """insert_run must pass quality_score=None when entry has no quality_score."""
+        mock_engine, mock_conn = _make_mock_engine()
+        repo = _make_repo(mock_engine)
+        repo.insert_run(SAMPLE_ENTRY_WITHOUT_QUALITY_SCORE)
+        _, params = mock_conn.execute.call_args.args
+        assert "quality_score" in params
+        assert params["quality_score"] is None
+
+    def test_quality_score_in_sql_insert(self):
+        """_sql_insert_run must reference quality_score column and bind param."""
+        from src.database.run_history import _sql_insert_run
+
+        sql = _sql_insert_run("CM3INT.")
+        assert "quality_score" in sql
+
+    def test_quality_score_in_sql_fetch(self):
+        """_sql_fetch_history must select quality_score column."""
+        from src.database.run_history import _sql_fetch_history
+
+        sql = _sql_fetch_history("CM3INT.", limit=20)
+        assert "quality_score" in sql

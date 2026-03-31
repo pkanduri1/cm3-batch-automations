@@ -92,10 +92,10 @@ def _sql_insert_run(schema: str) -> str:
     return (
         f"INSERT INTO {table} "
         "(run_id, suite_name, environment, run_timestamp, status, "
-        "pass_count, fail_count, skip_count, total_count, report_url, archive_path) "
+        "pass_count, fail_count, skip_count, total_count, report_url, archive_path, quality_score) "
         "VALUES "
         "(:run_id, :suite_name, :environment, :run_timestamp, :status, "
-        ":pass_count, :fail_count, :skip_count, :total_count, :report_url, :archive_path)"
+        ":pass_count, :fail_count, :skip_count, :total_count, :report_url, :archive_path, :quality_score)"
     )
 
 
@@ -136,7 +136,7 @@ def _sql_fetch_history(schema: str, limit: int = 20) -> str:
     table = _qualified(schema, "CM3_RUN_HISTORY")
     return (
         f"SELECT run_id, suite_name, environment, run_timestamp, status, "
-        f"pass_count, fail_count, skip_count, total_count, report_url, archive_path "
+        f"pass_count, fail_count, skip_count, total_count, report_url, archive_path, quality_score "
         f"FROM {table} "
         f"ORDER BY run_timestamp DESC "
         f"LIMIT {int(limit)}"
@@ -187,7 +187,7 @@ class RunHistoryRepository:
                 ``run_id``, ``suite_name``, ``environment``, ``timestamp``
                 (ISO-8601 UTC string), ``status``, ``pass_count``,
                 ``fail_count``, ``skip_count``, ``total_count``,
-                ``report_url``, ``archive_path``.
+                ``report_url``, ``archive_path``, ``quality_score`` (optional float).
         """
         params = {
             "run_id": entry["run_id"],
@@ -201,6 +201,7 @@ class RunHistoryRepository:
             "total_count": entry.get("total_count", 0),
             "report_url": entry.get("report_url", ""),
             "archive_path": entry.get("archive_path", ""),
+            "quality_score": entry.get("quality_score"),
         }
         sql = text(_sql_insert_run(self._schema_prefix))
         try:
