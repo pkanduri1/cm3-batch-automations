@@ -1,5 +1,8 @@
+# All PRs require review from pkanduri1.
 # Configuration files require team review before merging.
 # See docs/CHANGE_MANAGEMENT.md for the full approval workflow.
+
+*                    @pkanduri1
 
 config/mappings/     @buddy-k23
 config/rules/        @buddy-k23
