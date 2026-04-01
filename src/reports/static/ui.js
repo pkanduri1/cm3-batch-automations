@@ -17,10 +17,10 @@ var _trendSuite = '';
 /**
  * Switch the active tab panel and update the sliding underline indicator.
  *
- * @param {string} name - Tab identifier: 'quick', 'runs', 'mapping', or 'tester'.
+ * @param {string} name - Tab identifier: 'quick', 'runs', 'mapping', 'tester', or 'dbcompare'.
  */
 function switchTab(name) {
-  ['quick', 'runs', 'mapping', 'tester'].forEach(function(t) {
+  ['quick', 'runs', 'mapping', 'tester', 'dbcompare'].forEach(function(t) {
     var panel = document.getElementById('panel-' + t);
     var btn   = document.getElementById('tab-' + t);
     if (t === name) {
@@ -42,6 +42,49 @@ function switchTab(name) {
   // Reload trend chart whenever the Recent Runs tab is activated (#249)
   if (name === 'runs') { loadTrendChart(); loadSummaryCards(); }
 }
+
+// ===========================================================================
+// DB Compare — direction state + swap
+// ===========================================================================
+var _dbcDirection = 'db-to-file';
+
+/**
+ * Refresh all direction-dependent labels and CSS classes on the DB Compare panel.
+ * Called on page load (implicitly via initial state) and whenever the swap button
+ * is clicked.
+ */
+function _dbcUpdateDirection() {
+  var isDbToFile = _dbcDirection === 'db-to-file';
+  var lbl = document.getElementById('dbcDirectionLabel');
+  if (lbl) lbl.textContent = isDbToFile ? 'DB is source \u00B7 File is actual' : 'File is source \u00B7 DB is actual';
+
+  var dbPanel    = document.getElementById('dbcDbPanel');
+  var filePanel  = document.getElementById('dbcFilePanel');
+  var dbHeader   = document.getElementById('dbcDbPanelHeader');
+  var fileHeader = document.getElementById('dbcFilePanelHeader');
+
+  if (dbPanel)   dbPanel.className   = 'dbc-panel ' + (isDbToFile ? 'dbc-panel--source' : 'dbc-panel--actual');
+  if (filePanel) filePanel.className = 'dbc-panel ' + (isDbToFile ? 'dbc-panel--actual' : 'dbc-panel--source');
+  if (dbHeader)   dbHeader.className   = 'dbc-panel-header' + (isDbToFile ? '' : ' dbc-panel-header--actual');
+  if (fileHeader) fileHeader.className = 'dbc-panel-header' + (isDbToFile ? ' dbc-panel-header--actual' : '');
+
+  var sqlEd = document.getElementById('dbcSqlEditor');
+  if (sqlEd) {
+    sqlEd.placeholder = isDbToFile
+      ? 'SELECT column1, column2 FROM SCHEMA.TABLE'
+      : 'SELECT t1.col, t2.col FROM TARGET.TABLE1 t1 JOIN TARGET.TABLE2 t2 ON t1.id = t2.fk_id';
+  }
+}
+
+(function() {
+  var swapBtn = document.getElementById('dbcSwapBtn');
+  if (swapBtn) {
+    swapBtn.addEventListener('click', function() {
+      _dbcDirection = (_dbcDirection === 'db-to-file') ? 'file-to-db' : 'db-to-file';
+      _dbcUpdateDirection();
+    });
+  }
+})();
 
 /**
  * Reposition the sliding underline indicator under the currently active tab button.
@@ -336,6 +379,21 @@ async function loadMappings() {
         o.textContent = label;
         sel.appendChild(o);
       });
+      // Also populate DB Compare mapping select
+      var dbcSel = document.getElementById('dbcMappingSelect');
+      if (dbcSel) {
+        while (dbcSel.firstChild) { dbcSel.removeChild(dbcSel.firstChild); }
+        var dbcPlaceholder = document.createElement('option');
+        dbcPlaceholder.value = '';
+        dbcPlaceholder.textContent = '\u2014 select mapping \u2014';
+        dbcSel.appendChild(dbcPlaceholder);
+        list.forEach(function(m) {
+          var opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.mapping_name + ' (' + m.format + ')';
+          dbcSel.appendChild(opt);
+        });
+      }
     }
   } catch (err) {
     while (sel.firstChild) { sel.removeChild(sel.firstChild); }
