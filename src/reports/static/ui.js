@@ -178,7 +178,11 @@ setupDrop('dropZone2', 'secondary');
 document.getElementById('btnCloseReport').addEventListener('click', hideInlineReport);
 
 document.getElementById('fileInput').addEventListener('change', function() {
-  if (this.files.length) { setFile(this.files[0], 'primary'); }
+  if (this.files.length) {
+    setFile(this.files[0], 'primary');
+    // Hide export button whenever a new file is selected.
+    document.getElementById('exportErrorsRow').style.display = 'none';
+  }
 });
 document.getElementById('fileInput2').addEventListener('change', function() {
   if (this.files.length) { setFile(this.files[0], 'secondary'); }
@@ -432,6 +436,9 @@ document.getElementById('btnValidate').addEventListener('click', async function(
     document.getElementById('metricQuality').textContent = quality + '%';
     document.getElementById('quickMetrics').style.display = '';
 
+    // Show Download Failed Rows button when there are errors.
+    document.getElementById('exportErrorsRow').style.display = errors > 0 ? '' : 'none';
+
     var msg = 'Validated \u2014 ' + data.valid_rows + '/' + data.total_rows + ' rows valid'
       + (data.invalid_rows ? ' (' + data.invalid_rows + ' errors)' : '') + '.';
     if (data.report_url) {
@@ -445,6 +452,59 @@ document.getElementById('btnValidate').addEventListener('click', async function(
   } finally {
     setBtnLoading(btn, false);
     updateButtons();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Download Failed Rows
+// ---------------------------------------------------------------------------
+/**
+ * POST to /api/v1/files/export-errors with the same file + mapping/yaml used
+ * for the validate call, then trigger a browser file download from the response.
+ */
+document.getElementById('btnDownloadErrors').addEventListener('click', async function() {
+  if (!primaryFile) { setStatusText('No file selected.', 'error'); return; }
+
+  var mrYamlInput = document.getElementById('qtMrYamlInput');
+  var mrYamlFile = mrYamlInput && mrYamlInput.files[0] ? mrYamlInput.files[0] : null;
+  var mapping = document.getElementById('mappingSelect').value;
+  if (!mrYamlFile && !mapping) {
+    setStatusText('Please select a mapping or provide a multi-record YAML.', 'error');
+    return;
+  }
+
+  var btn = this;
+  setBtnLoading(btn, true);
+
+  try {
+    var fd = new FormData();
+    fd.append('file', primaryFile);
+    if (mrYamlFile) {
+      fd.append('multi_record_config', mrYamlFile);
+    } else {
+      fd.append('mapping_id', mapping);
+    }
+
+    var resp = await fetch('/api/v1/files/export-errors', { method: 'POST', body: fd });
+    if (!resp.ok) {
+      var errData = await resp.json().catch(function() { return { detail: resp.statusText }; });
+      throw new Error(errData.detail || resp.statusText);
+    }
+
+    // Trigger browser download from the response blob.
+    var blob = await resp.blob();
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'errors_' + primaryFile.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    setStatusText('Error downloading failed rows: ' + err.message, 'error');
+  } finally {
+    setBtnLoading(btn, false);
   }
 });
 

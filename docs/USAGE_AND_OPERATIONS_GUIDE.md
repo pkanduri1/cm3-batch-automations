@@ -329,6 +329,13 @@ comparison.
   need to see raw values for debugging.
 - **Elapsed time tile** -- After validation completes, an "Elapsed" metric card
   shows total processing time in seconds.
+- **Download Failed Rows** -- When validation finds errors, a "Download Failed
+  Rows" button appears below the metric cards.  Clicking it POSTs to
+  `POST /api/v1/files/export-errors` using the same file and mapping already
+  selected, and triggers a browser download of a file named
+  `errors_<original_filename>` containing only the rows that failed.  The
+  button is hidden when all rows are valid and is reset automatically when you
+  upload a new file.
 - **Report links** -- Download or view the generated HTML/JSON report directly
   from the results area.
 
@@ -506,6 +513,7 @@ valdo validate \
 | `--strict-fixed-width / --no-strict-fixed-width` | off | Strict fixed-width field checks |
 | `--strict-level` | `format` | Strict depth: `basic`, `format`, or `all` |
 | `--multi-record` | | Path to multi-record YAML config (for files with multiple record types) |
+| `--export-errors` | | Path to write failed rows to after validation completes |
 
 #### Common examples
 
@@ -556,6 +564,19 @@ valdo validate \
   -f output/ATOCTRAN.txt \
   --multi-record config/multi-record/atoctran_config.yaml
 ```
+
+**Export failed rows to a separate file:**
+
+```bash
+valdo validate \
+  --file data/batch/customers.txt \
+  --mapping config/mappings/customer_mapping.json \
+  --export-errors output/failed_rows.txt
+# Prints: Exported 23 failed rows to output/failed_rows.txt
+```
+
+For delimited files the output includes the header row so it can be opened
+directly in a spreadsheet or fed back into a re-validation run.
 
 See [Multi-Record-Type File Validation](#multi-record-type-file-validation)
 in the Configuration Reference for the full YAML format and cross-type rule
@@ -912,6 +933,25 @@ curl -X POST http://localhost:8000/api/v1/files/validate \
   "report_url": "/uploads/validate_customers.html"
 }
 ```
+
+#### POST /api/v1/files/export-errors
+
+Validate a file and return a downloadable file containing only the rows that
+failed validation.  Accepts the same `file`, `mapping_id`, and
+`multi_record_config` fields as `POST /api/v1/files/validate`.
+
+```bash
+curl -X POST http://localhost:8000/api/v1/files/export-errors \
+  -H "X-API-Key: key-dev-abc123" \
+  -F "file=@data/batch/customers.txt" \
+  -F "mapping_id=customer_mapping" \
+  --output errors_customers.txt
+```
+
+**Response:** A plain-text file download named `errors_<original_filename>`.
+For delimited files the header row is included so the output is self-describing.
+When there are no errors the response is empty (fixed-width) or header-only
+(delimited) with HTTP 200.
 
 #### POST /api/v1/files/compare
 
