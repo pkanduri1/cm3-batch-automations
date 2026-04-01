@@ -9,7 +9,7 @@
 - API: `src/api/main.py` (FastAPI app at port 8000)
 - Web UI: `src/reports/static/ui.html` (served at `/ui`)
 
-**Test suite:** 1718 unit tests + 92 E2E Playwright tests = 1810 total, 74% coverage
+**Test suite:** 1730 unit tests + 106 E2E Playwright tests = 1836 total, 80% coverage
 
 **Active branch:** `main`
 
@@ -59,10 +59,11 @@
 - Schema reconciliation and drift detection
 - Run history stored in Oracle tables
 
-### Web UI (4 tabs)
+### Web UI (5 tabs)
 - **Quick Test:** upload, validate, compare with metric cards; drift badge (⚠️) shown after validate if schema drift detected; "Download Failed Rows" button shown when `invalid_rows > 0`
 - **Recent Runs:** sortable table with auto-refresh; trend chart (7/14/30/90d); suite summary cards; "vs Baseline" column with deviation badges
 - **Mapping Generator:** upload templates, JSON preview, downloadable sample templates; multi-record YAML wizard (5-step discriminator detection → config generation)
+- **DB Compare:** split-panel Oracle DB vs file comparison; connection chip (sessionStorage, password never stored); client-side diff CSV download; direction swap (DB→File / File→DB)
 - **API Tester:** method selector, request builder, suite runner
 - Dark/light theme toggle, help sidebar with searchable usage guide
 - ADA/WCAG 2.1 AA compliant (contrast, keyboard, ARIA, reduced motion)
@@ -219,8 +220,8 @@ docs/
   splunk-setup.md                # Audit log integration
   sphinx/                        # Auto-generated API reference
 tests/
-  unit/              # 1718 unit tests (pytest)
-  e2e/               # 92 Playwright E2E tests
+  unit/              # 1730 unit tests (pytest)
+  e2e/               # 106 Playwright E2E tests
 ci/
   templates/         # Azure DevOps + GitLab CI reusable templates
 .github/
