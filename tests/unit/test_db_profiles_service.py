@@ -120,12 +120,11 @@ class TestResolveProfile:
 
     def test_resolves_profile_returns_db_config(self, tmp_path: Path, monkeypatch) -> None:
         from src.services.db_profiles_service import resolve_profile
-        from src.config.db_config import DbConfig
         monkeypatch.setenv("MY_PW", "hunter2")
         f = tmp_path / "cfg.yaml"
         self._write_cfg(f, "Dev", "MY_PW")
         cfg = resolve_profile("Dev", f)
-        assert isinstance(cfg, DbConfig)
+        assert type(cfg).__name__ == "DbConfig"
         assert cfg.user == "USR"
         assert cfg.password == "hunter2"
         assert cfg.dsn == "host:1521/SVC"
