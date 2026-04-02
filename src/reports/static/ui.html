@@ -779,33 +779,42 @@
           <!-- Connection form (expanded) -->
           <div class="dbc-conn-form" id="dbcConnForm" style="display:none">
             <div class="dbc-conn-grid">
-              <div class="dbc-field">
-                <label for="dbcAdapter">DB Adapter</label>
-                <select id="dbcAdapter">
-                  <option value="oracle">oracle</option>
-                  <option value="postgresql">postgresql</option>
-                  <option value="sqlite">sqlite</option>
+              <div class="dbc-field dbc-field--full">
+                <label for="dbcProfileSelect">DB Profile</label>
+                <select id="dbcProfileSelect" aria-label="Select a named database profile">
+                  <option value="">&#8212; select a profile &#8212;</option>
+                  <option value="__custom__">Custom&#8230;</option>
                 </select>
               </div>
-              <div class="dbc-field">
-                <label for="dbcHost">Host / DSN</label>
-                <input type="text" id="dbcHost" placeholder="localhost:1521/FREEPDB1">
-              </div>
-              <div class="dbc-field">
-                <label for="dbcUser">Username</label>
-                <input type="text" id="dbcUser" autocomplete="username">
-              </div>
-              <div class="dbc-field">
-                <label for="dbcPassword">Password</label>
-                <input type="password" id="dbcPassword" autocomplete="current-password">
-              </div>
-              <div class="dbc-field">
-                <label for="dbcSchema">Schema</label>
-                <input type="text" id="dbcSchema">
-              </div>
-              <div class="dbc-field dbc-field-action">
-                <button class="btn btn-secondary" id="dbcTestConnBtn" type="button">&#x1F517; Test Connection</button>
-              </div>
+              <div id="dbcManualFields">
+                <div class="dbc-field">
+                  <label for="dbcAdapter">DB Adapter</label>
+                  <select id="dbcAdapter">
+                    <option value="oracle">oracle</option>
+                    <option value="postgresql">postgresql</option>
+                    <option value="sqlite">sqlite</option>
+                  </select>
+                </div>
+                <div class="dbc-field">
+                  <label for="dbcHost">Host / DSN</label>
+                  <input type="text" id="dbcHost" placeholder="localhost:1521/FREEPDB1">
+                </div>
+                <div class="dbc-field">
+                  <label for="dbcUser">Username</label>
+                  <input type="text" id="dbcUser" autocomplete="username">
+                </div>
+                <div class="dbc-field">
+                  <label for="dbcPassword">Password</label>
+                  <input type="password" id="dbcPassword" autocomplete="current-password">
+                </div>
+                <div class="dbc-field">
+                  <label for="dbcSchema">Schema</label>
+                  <input type="text" id="dbcSchema">
+                </div>
+                <div class="dbc-field dbc-field-action">
+                  <button class="btn btn-secondary" id="dbcTestConnBtn" type="button">&#x1F517; Test Connection</button>
+                </div>
+              </div><!-- /dbcManualFields -->
             </div>
             <div class="dbc-conn-result" id="dbcConnResult" style="display:none"></div>
           </div>
