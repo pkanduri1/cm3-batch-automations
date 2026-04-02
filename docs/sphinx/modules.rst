@@ -246,6 +246,10 @@ File Downloader
    :members:
    :undoc-members:
 
+.. automodule:: src.api.models.db_profile
+   :members:
+   :undoc-members:
+
 Services
 --------
 
@@ -286,6 +290,10 @@ Services
    :undoc-members:
 
 .. automodule:: src.services.downloader_logger
+   :members:
+   :undoc-members:
+
+.. automodule:: src.services.db_profiles_service
    :members:
    :undoc-members:
 
