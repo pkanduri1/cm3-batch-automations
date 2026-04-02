@@ -3,9 +3,11 @@
 from fastapi import APIRouter, Depends, Form
 from src.api.models.response import HealthResponse, SystemInfoResponse
 from datetime import datetime
+from typing import List
 import sys
 
 from src.api.auth import require_api_key, require_role
+from src.config.db_connections import get_named_connections
 from src.database.connection import OracleConnection
 from src.services.metrics_registry import METRICS
 
@@ -51,6 +53,35 @@ async def metrics_snapshot(_=Depends(require_role("admin"))):
 async def slo_alerts(_=Depends(require_role("admin"))):
     """Return evaluated SLO alerts for operators."""
     return {"alerts": METRICS.slo_alerts()}
+
+
+@router.get("/db-connections")
+async def list_db_connections(_=Depends(require_api_key)) -> List[dict]:
+    """Return a summary list of all named database connections.
+
+    Reads connection profiles from the ``DB_CONNECTIONS`` environment variable
+    via :func:`~src.config.db_connections.get_named_connections`.  Passwords
+    are **never** included in the response.
+
+    Args:
+        _: API key dependency (injected by FastAPI).
+
+    Returns:
+        A list of dicts, each containing ``name``, ``host``, ``user``,
+        ``schema``, and ``adapter``.  Returns an empty list when no
+        connections are configured.
+    """
+    connections = get_named_connections()
+    return [
+        {
+            "name": conn.name,
+            "host": conn.host,
+            "user": conn.user,
+            "schema": conn.schema,
+            "adapter": conn.adapter,
+        }
+        for conn in connections.values()
+    ]
 
 
 @router.post("/db-ping")
