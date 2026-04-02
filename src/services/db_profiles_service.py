@@ -91,6 +91,6 @@ def resolve_profile(name: str, path: Path | None = None) -> DbConfig:
         user=profile.user,
         password=password,
         dsn=profile.host,
-        schema=profile.schema,
+        schema=profile.db_schema,
         db_adapter=profile.adapter,
     )

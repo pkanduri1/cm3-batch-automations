@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class DbProfile(BaseModel):
@@ -15,7 +15,8 @@ class DbProfile(BaseModel):
             ``"sqlite"``.
         host: Host/DSN string (e.g. ``"localhost:1521/FREEPDB1"``).
         user: Database username.
-        schema: Schema qualifier for SQL table references.
+        db_schema: Schema qualifier for SQL table references.
+            Serialised as ``"schema"`` in YAML and JSON.
         password_env: Name of the environment variable that holds the password.
         password_env_set: Computed — ``True`` when the env var is non-empty.
     """
@@ -26,7 +27,7 @@ class DbProfile(BaseModel):
     adapter: str
     host: str
     user: str
-    schema: str
+    db_schema: str = Field(alias="schema")
     password_env: str
 
     @computed_field  # type: ignore[misc]

@@ -47,7 +47,7 @@ class TestLoadProfiles:
         assert p.adapter == "oracle"
         assert p.host == "localhost:1521/FREEPDB1"
         assert p.user == "CM3INT"
-        assert p.schema == "CM3INT"
+        assert p.db_schema == "CM3INT"
         assert p.password_env == "ORACLE_PASSWORD"
 
     def test_password_env_set_true_when_env_var_present(self, tmp_path: Path, monkeypatch) -> None:
