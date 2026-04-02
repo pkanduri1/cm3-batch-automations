@@ -77,3 +77,82 @@ class TestGetDbProfiles:
             resp = client.get("/api/v1/system/db-profiles")
         p = resp.json()["profiles"][0]
         assert p["password_env_set"] is False
+
+
+class TestDbPingWithProfile:
+    def test_db_ping_accepts_profile_name(self) -> None:
+        """profile_name form field must be accepted without 422."""
+        client = _make_client()
+        from src.config.db_config import DbConfig
+        mock_cfg = DbConfig(user="U", password="P", dsn="H:1/S", schema="SCH", db_adapter="oracle")
+        with patch("src.api.routers.system.resolve_profile", return_value=mock_cfg), \
+             patch("src.api.routers.system.OracleConnection") as mock_conn:
+            mock_conn.return_value.connect.return_value = None
+            resp = client.post(
+                "/api/v1/system/db-ping",
+                data={"profile_name": "Local Dev"},
+                headers={"X-API-Key": "test-key"},
+            )
+        assert resp.status_code == 200
+
+    def test_db_ping_profile_not_found_returns_error(self) -> None:
+        client = _make_client()
+        with patch("src.api.routers.system.resolve_profile",
+                   side_effect=KeyError("Profile not found: 'Bad'")):
+            resp = client.post(
+                "/api/v1/system/db-ping",
+                data={"profile_name": "Bad"},
+                headers={"X-API-Key": "test-key"},
+            )
+        data = resp.json()
+        assert resp.status_code == 200
+        assert data["ok"] is False
+        assert "Profile not found" in data["error"]
+
+    def test_db_ping_missing_password_env_returns_error(self) -> None:
+        client = _make_client()
+        with patch("src.api.routers.system.resolve_profile",
+                   side_effect=RuntimeError("DB_PROD_PASSWORD is not set")):
+            resp = client.post(
+                "/api/v1/system/db-ping",
+                data={"profile_name": "Prod"},
+                headers={"X-API-Key": "test-key"},
+            )
+        data = resp.json()
+        assert data["ok"] is False
+        assert "DB_PROD_PASSWORD" in data["error"]
+
+    def test_db_ping_profile_success(self) -> None:
+        client = _make_client()
+        from src.config.db_config import DbConfig
+        mock_cfg = DbConfig(
+            user="CM3INT", password="secret",
+            dsn="localhost:1521/FREEPDB1", schema="CM3INT", db_adapter="oracle"
+        )
+        with patch("src.api.routers.system.resolve_profile", return_value=mock_cfg), \
+             patch("src.api.routers.system.OracleConnection") as mock_conn:
+            mock_conn.return_value.connect.return_value = None
+            resp = client.post(
+                "/api/v1/system/db-ping",
+                data={"profile_name": "Local Dev"},
+                headers={"X-API-Key": "test-key"},
+            )
+        assert resp.json() == {"ok": True}
+
+    def test_db_ping_adhoc_path_unchanged(self) -> None:
+        """Existing ad-hoc credential path must still work when no profile_name."""
+        client = _make_client()
+        with patch("src.api.routers.system.OracleConnection") as mock_conn:
+            mock_conn.return_value.connect.return_value = None
+            resp = client.post(
+                "/api/v1/system/db-ping",
+                data={
+                    "db_host": "localhost:1521/DEV",
+                    "db_user": "USR",
+                    "db_password": "PW",
+                    "db_adapter": "oracle",
+                },
+                headers={"X-API-Key": "test-key"},
+            )
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
