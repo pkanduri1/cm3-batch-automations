@@ -56,6 +56,7 @@ class TestDbConnectionsEndpoint:
         data = response.json()
         assert isinstance(data, list)
         assert len(data) == 2
+        assert {item["name"] for item in data} == {"STAGING", "DEV-1"}
 
     def test_response_items_have_required_fields(self, monkeypatch):
         """Each response item contains name, host, user, schema, and adapter fields."""
