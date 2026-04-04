@@ -160,3 +160,112 @@ def test_search_archive_returns_results(tmp_path):
                     headers={"X-API-Key": "k"})
     assert r.status_code == 200
     assert r.json()["results"][0]["archive"] == "batch.tar.gz"
+
+
+def test_browse_returns_404_for_missing_directory(tmp_path):
+    """GET /browse returns 404 when the directory does not exist."""
+    missing = str(tmp_path / "nonexistent")
+    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    # Allow the parent so the path validation passes, but the subdir is missing
+    with patch.dict(os.environ, env):
+        import src.api.main as m
+        from importlib import reload
+        reload(m)
+        m.app.state.fd_config = {"paths": [{"label": "T", "path": str(tmp_path)}]}
+        client = _make_client(tmp_path, env)
+        r = client.get(
+            f"/api/v1/downloader/browse?path={missing}",
+            headers={"X-API-Key": "k"},
+        )
+    assert r.status_code == 404
+
+
+def test_archive_contents_returns_404_when_archive_missing(tmp_path):
+    """GET /archive-contents returns 404 when archive file does not exist."""
+    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    with patch.dict(os.environ, env):
+        client = _make_client(tmp_path, env)
+        r = client.get(
+            f"/api/v1/downloader/archive-contents?path={tmp_path}&archive=missing.tar.gz",
+            headers={"X-API-Key": "k"},
+        )
+    assert r.status_code == 404
+
+
+def test_archive_contents_returns_400_for_unsupported_format(tmp_path):
+    """GET /archive-contents returns 400 for an unsupported archive format."""
+    bad_archive = tmp_path / "data.rar"
+    bad_archive.write_bytes(b"not a real rar")
+    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    with patch.dict(os.environ, env):
+        client = _make_client(tmp_path, env)
+        r = client.get(
+            f"/api/v1/downloader/archive-contents?path={tmp_path}&archive=data.rar",
+            headers={"X-API-Key": "k"},
+        )
+    assert r.status_code == 400
+
+
+def test_download_archive_not_found_returns_404(tmp_path):
+    """POST /download returns 404 when the named archive does not exist."""
+    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    with patch.dict(os.environ, env):
+        client = _make_client(tmp_path, env)
+        r = client.post(
+            "/api/v1/downloader/download",
+            json={"path": str(tmp_path), "filename": "report.csv", "archive": "missing.tar.gz"},
+            headers={"X-API-Key": "k"},
+        )
+    assert r.status_code == 404
+
+
+def test_download_inner_file_not_found_raises(tmp_path):
+    """POST /download raises FileNotFoundError when inner file is absent from archive.
+
+    The exception is raised lazily by the generator during streaming, so it
+    propagates through the StreamingResponse rather than being caught by the
+    endpoint's try/except block (which only guards the generator creation).
+    """
+    import pytest
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        data = b"content\n"
+        info = tarfile.TarInfo(name="actual.csv")
+        info.size = len(data)
+        tf.addfile(info, io.BytesIO(data))
+    (tmp_path / "batch.tar.gz").write_bytes(buf.getvalue())
+    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    with patch.dict(os.environ, env):
+        client = _make_client(tmp_path, env)
+        with pytest.raises(FileNotFoundError, match="missing.csv"):
+            client.post(
+                "/api/v1/downloader/download",
+                json={"path": str(tmp_path), "filename": "missing.csv", "archive": "batch.tar.gz"},
+                headers={"X-API-Key": "k"},
+            )
+
+
+def test_download_plain_file_not_found_returns_404(tmp_path):
+    """POST /download returns 404 when plain file does not exist."""
+    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    with patch.dict(os.environ, env):
+        client = _make_client(tmp_path, env)
+        r = client.post(
+            "/api/v1/downloader/download",
+            json={"path": str(tmp_path), "filename": "ghost.csv"},
+            headers={"X-API-Key": "k"},
+        )
+    assert r.status_code == 404
+
+
+def test_download_rejects_path_traversal_archive_name(tmp_path):
+    """POST /download returns 400 when archive name contains path traversal."""
+    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    with patch.dict(os.environ, env):
+        client = _make_client(tmp_path, env)
+        r = client.post(
+            "/api/v1/downloader/download",
+            json={"path": str(tmp_path), "filename": "report.csv", "archive": "../evil.tar.gz"},
+            headers={"X-API-Key": "k"},
+        )
+    assert r.status_code == 400
