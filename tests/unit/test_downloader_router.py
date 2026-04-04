@@ -269,3 +269,22 @@ def test_download_rejects_path_traversal_archive_name(tmp_path):
             headers={"X-API-Key": "k"},
         )
     assert r.status_code == 400
+
+
+def test_download_nested_archive_inner_file(tmp_path):
+    """Inner archive paths with '/' separators should be downloadable."""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        data = b"nested content"
+        info = tarfile.TarInfo(name="subdir/nested.log")
+        info.size = len(data)
+        tf.addfile(info, io.BytesIO(data))
+    (tmp_path / "a.tar.gz").write_bytes(buf.getvalue())
+    client = _setup_app(tmp_path, {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"})
+    r = client.post(
+        "/api/v1/downloader/download",
+        json={"path": str(tmp_path), "filename": "subdir/nested.log", "archive": "a.tar.gz"},
+        headers={"X-API-Key": "k"},
+    )
+    assert r.status_code == 200
+    assert b"nested content" in r.content

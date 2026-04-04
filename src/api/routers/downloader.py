@@ -196,13 +196,12 @@ async def download_file(
         HTTPException: 404 if file or archive is not found.
         HTTPException: 400 if archive format is unsupported.
     """
-    _safe_filename(body.filename)
-    if body.archive:
-        _safe_filename(body.archive)
     resolved = _validate(body.path, request)
     client_ip, client_host = resolve_client_info(request)
 
     if body.archive:
+        _safe_filename(body.archive)  # archive itself must be a simple filename
+        # body.filename may contain '/' — it is an inner archive key, not a filesystem path
         arc_path = resolved / body.archive
         if not arc_path.is_file():
             raise HTTPException(status_code=404, detail=f"Archive '{body.archive}' not found")
@@ -213,6 +212,7 @@ async def download_file(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
     else:
+        _safe_filename(body.filename)  # plain file must be a simple filename
         file_path = resolved / body.filename
         if not file_path.is_file():
             raise HTTPException(status_code=404, detail=f"File '{body.filename}' not found")
