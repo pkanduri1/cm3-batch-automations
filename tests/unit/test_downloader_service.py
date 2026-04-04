@@ -70,3 +70,15 @@ def test_browse_returns_size(tmp_path):
     (tmp_path / "f.txt").write_text("hello")
     entry = next(e for e in browse_path(tmp_path) if e.name == "f.txt")
     assert entry.size_bytes == 5
+
+
+def test_browse_raises_if_path_missing(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        browse_path(tmp_path / "does_not_exist")
+
+
+def test_browse_raises_if_not_directory(tmp_path):
+    f = tmp_path / "file.txt"
+    f.write_text("x")
+    with pytest.raises(NotADirectoryError):
+        browse_path(f)
