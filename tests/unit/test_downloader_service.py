@@ -82,3 +82,55 @@ def test_browse_raises_if_not_directory(tmp_path):
     f.write_text("x")
     with pytest.raises(NotADirectoryError):
         browse_path(f)
+
+
+# ---------------------------------------------------------------------------
+# Archive handling helpers (reused by archive tests below)
+# ---------------------------------------------------------------------------
+def _make_targz(path: Path, inner_files: dict) -> Path:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        for name, data in inner_files.items():
+            info = tarfile.TarInfo(name=name)
+            info.size = len(data)
+            tf.addfile(info, io.BytesIO(data))
+    path.write_bytes(buf.getvalue())
+    return path
+
+
+def _make_zip(path: Path, inner_files: dict) -> Path:
+    with zipfile.ZipFile(path, "w") as zf:
+        for name, data in inner_files.items():
+            zf.writestr(name, data)
+    return path
+
+
+from src.services.downloader_service import list_archive_contents, extract_file
+
+
+def test_list_archive_contents_targz(tmp_path):
+    arc = _make_targz(tmp_path / "a.tar.gz", {"r.csv": b"a,b", "e.log": b"none"})
+    assert set(list_archive_contents(arc)) == {"r.csv", "e.log"}
+
+
+def test_list_archive_contents_zip(tmp_path):
+    arc = _make_zip(tmp_path / "a.zip", {"data.csv": b"x,y"})
+    assert "data.csv" in list_archive_contents(arc)
+
+
+def test_extract_file_targz(tmp_path):
+    data = b"hello tar"
+    arc = _make_targz(tmp_path / "a.tar.gz", {"inner.txt": data})
+    assert b"".join(extract_file(arc, "inner.txt")) == data
+
+
+def test_extract_file_zip(tmp_path):
+    data = b"hello zip"
+    arc = _make_zip(tmp_path / "a.zip", {"inner.txt": data})
+    assert b"".join(extract_file(arc, "inner.txt")) == data
+
+
+def test_extract_file_missing_raises(tmp_path):
+    arc = _make_targz(tmp_path / "a.tar.gz", {"exists.txt": b"x"})
+    with pytest.raises((KeyError, FileNotFoundError)):
+        list(extract_file(arc, "missing.txt"))

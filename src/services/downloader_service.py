@@ -100,3 +100,68 @@ def browse_path(path: Path, pattern: Optional[str] = None) -> list:
         entry_type: Literal["plain", "archive"] = "archive" if _is_archive(item.name) else "plain"
         entries.append(BrowseEntry(name=item.name, type=entry_type, size_bytes=item.stat().st_size))
     return entries
+
+
+def list_archive_contents(archive_path: Path) -> list:
+    """List files inside *archive_path* (.tar.gz, .tgz, or .zip).
+
+    Args:
+        archive_path: Path to the archive file.
+
+    Returns:
+        List of inner file paths (directories excluded).
+
+    Raises:
+        ValueError: If the archive format is not supported.
+    """
+    name = archive_path.name
+    if name.endswith((".tar.gz", ".tgz")):
+        with tarfile.open(archive_path, "r:gz") as tf:
+            return [m.name for m in tf.getmembers() if m.isfile()]
+    if name.endswith(".zip"):
+        with zipfile.ZipFile(archive_path, "r") as zf:
+            return [n for n in zf.namelist() if not n.endswith("/")]
+    raise ValueError(f"Unsupported archive format: {name}")
+
+
+def extract_file(archive_path: Path, inner_filename: str) -> Iterator[bytes]:
+    """Stream *inner_filename* from *archive_path* in 64 KB chunks.
+
+    Args:
+        archive_path: Path to the archive file.
+        inner_filename: Exact path of the file inside the archive.
+
+    Yields:
+        Raw byte chunks for a ``StreamingResponse``.
+
+    Raises:
+        FileNotFoundError: If *inner_filename* is not in the archive.
+        ValueError: If the archive format is not supported.
+    """
+    name = archive_path.name
+    chunk = 65536
+    if name.endswith((".tar.gz", ".tgz")):
+        with tarfile.open(archive_path, "r:gz") as tf:
+            try:
+                member = tf.getmember(inner_filename)
+            except KeyError:
+                raise FileNotFoundError(f"{inner_filename!r} not in {archive_path.name}")
+            fh = tf.extractfile(member)
+            if fh is None:
+                raise FileNotFoundError(f"{inner_filename!r} is not a regular file")
+            while True:
+                data = fh.read(chunk)
+                if not data:
+                    break
+                yield data
+        return
+    if name.endswith(".zip"):
+        with zipfile.ZipFile(archive_path, "r") as zf:
+            with zf.open(inner_filename) as fh:
+                while True:
+                    data = fh.read(chunk)
+                    if not data:
+                        break
+                    yield data
+        return
+    raise ValueError(f"Unsupported archive format: {name}")
