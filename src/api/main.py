@@ -151,6 +151,11 @@ app.include_router(
     dependencies=[Depends(require_api_key)],
 )
 
+# File Downloader — only registered when ENABLE_FILE_DOWNLOADER=true
+if os.getenv("ENABLE_FILE_DOWNLOADER", "").lower() == "true":
+    from src.api.routers import downloader as _dl_mod
+    app.include_router(_dl_mod.router, prefix="/api/v1/downloader", tags=["downloader"])
+
 # Serve generated reports
 _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(_UPLOADS_DIR)), name="uploads")
