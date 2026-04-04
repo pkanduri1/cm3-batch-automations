@@ -45,9 +45,17 @@ def test_browse_identifies_archives(tmp_path):
     (tmp_path / "a.tar.gz").write_bytes(buf.getvalue())
     with zipfile.ZipFile(tmp_path / "b.zip", "w") as zf:
         zf.writestr("f.txt", "x")
+    buf2 = io.BytesIO()
+    with tarfile.open(fileobj=buf2, mode="w:gz") as tf:
+        data2 = b"y"
+        info2 = tarfile.TarInfo(name="g.txt")
+        info2.size = len(data2)
+        tf.addfile(info2, io.BytesIO(data2))
+    (tmp_path / "c.tgz").write_bytes(buf2.getvalue())
     types = {e.name: e.type for e in browse_path(tmp_path)}
     assert types["a.tar.gz"] == "archive"
     assert types["b.zip"] == "archive"
+    assert types["c.tgz"] == "archive"
 
 
 def test_browse_wildcard_filter(tmp_path):

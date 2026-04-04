@@ -87,6 +87,10 @@ def browse_path(path: Path, pattern: Optional[str] = None) -> list:
     Returns:
         Sorted list of :class:`BrowseEntry` objects (directories excluded).
     """
+    if not path.exists():
+        raise FileNotFoundError(f"Directory not found: {path}")
+    if not path.is_dir():
+        raise NotADirectoryError(f"Not a directory: {path}")
     entries: list[BrowseEntry] = []
     for item in sorted(path.iterdir()):
         if not item.is_file():
