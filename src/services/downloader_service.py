@@ -212,3 +212,76 @@ def search_in_files(path: Path, filename_pattern: str, search_string: str) -> Se
 
     return SearchResult(results=results, truncated=truncated, total_matches=total,
                         shown=len(results), download_ref=download_ref)
+
+
+def _read_inner_lines(archive_path: Path, inner_filename: str) -> list:
+    """Read all lines from *inner_filename* inside *archive_path*.
+
+    Args:
+        archive_path: Path to the archive.
+        inner_filename: Exact inner path to read.
+
+    Returns:
+        List of decoded lines (UTF-8, errors replaced).
+    """
+    content = b"".join(extract_file(archive_path, inner_filename))
+    return content.decode("utf-8", errors="replace").splitlines()
+
+
+def search_in_archives(
+    path: Path,
+    archive_pattern: str,
+    file_pattern: str,
+    search_string: str,
+) -> SearchResult:
+    """Search *search_string* in archive inner files matching *file_pattern*.
+
+    Args:
+        path: Directory to search (already validated).
+        archive_pattern: ``fnmatch`` wildcard for archive filenames.
+        file_pattern: ``fnmatch`` wildcard for inner filenames.
+        search_string: Literal string to find.
+
+    Returns:
+        :class:`SearchResult` capped at ``_MAX_SEARCH_RESULTS`` hits.
+        ``download_ref`` populated when truncated from a single (archive, file)
+        pair. Otherwise ``None`` — UI prompts user to refine to exact filename.
+    """
+    results: list = []
+    total = 0
+    matched_pairs: set = set()
+
+    for archive_path in sorted(path.iterdir()):
+        if not archive_path.is_file():
+            continue
+        if not fnmatch.fnmatch(archive_path.name, archive_pattern):
+            continue
+        if not _is_archive(archive_path.name):
+            continue
+        try:
+            inner_files = list_archive_contents(archive_path)
+        except Exception:
+            continue
+        for inner_name in inner_files:
+            if not fnmatch.fnmatch(Path(inner_name).name, file_pattern):
+                continue
+            try:
+                lines = _read_inner_lines(archive_path, inner_name)
+            except Exception:
+                continue
+            for lineno, line in enumerate(lines, 1):
+                if search_string in line:
+                    total += 1
+                    matched_pairs.add((archive_path.name, inner_name))
+                    if len(results) < _MAX_SEARCH_RESULTS:
+                        results.append(SearchHit(file=inner_name, line=lineno,
+                                                  content=line.rstrip(), archive=archive_path.name))
+
+    truncated = total > len(results)
+    download_ref = None
+    if truncated and len(matched_pairs) == 1:
+        arc_name, inner_name = next(iter(matched_pairs))
+        download_ref = DownloadRef(path=str(path), archive=arc_name, filename=inner_name)
+
+    return SearchResult(results=results, truncated=truncated, total_matches=total,
+                        shown=len(results), download_ref=download_ref)

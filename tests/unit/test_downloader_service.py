@@ -4,7 +4,7 @@ import tarfile
 import zipfile
 import pytest
 from pathlib import Path
-from src.services.downloader_service import validate_path, browse_path, BrowseEntry, list_archive_contents, extract_file, search_in_files
+from src.services.downloader_service import validate_path, browse_path, BrowseEntry, list_archive_contents, extract_file, search_in_files, search_in_archives
 
 
 def test_validate_path_accepts_allowed(tmp_path):
@@ -186,3 +186,53 @@ def test_search_files_pattern_filters(tmp_path):
     names = [h.file for h in r.results]
     assert "errors.log" in names
     assert "data.csv" not in names
+
+
+# ---------------------------------------------------------------------------
+# search_in_archives
+# ---------------------------------------------------------------------------
+
+def test_search_archives_finds_match(tmp_path):
+    _make_targz(tmp_path / "batch.tar.gz", {"errors.log": b"line1\nERROR bad\nline3\n"})
+    r = search_in_archives(tmp_path, "batch*.tar.gz", "*.log", "ERROR")
+    assert r.total_matches == 1
+    assert r.results[0].archive == "batch.tar.gz"
+    assert r.results[0].line == 2
+    assert r.truncated is False
+
+
+def test_search_archives_truncates_single_file(tmp_path):
+    lines = b"\n".join(f"ERROR {i}".encode() for i in range(60))
+    _make_targz(tmp_path / "batch.tar.gz", {"big.log": lines})
+    r = search_in_archives(tmp_path, "*.tar.gz", "*.log", "ERROR")
+    assert r.shown == 50
+    assert r.truncated is True
+    assert r.download_ref is not None
+    assert r.download_ref.archive == "batch.tar.gz"
+
+
+def test_search_archives_truncated_multi_file_no_ref(tmp_path):
+    _make_targz(tmp_path / "batch.tar.gz", {
+        "f1.log": b"\n".join(f"ERROR {i}".encode() for i in range(30)),
+        "f2.log": b"\n".join(f"ERROR {i}".encode() for i in range(30)),
+    })
+    r = search_in_archives(tmp_path, "*.tar.gz", "*.log", "ERROR")
+    assert r.truncated is True
+    assert r.download_ref is None
+
+
+def test_search_archives_archive_pattern_filters(tmp_path):
+    _make_targz(tmp_path / "batch.tar.gz", {"e.log": b"ERROR here"})
+    _make_targz(tmp_path / "other.tar.gz", {"e.log": b"ERROR here too"})
+    r = search_in_archives(tmp_path, "batch*.tar.gz", "*.log", "ERROR")
+    archives = {h.archive for h in r.results}
+    assert "batch.tar.gz" in archives
+    assert "other.tar.gz" not in archives
+
+
+def test_search_archives_file_pattern_filters(tmp_path):
+    _make_targz(tmp_path / "batch.tar.gz", {"e.log": b"ERROR log", "d.csv": b"ERROR csv"})
+    r = search_in_archives(tmp_path, "*.tar.gz", "*.log", "ERROR")
+    files = {h.file for h in r.results}
+    assert "e.log" in files
+    assert "d.csv" not in files
