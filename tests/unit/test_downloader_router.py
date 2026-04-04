@@ -1,6 +1,8 @@
 """Unit tests for the file downloader API router."""
 
+import io
 import os
+import tarfile
 from importlib import reload
 from pathlib import Path
 from unittest.mock import patch
@@ -107,3 +109,54 @@ def test_download_rejects_path_traversal_filename(tmp_path):
             headers={"X-API-Key": "k"},
         )
     assert r.status_code == 400
+
+
+def _setup_app(tmp_path: Path, env: dict) -> TestClient:
+    """Create a TestClient with env patched in and fd_config set.
+
+    Unlike ``_make_client``, this helper patches the environment permanently
+    for the lifetime of the returned client (uses ``patch.dict`` without a
+    context-manager exit), which is suitable for tests that make requests
+    outside of a ``with`` block.
+
+    Args:
+        tmp_path: Directory used as the single allowed path in fd_config.
+        env: Environment variables to inject via ``os.environ``.
+
+    Returns:
+        Configured ``TestClient`` with the patched app state.
+    """
+    patch.dict(os.environ, env).__enter__()
+    import src.api.main as m
+    reload(m)
+    m.app.state.fd_config = {"paths": [{"label": "T", "path": str(tmp_path)}]}
+    return TestClient(m.app)
+
+
+def test_search_files_returns_results(tmp_path):
+    (tmp_path / "errors.log").write_text("line1\nERROR found\nline3\n")
+    client = _setup_app(tmp_path, {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"})
+    r = client.post("/api/v1/downloader/search-files",
+                    json={"path": str(tmp_path), "filename_pattern": "*.log", "search_string": "ERROR"},
+                    headers={"X-API-Key": "k"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total_matches"] == 1
+    assert data["results"][0]["file"] == "errors.log"
+
+
+def test_search_archive_returns_results(tmp_path):
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        data = b"line1\nERROR in archive\n"
+        info = tarfile.TarInfo(name="errors.log")
+        info.size = len(data)
+        tf.addfile(info, io.BytesIO(data))
+    (tmp_path / "batch.tar.gz").write_bytes(buf.getvalue())
+    client = _setup_app(tmp_path, {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"})
+    r = client.post("/api/v1/downloader/search-archive",
+                    json={"path": str(tmp_path), "archive_pattern": "*.tar.gz",
+                          "file_pattern": "*.log", "search_string": "ERROR"},
+                    headers={"X-API-Key": "k"})
+    assert r.status_code == 200
+    assert r.json()["results"][0]["archive"] == "batch.tar.gz"

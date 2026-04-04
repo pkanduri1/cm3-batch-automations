@@ -245,3 +245,79 @@ async def download_file(
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
     )
+
+
+def _fmt_result(r) -> dict:
+    """Format a :class:`SearchResult` as a JSON-serialisable dict.
+
+    Args:
+        r: A ``SearchResult`` dataclass returned by the downloader service.
+
+    Returns:
+        Dict with keys: ``results``, ``truncated``, ``total_matches``, ``shown``,
+        and ``download_ref`` (``None`` or a dict with ``path``, ``filename``,
+        ``archive``).
+    """
+    return {
+        "results": [
+            {"file": h.file, "line": h.line, "content": h.content, "archive": h.archive}
+            for h in r.results
+        ],
+        "truncated": r.truncated,
+        "total_matches": r.total_matches,
+        "shown": r.shown,
+        "download_ref": (
+            {"path": r.download_ref.path, "filename": r.download_ref.filename,
+             "archive": r.download_ref.archive}
+            if r.download_ref else None
+        ),
+    }
+
+
+@router.post("/search-files")
+async def search_files(body: SearchFilesRequest, request: Request, _=Depends(require_api_key)):
+    """Search a string in plain files matching a filename wildcard.
+
+    Args:
+        body: Request body with ``path``, ``filename_pattern``, and ``search_string``.
+        request: Current FastAPI request.
+        _: Unused auth context (validates API key).
+
+    Returns:
+        Dict with ``results``, ``truncated``, ``total_matches``, ``shown``,
+        and ``download_ref``.
+
+    Raises:
+        HTTPException: 403 if path is not under an allowed configured path.
+    """
+    resolved = _validate(body.path, request)
+    client_ip, client_host = resolve_client_info(request)
+    result = svc.search_in_files(resolved, body.filename_pattern, body.search_string)
+    log_activity(operation="search_files", client_ip=client_ip, client_host=client_host,
+                 path=body.path, filename=body.filename_pattern, archive=None, status="success")
+    return _fmt_result(result)
+
+
+@router.post("/search-archive")
+async def search_archive(body: SearchArchiveRequest, request: Request, _=Depends(require_api_key)):
+    """Search a string inside archive inner files — both patterns support wildcards.
+
+    Args:
+        body: Request body with ``path``, ``archive_pattern``, ``file_pattern``,
+            and ``search_string``.
+        request: Current FastAPI request.
+        _: Unused auth context (validates API key).
+
+    Returns:
+        Dict with ``results``, ``truncated``, ``total_matches``, ``shown``,
+        and ``download_ref``.
+
+    Raises:
+        HTTPException: 403 if path is not under an allowed configured path.
+    """
+    resolved = _validate(body.path, request)
+    client_ip, client_host = resolve_client_info(request)
+    result = svc.search_in_archives(resolved, body.archive_pattern, body.file_pattern, body.search_string)
+    log_activity(operation="search_archive", client_ip=client_ip, client_host=client_host,
+                 path=body.path, filename=body.file_pattern, archive=body.archive_pattern, status="success")
+    return _fmt_result(result)
