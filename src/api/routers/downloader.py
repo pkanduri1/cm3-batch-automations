@@ -275,7 +275,7 @@ def _fmt_result(r) -> dict:
 
 
 @router.post("/search-files")
-async def search_files(body: SearchFilesRequest, request: Request, _=Depends(require_api_key)):
+async def search_files(body: SearchFilesRequest, request: Request, _: object = Depends(require_api_key)):
     """Search a string in plain files matching a filename wildcard.
 
     Args:
@@ -299,7 +299,7 @@ async def search_files(body: SearchFilesRequest, request: Request, _=Depends(req
 
 
 @router.post("/search-archive")
-async def search_archive(body: SearchArchiveRequest, request: Request, _=Depends(require_api_key)):
+async def search_archive(body: SearchArchiveRequest, request: Request, _: object = Depends(require_api_key)):
     """Search a string inside archive inner files — both patterns support wildcards.
 
     Args:
