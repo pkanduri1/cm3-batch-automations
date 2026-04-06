@@ -78,7 +78,7 @@ jobs:
           ORACLE_DSN: ${{ secrets.ORACLE_DSN }}
         run: |
           mkdir -p reports
-          cm3-batch reconcile-all -d config/mappings -o reports/reconcile_all.json
+          valdo reconcile-all -d config/mappings -o reports/reconcile_all.json
 
   e2e:
     runs-on: ubuntu-latest

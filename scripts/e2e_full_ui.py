@@ -135,7 +135,7 @@ def workflow_quick_test(page: Page, out_dir: Path) -> None:
     ))
 
     step(tag, "select customer_mapping", page, out_dir, lambda: (
-        page.locator("#mappingSelect").select_option(value="customer_mapping"),
+        page.locator("#mappingSelect").select_option(value="customer_file_to_db"),
         page.wait_for_timeout(300),
     ))
 
