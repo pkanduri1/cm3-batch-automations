@@ -9,7 +9,7 @@
 - API: `src/api/main.py` (FastAPI app at port 8000)
 - Web UI: `src/reports/static/ui.html` (served at `/ui`)
 
-**Test suite:** 1730 unit tests + 106 E2E Playwright tests = 1836 total, 80% coverage
+**Test suite:** 1836 unit tests + 125 E2E Playwright tests = 1961 total, 80% coverage
 
 **Active branch:** `main`
 

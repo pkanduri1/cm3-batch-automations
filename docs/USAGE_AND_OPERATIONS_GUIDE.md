@@ -546,7 +546,12 @@ tabs:
 
 #### Browse & Download
 
-Select a configured path, optionally filter by archive name pattern, then click Browse. Plain files have a direct Download button. Archives show an Expand button listing inner files — each has its own Download button. Whole-archive downloads are not permitted.
+Select a configured path, optionally filter by archive name pattern, then click Browse.
+
+- **Directories** (e.g. dated folders like `20260406/`) appear at the top of the listing with a folder icon and an **Open** button. Clicking Open drills into that subdirectory and updates the breadcrumb bar.
+- **Breadcrumb** — shows the current location relative to the configured root (e.g. `/ / 20260406`). Each segment is clickable to navigate back up.
+- **Plain files** have a direct Download button.
+- **Archives** show an Expand button that lists inner files — each inner file has its own Download button. Whole-archive downloads are not permitted.
 
 #### Search Files
 
