@@ -187,7 +187,7 @@ def workflow_quick_test(page: Page, out_dir: Path) -> None:
     step(tag, "reveal compare panel", page, out_dir, lambda: (
         page.locator("#btnToggleCompare").click(),
         page.wait_for_timeout(500),
-        pw_expect(page.locator("#fileInput2")).to_be_visible(),
+        pw_expect(page.locator("#dropZone2")).to_be_visible(),
     ))
 
     step(tag, "upload customers_updated.txt", page, out_dir, lambda: (
