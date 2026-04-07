@@ -1,6 +1,7 @@
 """File downloader service — path validation, browse, archive handling, and search."""
 
 import fnmatch
+import logging
 import tarfile
 import zipfile
 from dataclasses import dataclass, field
@@ -9,10 +10,29 @@ from typing import Iterator, Literal, Optional
 
 _ARCHIVE_SUFFIXES = (".tar.gz", ".tgz", ".zip")
 _MAX_SEARCH_RESULTS = 50
+_log = logging.getLogger(__name__)
 
 
 def _is_archive(name: str) -> bool:
     return any(name.endswith(s) for s in _ARCHIVE_SUFFIXES)
+
+
+def _safe_inner_path(name: str) -> bool:
+    """Return True if *name* is a safe archive inner path.
+
+    Rejects absolute paths, paths containing '..' components, and paths
+    containing null bytes to prevent path traversal attacks from crafted archives.
+
+    Args:
+        name: The inner path string from an archive member.
+
+    Returns:
+        True if the path is safe to use, False otherwise.
+    """
+    if '\x00' in name:
+        return False
+    p = Path(name)
+    return not p.is_absolute() and '..' not in p.parts
 
 
 @dataclass
@@ -125,10 +145,26 @@ def list_archive_contents(archive_path: Path) -> list:
     name = archive_path.name
     if name.endswith((".tar.gz", ".tgz")):
         with tarfile.open(archive_path, "r:gz") as tf:
-            return [m.name for m in tf.getmembers() if m.isfile()]
+            result = []
+            for m in tf.getmembers():
+                if not m.isfile():
+                    continue
+                if not _safe_inner_path(m.name):
+                    _log.warning("Skipping unsafe inner path in archive: %r", m.name)
+                    continue
+                result.append(m.name)
+            return result
     if name.endswith(".zip"):
         with zipfile.ZipFile(archive_path, "r") as zf:
-            return [n for n in zf.namelist() if not n.endswith("/")]
+            result = []
+            for n in zf.namelist():
+                if n.endswith("/"):
+                    continue
+                if not _safe_inner_path(n):
+                    _log.warning("Skipping unsafe inner path in archive: %r", n)
+                    continue
+                result.append(n)
+            return result
     raise ValueError(f"Unsupported archive format: {name}")
 
 
@@ -146,6 +182,8 @@ def extract_file(archive_path: Path, inner_filename: str) -> Iterator[bytes]:
         FileNotFoundError: If *inner_filename* is not in the archive.
         ValueError: If the archive format is not supported.
     """
+    if not _safe_inner_path(inner_filename):
+        raise ValueError(f"Unsafe archive inner path: {inner_filename!r}")
     name = archive_path.name
     chunk = 65536
     if name.endswith((".tar.gz", ".tgz")):
