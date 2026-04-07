@@ -17,11 +17,11 @@ def _is_archive(name: str) -> bool:
 
 @dataclass
 class BrowseEntry:
-    """A file or archive entry returned by browse_path."""
+    """A file, archive, or directory entry returned by browse_path."""
 
     name: str
-    type: Literal["plain", "archive"]
-    size_bytes: int
+    type: Literal["plain", "archive", "directory"]
+    size_bytes: Optional[int] = None
 
 
 @dataclass
@@ -78,28 +78,36 @@ def validate_path(requested: str, allowed_paths: list[str]) -> Path:
 
 
 def browse_path(path: Path, pattern: Optional[str] = None) -> list:
-    """List files in *path*, optionally filtered by *pattern*.
+    """List files and subdirectories in *path*, optionally filtering files by *pattern*.
+
+    Subdirectories are always included (pattern does not apply to them) and
+    are sorted before files so dated folders (e.g. ``20260406/``) appear at
+    the top of the results.
 
     Args:
         path: Directory to list (already validated).
-        pattern: Optional ``fnmatch`` wildcard (e.g. ``"batch_*.tar.gz"``).
+        pattern: Optional ``fnmatch`` wildcard applied to files only
+            (e.g. ``"batch_*.tar.gz"``).  Directories are never filtered.
 
     Returns:
-        Sorted list of :class:`BrowseEntry` objects (directories excluded).
+        Sorted list of :class:`BrowseEntry` objects — directories first,
+        then files.
     """
     if not path.exists():
         raise FileNotFoundError(f"Directory not found: {path}")
     if not path.is_dir():
         raise NotADirectoryError(f"Not a directory: {path}")
-    entries: list[BrowseEntry] = []
+    dirs: list[BrowseEntry] = []
+    files: list[BrowseEntry] = []
     for item in sorted(path.iterdir()):
-        if not item.is_file():
-            continue
-        if pattern and not fnmatch.fnmatch(item.name, pattern):
-            continue
-        entry_type: Literal["plain", "archive"] = "archive" if _is_archive(item.name) else "plain"
-        entries.append(BrowseEntry(name=item.name, type=entry_type, size_bytes=item.stat().st_size))
-    return entries
+        if item.is_dir():
+            dirs.append(BrowseEntry(name=item.name, type="directory", size_bytes=None))
+        elif item.is_file():
+            if pattern and not fnmatch.fnmatch(item.name, pattern):
+                continue
+            entry_type: Literal["plain", "archive"] = "archive" if _is_archive(item.name) else "plain"
+            files.append(BrowseEntry(name=item.name, type=entry_type, size_bytes=item.stat().st_size))
+    return dirs + files
 
 
 def list_archive_contents(archive_path: Path) -> list:

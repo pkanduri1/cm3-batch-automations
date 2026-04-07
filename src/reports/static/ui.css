@@ -1946,6 +1946,17 @@
   color:var(--text-primary); font-family:monospace;
 }
 
+.fd-breadcrumb {
+  font-size:12px; padding:4px 0 6px; color:var(--text-secondary);
+  min-height:18px;
+}
+.fd-bc-sep { color:var(--text-secondary); }
+.fd-bc-link {
+  cursor:pointer; color:var(--accent); text-decoration:underline;
+}
+.fd-bc-link:hover { opacity:0.8; }
+.fd-bc-current { color:var(--text-primary); font-weight:600; }
+
 .fd-truncation-warn {
   display:flex; align-items:center; gap:10px; padding:8px 12px;
   background:var(--surface); border:1px solid #f59e0b;

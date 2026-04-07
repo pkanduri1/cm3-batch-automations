@@ -58,6 +58,42 @@ def test_browse_identifies_archives(tmp_path):
     assert types["c.tgz"] == "archive"
 
 
+def test_browse_includes_subdirectories(tmp_path):
+    (tmp_path / "20260406").mkdir()
+    (tmp_path / "20260405").mkdir()
+    (tmp_path / "report.txt").write_text("x")
+    entries = browse_path(tmp_path)
+    types = {e.name: e.type for e in entries}
+    assert types["20260406"] == "directory"
+    assert types["20260405"] == "directory"
+    assert types["report.txt"] == "plain"
+
+
+def test_browse_directories_sorted_before_files(tmp_path):
+    (tmp_path / "z_dir").mkdir()
+    (tmp_path / "a_file.txt").write_text("x")
+    entries = browse_path(tmp_path)
+    names = [e.name for e in entries]
+    assert names.index("z_dir") < names.index("a_file.txt")
+
+
+def test_browse_pattern_does_not_filter_directories(tmp_path):
+    (tmp_path / "20260406").mkdir()
+    (tmp_path / "batch_01.tar.gz").write_bytes(b"x")
+    (tmp_path / "unrelated.txt").write_text("x")
+    entries = browse_path(tmp_path, pattern="batch_*.tar.gz")
+    names = [e.name for e in entries]
+    assert "20260406" in names
+    assert "batch_01.tar.gz" in names
+    assert "unrelated.txt" not in names
+
+
+def test_browse_directory_entry_has_no_size(tmp_path):
+    (tmp_path / "subdir").mkdir()
+    entry = next(e for e in browse_path(tmp_path) if e.name == "subdir")
+    assert entry.size_bytes is None
+
+
 def test_browse_wildcard_filter(tmp_path):
     (tmp_path / "batch_01.tar.gz").write_bytes(b"x")
     (tmp_path / "unrelated.txt").write_text("x")
