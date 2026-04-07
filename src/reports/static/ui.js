@@ -79,6 +79,7 @@ function initTabVisibility() {
 // File Downloader Tab
 // ===========================================================================
 var _fdPaths = [];
+var _fdCurrentPath = null;
 
 /**
  * Return authentication headers for API requests.
@@ -138,10 +139,13 @@ function loadDownloaderPaths() {
  * Clear browse/search result panels when the selected path changes.
  */
 function onFdPathChange() {
+  _fdCurrentPath = null;
   ['fdBrowseResults', 'fdSearchResults', 'fdArchSearchResults'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.textContent = '';
   });
+  var bc = document.getElementById('fdBreadcrumb');
+  if (bc) bc.textContent = '';
 }
 
 /**
@@ -174,19 +178,36 @@ function _fdFormatBytes(bytes) {
 }
 
 /**
- * List files in the selected path and render them in #fdBrowseResults.
+ * List files in the selected root path and render them in #fdBrowseResults.
  *
- * Reads the optional archive pattern from #fdArchivePattern. Shows a loading
- * indicator while the request is in flight and an error message on failure.
+ * Reads the optional archive pattern from #fdArchivePattern. Resets the
+ * current sub-path state and breadcrumb back to the root before browsing.
  */
 function fdBrowse() {
   var path = document.getElementById('fdPathSelect').value;
   if (!path) { alert('Please select a path first.'); return; }
   var pattern = document.getElementById('fdArchivePattern').value.trim() || null;
-  var url = '/api/v1/downloader/browse?path=' + encodeURIComponent(path);
-  if (pattern) url += '&pattern=' + encodeURIComponent(pattern);
+  _fdCurrentPath = path;
+  _fdBrowseDir(path, pattern);
+}
+
+/**
+ * Browse a specific directory path and render results in #fdBrowseResults.
+ *
+ * Updates the breadcrumb to reflect the current location. Called by fdBrowse
+ * for the root and by directory entry clicks when drilling into sub-folders.
+ *
+ * @param {string}  dirPath - Absolute filesystem path to browse.
+ * @param {string|null} pattern - Optional fnmatch pattern for file filtering.
+ */
+function _fdBrowseDir(dirPath, pattern) {
+  var rootPath = document.getElementById('fdPathSelect').value;
   var container = document.getElementById('fdBrowseResults');
   container.textContent = 'Loading\u2026';
+  _fdRenderBreadcrumb(rootPath, dirPath, pattern);
+
+  var url = '/api/v1/downloader/browse?path=' + encodeURIComponent(dirPath);
+  if (pattern) url += '&pattern=' + encodeURIComponent(pattern);
 
   fetch(url, { headers: _apiHeaders() })
     .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
@@ -197,7 +218,7 @@ function fdBrowse() {
         return;
       }
       data.entries.forEach(function(entry) {
-        container.appendChild(_fdRenderEntry(entry, path));
+        container.appendChild(_fdRenderEntry(entry, dirPath, pattern));
       });
     })
     .catch(function(err) {
@@ -206,18 +227,87 @@ function fdBrowse() {
 }
 
 /**
- * Build a DOM row for a single browse entry (file or archive).
+ * Update the #fdBreadcrumb bar to show the current location within rootPath.
+ *
+ * Each ancestor segment is rendered as a clickable link. The current
+ * (leaf) segment is rendered as plain text.
+ *
+ * @param {string}      rootPath    - The configured root (from #fdPathSelect).
+ * @param {string}      currentPath - The path being browsed (rootPath or deeper).
+ * @param {string|null} pattern     - Pattern forwarded to _fdBrowseDir on click.
+ */
+function _fdRenderBreadcrumb(rootPath, currentPath, pattern) {
+  var bc = document.getElementById('fdBreadcrumb');
+  if (!bc) return;
+  bc.textContent = '';
+
+  var rel = (currentPath.indexOf(rootPath) === 0) ? currentPath.slice(rootPath.length) : '';
+  var segments = rel.split('/').filter(function(s) { return s.length > 0; });
+
+  var rootSpan = document.createElement('span');
+  rootSpan.className = 'fd-bc-seg fd-bc-link';
+  rootSpan.textContent = '/';
+  rootSpan.setAttribute('title', rootPath);
+  rootSpan.onclick = function() { _fdBrowseDir(rootPath, pattern); };
+  bc.appendChild(rootSpan);
+
+  var accPath = rootPath;
+  segments.forEach(function(seg, i) {
+    accPath = accPath + '/' + seg;
+    var sep = document.createElement('span');
+    sep.className = 'fd-bc-sep';
+    sep.textContent = ' / ';
+    bc.appendChild(sep);
+
+    var segSpan = document.createElement('span');
+    segSpan.textContent = seg;
+    if (i === segments.length - 1) {
+      segSpan.className = 'fd-bc-seg fd-bc-current';
+    } else {
+      segSpan.className = 'fd-bc-seg fd-bc-link';
+      var segPath = accPath;
+      segSpan.onclick = function() { _fdBrowseDir(segPath, pattern); };
+    }
+    bc.appendChild(segSpan);
+  });
+}
+
+/**
+ * Build a DOM row for a single browse entry (file, archive, or directory).
  *
  * All server-provided strings (name, type, size) are assigned via textContent
  * to prevent XSS.
  *
- * @param {Object} entry - Entry object with name, type, and size_bytes fields.
- * @param {string} path  - The selected path alias used for download requests.
+ * @param {Object}      entry   - Entry object with name, type, and size_bytes.
+ * @param {string}      path    - The current browsed path (for download/drill-down).
+ * @param {string|null} pattern - Active file pattern (forwarded on drill-down).
  * @returns {HTMLElement} A div element representing the entry row.
  */
-function _fdRenderEntry(entry, path) {
+function _fdRenderEntry(entry, path, pattern) {
   var row = document.createElement('div');
   row.className = 'fd-entry';
+
+  if (entry.type === 'directory') {
+    var nameEl = document.createElement('span');
+    nameEl.className = 'fd-entry-name';
+    nameEl.textContent = '\uD83D\uDCC1  ' + entry.name;
+
+    var meta = document.createElement('span');
+    meta.className = 'fd-entry-meta';
+    meta.textContent = 'directory';
+
+    var openBtn = document.createElement('button');
+    openBtn.className = 'btn btn-secondary';
+    openBtn.style.cssText = 'font-size:11px;padding:3px 10px';
+    openBtn.textContent = '\u25B6 Open';
+    var subPath = path + '/' + entry.name;
+    openBtn.onclick = function() { _fdBrowseDir(subPath, pattern); };
+
+    row.appendChild(nameEl);
+    row.appendChild(meta);
+    row.appendChild(openBtn);
+    return row;
+  }
 
   var nameEl = document.createElement('span');
   nameEl.className = 'fd-entry-name';
