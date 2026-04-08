@@ -145,3 +145,83 @@ class TestGenerateFile:
         rows1 = generate_file(sample_mapping, row_count=5, seed=1)
         rows2 = generate_file(sample_mapping, row_count=5, seed=2)
         assert rows1 != rows2
+
+
+class TestInjectErrors:
+    """Tests for inject_errors() in test_data_generator."""
+
+    @pytest.fixture()
+    def base_rows_and_fields(self):
+        """Generate 100 clean rows from a mapping with diverse field types."""
+        from src.services.test_data_generator import generate_file
+        mapping = {
+            "source": {"format": "fixed_width"},
+            "fields": [
+                {"name": "id", "length": 5, "data_type": "string", "required": True,
+                 "validation_rules": [{"type": "not_null"}]},
+                {"name": "status", "length": 1, "valid_values": ["A", "I"]},
+                {"name": "eff_date", "length": 8, "data_type": "date",
+                 "validation_rules": [{"type": "date_format", "parameters": {"format": "%Y%m%d"}}]},
+                {"name": "amount", "length": 8, "data_type": "decimal"},
+            ],
+        }
+        rows = generate_file(mapping, row_count=100, seed=42)
+        return rows, mapping["fields"]
+
+    def test_blank_required_count(self, base_rows_and_fields):
+        from src.services.test_data_generator import inject_errors
+        rows, fields = base_rows_and_fields
+        result = inject_errors(rows, {"blank_required": 5}, fields, random.Random(1))
+        blanked = sum(1 for r in result if r["id"].strip() == "")
+        assert blanked == 5
+
+    def test_invalid_date_count(self, base_rows_and_fields):
+        from src.services.test_data_generator import inject_errors
+        rows, fields = base_rows_and_fields
+        result = inject_errors(rows, {"invalid_date": 10}, fields, random.Random(1))
+        bad_dates = sum(1 for r in result if "99999999" in r.get("eff_date", ""))
+        assert bad_dates == 10
+
+    def test_duplicate_key_count(self, base_rows_and_fields):
+        from src.services.test_data_generator import inject_errors
+        rows, fields = base_rows_and_fields
+        # Count pre-existing natural duplicates of row 0's id before injection
+        first_id_before = rows[0]["id"]
+        natural_dupes = sum(1 for r in rows[1:] if r["id"] == first_id_before)
+        result = inject_errors(rows, {"duplicate_key": 3}, fields, random.Random(1))
+        first_id = result[0]["id"]
+        dupes = sum(1 for r in result[1:] if r["id"] == first_id)
+        # Injected 3 duplicates on top of any natural ones
+        assert dupes == natural_dupes + 3
+
+    def test_invalid_value_count(self, base_rows_and_fields):
+        from src.services.test_data_generator import inject_errors
+        rows, fields = base_rows_and_fields
+        result = inject_errors(rows, {"invalid_value": 2}, fields, random.Random(1))
+        bad = sum(1 for r in result if r["status"].strip() not in ["A", "I"])
+        assert bad >= 2
+
+    def test_wrong_length_count(self, base_rows_and_fields):
+        from src.services.test_data_generator import inject_errors
+        rows, fields = base_rows_and_fields
+        original_len = sum(int(f["length"]) for f in fields)
+        result = inject_errors(rows, {"wrong_length": 1}, fields, random.Random(1))
+        wrong = sum(
+            1 for r in result
+            if sum(len(r[f["name"]]) for f in fields) != original_len
+        )
+        assert wrong == 1
+
+    def test_unknown_error_type_raises(self, base_rows_and_fields):
+        from src.services.test_data_generator import inject_errors
+        rows, fields = base_rows_and_fields
+        with pytest.raises(ValueError, match="Unknown error injection type"):
+            inject_errors(rows, {"bogus_type": 1}, fields, random.Random(1))
+
+    def test_zero_injection_no_change(self, base_rows_and_fields):
+        from src.services.test_data_generator import inject_errors
+        import copy
+        rows, fields = base_rows_and_fields
+        original = copy.deepcopy(rows)
+        result = inject_errors(rows, {}, fields, random.Random(1))
+        assert result == original

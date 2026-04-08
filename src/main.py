@@ -1104,12 +1104,18 @@ def detect_drift(file, mapping, output, mappings_dir):
               help='Output file path')
 @click.option('--seed', '-s', default=42, type=int, show_default=True,
               help='Random seed for reproducibility')
-def generate_test_data(mapping, rows, output, seed):
+@click.option('--inject-errors', 'inject_errors_json', default=None, type=str,
+              help="JSON dict of error injections e.g. '{\"blank_required\": 5}'")
+def generate_test_data(mapping, rows, output, seed, inject_errors_json):
     """Generate synthetic test data files from a mapping definition."""
     try:
         from src.commands.generate_test_data_command import run_generate_test_data_command
+        inject = None
+        if inject_errors_json:
+            inject = json.loads(inject_errors_json)
         run_generate_test_data_command(
             mapping=mapping, rows=rows, output=output, seed=seed,
+            inject_errors=inject,
         )
     except click.ClickException:
         raise

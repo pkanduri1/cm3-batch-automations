@@ -7,9 +7,11 @@ Functions:
     generate_field_value: Single field value from a field definition dict.
     generate_row: One row as {field_name: value} for all fields.
     generate_file: Multiple rows from a full mapping dict.
+    inject_errors: Inject controlled errors into generated rows.
 """
 from __future__ import annotations
 
+import copy
 import random
 import re
 import string
@@ -218,3 +220,152 @@ def generate_file(mapping: dict, row_count: int, seed: int = 42) -> list:
     rng = random.Random(seed)
     fields = mapping.get("fields", [])
     return [generate_row(fields, rng) for _ in range(row_count)]
+
+
+# ---------------------------------------------------------------------------
+# Error injection
+# ---------------------------------------------------------------------------
+
+_VALID_ERROR_TYPES = frozenset({
+    "blank_required", "invalid_date", "duplicate_key",
+    "invalid_value", "wrong_length",
+})
+
+
+def _find_first_field(fields: list, predicate) -> dict | None:
+    """Return the first field dict matching predicate, or None.
+
+    Args:
+        fields: List of field definition dicts.
+        predicate: Callable taking a field dict, returning bool.
+
+    Returns:
+        First matching field dict, or None if no match.
+    """
+    for f in fields:
+        if predicate(f):
+            return f
+    return None
+
+
+def _pick_rows(rng: random.Random, total: int, count: int, exclude: set | None = None) -> list:
+    """Pick *count* unique row indices from [0, total), excluding *exclude*.
+
+    Args:
+        rng: Random instance.
+        total: Number of rows available.
+        count: Number of indices to pick.
+        exclude: Set of indices to skip (default empty).
+
+    Returns:
+        List of selected row indices.
+    """
+    excluded = exclude or set()
+    available = [i for i in range(total) if i not in excluded]
+    return rng.sample(available, min(count, len(available)))
+
+
+def inject_errors(
+    rows: list,
+    error_spec: dict,
+    fields: list,
+    rng: random.Random,
+) -> list:
+    """Inject controlled errors into previously generated rows.
+
+    Modifies a deep copy of *rows* and returns it. The input list is unchanged.
+
+    Supported error types:
+
+    - ``blank_required``: Blanks the first required/not_null/not_empty field in N rows.
+    - ``invalid_date``: Replaces the first date field with ``"99999999"`` in N rows.
+    - ``duplicate_key``: Copies row 0's first required field value into N other rows.
+    - ``invalid_value``: Replaces the first valid_values-constrained field with ``"ZZZZ"`` in N rows.
+    - ``wrong_length``: Appends ``"X"`` to the first field in N rows (corrupts record width).
+
+    Args:
+        rows: List of {field_name: value} dicts to inject errors into.
+        error_spec: Dict mapping error type name to row count.
+        fields: Field definition list from the mapping.
+        rng: Seeded Random instance for reproducible index selection.
+
+    Returns:
+        New list of rows with errors injected.
+
+    Raises:
+        ValueError: If an unrecognised error type is in *error_spec*.
+    """
+    rows = copy.deepcopy(rows)
+
+    unknown = set(error_spec) - _VALID_ERROR_TYPES
+    if unknown:
+        raise ValueError("Unknown error injection type: " + repr(sorted(unknown)))
+
+    total = len(rows)
+    used: set = set()
+
+    # blank_required
+    count = error_spec.get("blank_required", 0)
+    if count:
+        target = _find_first_field(
+            fields,
+            lambda f: _has_rule(f, "not_null", "not_empty") or f.get("required"),
+        )
+        if target:
+            length = target.get("length")
+            blank = " " * int(length) if length else ""
+            for idx in _pick_rows(rng, total, count, used):
+                rows[idx][target["name"]] = blank
+                used.add(idx)
+
+    # invalid_date
+    count = error_spec.get("invalid_date", 0)
+    if count:
+        target = _find_first_field(
+            fields,
+            lambda f: (f.get("data_type") or "").lower() == "date" or _has_rule(f, "date_format"),
+        )
+        if target:
+            length = target.get("length")
+            bad = "99999999"
+            if length:
+                bad = bad[:int(length)].ljust(int(length))
+            for idx in _pick_rows(rng, total, count, used):
+                rows[idx][target["name"]] = bad
+                used.add(idx)
+
+    # duplicate_key
+    count = error_spec.get("duplicate_key", 0)
+    if count and total > 1:
+        target = _find_first_field(
+            fields,
+            lambda f: f.get("required") or _has_rule(f, "not_null", "not_empty"),
+        )
+        if target:
+            source_val = rows[0][target["name"]]
+            for idx in _pick_rows(rng, total, count, {0} | used):
+                rows[idx][target["name"]] = source_val
+                used.add(idx)
+
+    # invalid_value
+    count = error_spec.get("invalid_value", 0)
+    if count:
+        target = _find_first_field(fields, lambda f: bool(f.get("valid_values")))
+        if target:
+            length = target.get("length")
+            bad = "ZZZZ"
+            if length:
+                bad = bad[:int(length)].ljust(int(length))
+            for idx in _pick_rows(rng, total, count, used):
+                rows[idx][target["name"]] = bad
+                used.add(idx)
+
+    # wrong_length
+    count = error_spec.get("wrong_length", 0)
+    if count and fields:
+        first = fields[0]
+        for idx in _pick_rows(rng, total, count, used):
+            rows[idx][first["name"]] += "X"
+            used.add(idx)
+
+    return rows
