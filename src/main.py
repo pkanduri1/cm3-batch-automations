@@ -1095,6 +1095,39 @@ def detect_drift(file, mapping, output, mappings_dir):
         sys.exit(1)
 
 
+@cli.command('generate-test-data')
+@click.option('--mapping', '-m', type=click.Path(exists=True),
+              help='Mapping JSON file defining the file schema')
+@click.option('--rows', '-n', default=None, type=int,
+              help='Number of rows to generate (must be >= 1 for single-mapping mode)')
+@click.option('--output', '-o', required=True, type=click.Path(),
+              help='Output file path')
+@click.option('--seed', '-s', default=42, type=int, show_default=True,
+              help='Random seed for reproducibility')
+@click.option('--inject-errors', 'inject_errors_json', default=None, type=str,
+              help="JSON dict of error injections e.g. '{\"blank_required\": 5}'")
+@click.option('--multi-record', 'multi_record', default=None, type=click.Path(exists=True),
+              help='Multi-record YAML config (mutually exclusive with --mapping)')
+@click.option('--detail-rows', 'detail_rows', default=None, type=int,
+              help='Number of detail rows in multi-record mode (default: 10)')
+def generate_test_data(mapping, rows, output, seed, inject_errors_json, multi_record, detail_rows):
+    """Generate synthetic test data files from a mapping definition."""
+    try:
+        from src.commands.generate_test_data_command import run_generate_test_data_command
+        inject = None
+        if inject_errors_json:
+            inject = json.loads(inject_errors_json)
+        run_generate_test_data_command(
+            mapping=mapping, rows=rows, output=output, seed=seed,
+            inject_errors=inject, multi_record=multi_record, detail_rows=detail_rows,
+        )
+    except click.ClickException:
+        raise
+    except Exception as e:
+        click.echo(click.style(f"Error: {e}", fg="red"))
+        sys.exit(1)
+
+
 @cli.command()
 @click.option('--host', default='0.0.0.0', show_default=True,
               help='Bind address for the server')
