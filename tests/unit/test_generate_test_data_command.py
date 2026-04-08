@@ -145,6 +145,15 @@ class TestGenerateTestDataCommand:
                 rows=0, output=str(tmp_path / "out.txt"), seed=42,
             )
 
+    def test_neither_mapping_nor_multi_record_raises(self, tmp_path):
+        """Calling without --mapping or --multi-record must raise a clear error."""
+        from src.commands.generate_test_data_command import run_generate_test_data_command
+        with pytest.raises((click.ClickException, ValueError)):
+            run_generate_test_data_command(
+                mapping=None, multi_record=None, rows=10,
+                output=str(tmp_path / "out.txt"), seed=42,
+            )
+
 
 class TestMultiRecordGeneration:
     """Tests for --multi-record mode of generate-test-data."""

@@ -281,6 +281,10 @@ Services
    :members:
    :undoc-members:
 
+.. automodule:: src.services.test_data_generator
+   :members:
+   :undoc-members:
+
 .. automodule:: src.services.error_extractor
    :members:
    :undoc-members:
@@ -344,6 +348,10 @@ Pipeline
    :undoc-members:
 
 .. automodule:: src.commands.detect_drift_command
+   :members:
+   :undoc-members:
+
+.. automodule:: src.commands.generate_test_data_command
    :members:
    :undoc-members:
 

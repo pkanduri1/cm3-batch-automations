@@ -123,9 +123,11 @@ def run_generate_test_data_command(
         click.echo(f"Generated {len(records)} multi-record rows -> {output}")
         return
 
-    if not multi_record:
-        if rows is None or rows < 1:
-            raise click.ClickException("--rows must be at least 1.")
+    if not mapping:
+        raise click.ClickException("Either --mapping or --multi-record is required.")
+
+    if rows is None or rows < 1:
+        raise click.ClickException("--rows must be at least 1.")
 
     with open(mapping, "r", encoding="utf-8") as fh:
         mapping_config = json.load(fh)
