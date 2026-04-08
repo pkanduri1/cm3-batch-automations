@@ -4,7 +4,7 @@ import tarfile
 import zipfile
 import pytest
 from pathlib import Path
-from src.services.downloader_service import validate_path, browse_path, BrowseEntry, list_archive_contents, extract_file, search_in_files, search_in_archives
+from src.services.downloader_service import validate_path, browse_path, BrowseEntry, list_archive_contents, extract_file, search_in_files, search_in_archives, _safe_inner_path
 
 
 def test_validate_path_accepts_allowed(tmp_path):
@@ -272,3 +272,89 @@ def test_search_archives_file_pattern_filters(tmp_path):
     files = {h.file for h in r.results}
     assert "e.log" in files
     assert "d.csv" not in files
+
+
+# ---------------------------------------------------------------------------
+# _safe_inner_path
+# ---------------------------------------------------------------------------
+
+def test_safe_inner_path_accepts_normal():
+    assert _safe_inner_path("logs/errors.log") is True
+
+
+def test_safe_inner_path_accepts_nested():
+    assert _safe_inner_path("subdir/nested/file.log") is True
+
+
+def test_safe_inner_path_accepts_single():
+    assert _safe_inner_path("file.txt") is True
+
+
+def test_safe_inner_path_rejects_dotdot():
+    assert _safe_inner_path("../../etc/passwd") is False
+
+
+def test_safe_inner_path_rejects_dotdot_relative():
+    assert _safe_inner_path("../sibling.txt") is False
+
+
+def test_safe_inner_path_rejects_absolute():
+    assert _safe_inner_path("/etc/shadow") is False
+
+
+def test_safe_inner_path_rejects_absolute_tmp():
+    assert _safe_inner_path("/tmp/evil") is False
+
+
+def test_safe_inner_path_rejects_null_byte():
+    assert _safe_inner_path("name\x00injected") is False
+
+
+# ---------------------------------------------------------------------------
+# list_archive_contents skips unsafe paths
+# ---------------------------------------------------------------------------
+
+def test_list_archive_skips_traversal_paths(tmp_path):
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        safe_data = b"safe"
+        info1 = tarfile.TarInfo(name="safe.txt")
+        info1.size = len(safe_data)
+        tf.addfile(info1, io.BytesIO(safe_data))
+        info2 = tarfile.TarInfo(name="../../etc/passwd")
+        evil_data = b"evil"
+        info2.size = len(evil_data)
+        tf.addfile(info2, io.BytesIO(evil_data))
+    arc = tmp_path / "crafted.tar.gz"
+    arc.write_bytes(buf.getvalue())
+    contents = list_archive_contents(arc)
+    assert "safe.txt" in contents
+    assert "../../etc/passwd" not in contents
+
+
+def test_list_archive_all_unsafe_returns_empty(tmp_path):
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        info = tarfile.TarInfo(name="../../evil")
+        data = b"x"
+        info.size = len(data)
+        tf.addfile(info, io.BytesIO(data))
+    arc = tmp_path / "evil.tar.gz"
+    arc.write_bytes(buf.getvalue())
+    assert list_archive_contents(arc) == []
+
+
+# ---------------------------------------------------------------------------
+# extract_file raises on traversal path
+# ---------------------------------------------------------------------------
+
+def test_extract_file_rejects_traversal_path(tmp_path):
+    arc = _make_targz(tmp_path / "a.tar.gz", {"safe.txt": b"x"})
+    with pytest.raises(ValueError, match="Unsafe archive inner path"):
+        list(extract_file(arc, "../../etc/passwd"))
+
+
+def test_extract_file_rejects_absolute_path(tmp_path):
+    arc = _make_targz(tmp_path / "a.tar.gz", {"safe.txt": b"x"})
+    with pytest.raises(ValueError, match="Unsafe archive inner path"):
+        list(extract_file(arc, "/etc/shadow"))
