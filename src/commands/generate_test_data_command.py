@@ -97,7 +97,7 @@ def run_generate_test_data_command(
         inject_errors: Optional dict of {error_type: count} for error injection
             (used by Task 3).
         multi_record: Path to multi-record YAML config (mutually exclusive with
-            mapping, used by Task 4).
+            mapping, used by Task 4). (fixed-width output only)
         detail_rows: Number of detail rows per group for multi-record mode.
 
     Raises:

@@ -407,6 +407,10 @@ def generate_multi_record_file(
         List of ``(record_type_key, row_dict, fields_list)`` tuples in file
         order: ``[("header", {...}, [...]), ("detail", {...}, [...]), ...,
         ("trailer", {...}, [...])]``.
+
+    Note:
+        Multi-record output is always fixed-width. All record-type mappings referenced
+        by the config are expected to have ``source.format == "fixed_width"``.
     """
     rng = random.Random(seed)
     record_types = config.get("record_types", {})

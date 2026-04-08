@@ -237,3 +237,20 @@ class TestMultiRecordGeneration:
                 multi_record=str(yaml_path),
                 detail_rows=5, rows=10, output=str(tmp_path / "out.txt"), seed=42,
             )
+
+    def test_trailer_record_count_is_populated(self, multi_record_setup, tmp_path):
+        """Trailer RECORD_COUNT field is auto-set to the detail row count."""
+        from src.commands.generate_test_data_command import run_generate_test_data_command
+        yaml_path, _ = multi_record_setup
+        out = tmp_path / "mr.txt"
+        run_generate_test_data_command(
+            mapping=None, multi_record=str(yaml_path),
+            detail_rows=7, rows=None, output=str(out), seed=42,
+        )
+        lines = out.read_text().splitlines()
+        # Trailer is last line; trailer format: 3-char REC_TYPE + 10-char RECORD_COUNT
+        trailer_line = lines[-1]
+        assert trailer_line[:3] == "TRL"
+        # RECORD_COUNT (right-justified, zero-padded) should be "0000000007"
+        record_count_field = trailer_line[3:13]  # positions 3-12 (length=10)
+        assert record_count_field == "0000000007"
