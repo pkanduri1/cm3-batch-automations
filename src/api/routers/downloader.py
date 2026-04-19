@@ -1,34 +1,62 @@
 """File Downloader API router.
 
-Provides browse, download, and archive-inspection endpoints.
-All endpoints require a valid API key and path must be under a
-configured allowed path (from file-downloader.yml).
+Provides browse, download, archive-inspection, and nested-archive-search
+endpoints. All endpoints require a valid API key and the requested path must
+be under a configured allowed path (from the ``downloader.paths`` section in
+``config/ui.yml``).
 """
 
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from src.api.auth import require_api_key
 from src.services import downloader_service as svc
-from src.services.downloader_logger import log_activity, resolve_client_info
+from src.services.downloader_logger import DownloaderLogger, resolve_client_info
 
 router = APIRouter()
 
 
-def _allowed_paths(request: Request) -> list:
-    """Extract allowed path strings from app state fd_config.
+def _dl_cfg(request: Request) -> dict:
+    """Extract the downloader config dict from app state.
 
     Args:
         request: Current FastAPI request.
 
     Returns:
-        List of allowed path strings from file-downloader.yml config.
+        The ``downloader`` sub-dict from ``app.state.ui_config``, or an empty
+        dict when not configured.
     """
-    return [p["path"] for p in getattr(request.app.state, "fd_config", {}).get("paths", [])]
+    return getattr(request.app.state, "ui_config", {}).get("downloader", {})
+
+
+def _allowed_paths(request: Request) -> list:
+    """Extract allowed path strings from the downloader config in ui_config.
+
+    Args:
+        request: Current FastAPI request.
+
+    Returns:
+        List of allowed path strings from ``config/ui.yml`` downloader section.
+    """
+    return [p["path"] for p in _dl_cfg(request).get("paths", [])]
+
+
+def _get_logger(request: Request) -> DownloaderLogger:
+    """Construct a :class:`DownloaderLogger` using the configured log path.
+
+    Args:
+        request: Current FastAPI request.
+
+    Returns:
+        :class:`DownloaderLogger` instance pointing at the path from
+        ``downloader.log_path`` in ``config/ui.yml``.
+    """
+    log_path = _dl_cfg(request).get("log_path", "logs/file-downloads.log")
+    return DownloaderLogger(log_path=log_path)
 
 
 def _safe_filename(name: str) -> str:
@@ -41,7 +69,8 @@ def _safe_filename(name: str) -> str:
         The original name if safe.
 
     Raises:
-        HTTPException: 400 if the name contains path separators or is absolute.
+        HTTPException: 400 if the name contains path separators or is
+            absolute.
     """
     if Path(name).name != name:
         raise HTTPException(status_code=400, detail=f"Invalid filename: {name!r}")
@@ -94,16 +123,16 @@ class SearchArchiveRequest(BaseModel):
 
 @router.get("/paths")
 async def get_paths(request: Request, _: object = Depends(require_api_key)):
-    """Return configured paths from file-downloader.yml.
+    """Return configured paths from the downloader section of config/ui.yml.
 
     Args:
         request: Current FastAPI request.
         _: Unused auth context (validates API key).
 
     Returns:
-        Dict with ``paths`` list from app state fd_config.
+        Dict with ``paths`` list from the downloader config.
     """
-    return {"paths": getattr(request.app.state, "fd_config", {}).get("paths", [])}
+    return {"paths": _dl_cfg(request).get("paths", [])}
 
 
 @router.get("/browse")
@@ -122,7 +151,8 @@ async def browse(
         _: Unused auth context (validates API key).
 
     Returns:
-        Dict with ``entries`` list, each having ``name``, ``type``, ``size_bytes``.
+        Dict with ``entries`` list, each having ``name``, ``type``,
+        ``size_bytes``.
 
     Raises:
         HTTPException: 403 if path is not under an allowed configured path.
@@ -184,7 +214,8 @@ async def download_file(
     """Stream a single file from disk or extracted from an archive.
 
     Args:
-        body: Download request with ``path``, ``filename``, and optional ``archive``.
+        body: Download request with ``path``, ``filename``, and optional
+            ``archive``.
         request: Current FastAPI request.
         _: Unused auth context (validates API key).
 
@@ -198,6 +229,7 @@ async def download_file(
     """
     resolved = _validate(body.path, request)
     client_ip, client_host = resolve_client_info(request)
+    dl_logger = _get_logger(request)
 
     if body.archive:
         _safe_filename(body.archive)  # archive itself must be a simple filename
@@ -227,7 +259,7 @@ async def download_file(
 
         stream = _plain()
 
-    log_activity(
+    dl_logger.log_activity(
         operation="download",
         client_ip=client_ip,
         client_host=client_host,
@@ -254,9 +286,9 @@ def _fmt_result(r) -> dict:
         r: A ``SearchResult`` dataclass returned by the downloader service.
 
     Returns:
-        Dict with keys: ``results``, ``truncated``, ``total_matches``, ``shown``,
-        and ``download_ref`` (``None`` or a dict with ``path``, ``filename``,
-        ``archive``).
+        Dict with keys: ``results``, ``truncated``, ``total_matches``,
+        ``shown``, and ``download_ref`` (``None`` or a dict with ``path``,
+        ``filename``, ``archive``).
     """
     return {
         "results": [
@@ -279,7 +311,8 @@ async def search_files(body: SearchFilesRequest, request: Request, _: object = D
     """Search a string in plain files matching a filename wildcard.
 
     Args:
-        body: Request body with ``path``, ``filename_pattern``, and ``search_string``.
+        body: Request body with ``path``, ``filename_pattern``, and
+            ``search_string``.
         request: Current FastAPI request.
         _: Unused auth context (validates API key).
 
@@ -292,9 +325,10 @@ async def search_files(body: SearchFilesRequest, request: Request, _: object = D
     """
     resolved = _validate(body.path, request)
     client_ip, client_host = resolve_client_info(request)
+    dl_logger = _get_logger(request)
     result = svc.search_in_files(resolved, body.filename_pattern, body.search_string)
-    log_activity(operation="search_files", client_ip=client_ip, client_host=client_host,
-                 path=body.path, filename=body.filename_pattern, archive=None, status="success")
+    dl_logger.log_activity(operation="search_files", client_ip=client_ip, client_host=client_host,
+                           path=body.path, filename=body.filename_pattern, archive=None, status="success")
     return _fmt_result(result)
 
 
@@ -303,8 +337,8 @@ async def search_archive(body: SearchArchiveRequest, request: Request, _: object
     """Search a string inside archive inner files — both patterns support wildcards.
 
     Args:
-        body: Request body with ``path``, ``archive_pattern``, ``file_pattern``,
-            and ``search_string``.
+        body: Request body with ``path``, ``archive_pattern``,
+            ``file_pattern``, and ``search_string``.
         request: Current FastAPI request.
         _: Unused auth context (validates API key).
 
@@ -317,7 +351,50 @@ async def search_archive(body: SearchArchiveRequest, request: Request, _: object
     """
     resolved = _validate(body.path, request)
     client_ip, client_host = resolve_client_info(request)
+    dl_logger = _get_logger(request)
     result = svc.search_in_archives(resolved, body.archive_pattern, body.file_pattern, body.search_string)
-    log_activity(operation="search_archive", client_ip=client_ip, client_host=client_host,
-                 path=body.path, filename=body.file_pattern, archive=body.archive_pattern, status="success")
+    dl_logger.log_activity(operation="search_archive", client_ip=client_ip, client_host=client_host,
+                           path=body.path, filename=body.file_pattern, archive=body.archive_pattern,
+                           status="success")
     return _fmt_result(result)
+
+
+@router.post("/search-nested-archives")
+async def search_nested_archives(
+    request: Request,
+    archive_pattern: str = Body(...),
+    member_pattern: str = Body(...),
+    _: object = Depends(require_api_key),
+):
+    """Recursively search archives in the configured base directory.
+
+    Walks ``downloader.archive_base_dir`` (from ``config/ui.yml``) recursively,
+    finds archives whose filename matches *archive_pattern*, and returns
+    members whose basename matches *member_pattern*. No extraction is
+    performed.
+
+    Args:
+        request: Current FastAPI request.
+        archive_pattern: Wildcard for archive filenames
+            (e.g. ``"archive_*.zip"``).
+        member_pattern: Wildcard for member basenames
+            (e.g. ``"TRANS_*.txt"``).
+        _: Unused auth context (validates API key).
+
+    Returns:
+        Dict with ``results`` (list of ``{archive_path, member_path}``) and
+        ``count`` (int).
+
+    Raises:
+        HTTPException: 400 if ``archive_base_dir`` is not configured in
+            ``config/ui.yml``.
+    """
+    cfg = _dl_cfg(request)
+    archive_base_dir = cfg.get("archive_base_dir")
+    if not archive_base_dir:
+        raise HTTPException(
+            status_code=400,
+            detail="archive_base_dir is not configured in config/ui.yml downloader section",
+        )
+    results = svc.search_archives(archive_base_dir, archive_pattern, member_pattern)
+    return {"results": results, "count": len(results)}

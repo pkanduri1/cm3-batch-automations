@@ -385,6 +385,74 @@ def _grep_search_archive_file(
     return hits, total
 
 
+def search_archives(
+    base_dir: str,
+    archive_pattern: str,
+    member_pattern: str,
+) -> list:
+    """Recursively search for files inside archives matching wildcard patterns.
+
+    Walks *base_dir* recursively to find archive files (``.zip``, ``.tar.gz``,
+    ``.tar``) whose filename matches *archive_pattern* (fnmatch). Then searches
+    inside each matched archive for members whose basename matches
+    *member_pattern*. No full extraction is performed.
+
+    Args:
+        base_dir: Root directory to walk recursively.
+        archive_pattern: Wildcard pattern for archive filenames
+            (e.g. ``"archive_*.zip"``).
+        member_pattern: Wildcard pattern for member basenames
+            (e.g. ``"TRANS_*.txt"``).
+
+    Returns:
+        List of dicts with keys:
+
+        * ``archive_path``: Absolute path to the archive file on disk.
+        * ``member_path``: Full internal path of the matching member.
+    """
+    results = []
+    base = Path(base_dir)
+
+    for archive_file in sorted(base.rglob("*")):
+        if not archive_file.is_file():
+            continue
+        # Filter by supported archive extensions
+        name = archive_file.name
+        is_zip = name.endswith(".zip")
+        is_tar_gz = name.endswith(".tar.gz") or name.endswith(".tgz")
+        is_tar = name.endswith(".tar") and not is_tar_gz
+        if not (is_zip or is_tar_gz or is_tar):
+            continue
+        # Filter archive filename by pattern
+        if not fnmatch.fnmatch(name, archive_pattern):
+            continue
+
+        try:
+            if is_zip:
+                with zipfile.ZipFile(archive_file, "r") as zf:
+                    for member in zf.namelist():
+                        if fnmatch.fnmatch(Path(member).name, member_pattern):
+                            results.append({
+                                "archive_path": str(archive_file),
+                                "member_path": member,
+                            })
+            else:
+                # .tar.gz, .tgz, or plain .tar
+                mode = "r:gz" if is_tar_gz else "r:"
+                with tarfile.open(archive_file, mode) as tf:
+                    for m in tf.getmembers():
+                        if fnmatch.fnmatch(Path(m.name).name, member_pattern):
+                            results.append({
+                                "archive_path": str(archive_file),
+                                "member_path": m.name,
+                            })
+        except Exception as exc:
+            _log.warning("Skipping unreadable archive %s: %s", archive_file, exc)
+            continue
+
+    return results
+
+
 def search_in_archives(
     path: Path,
     archive_pattern: str,

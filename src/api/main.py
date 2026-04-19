@@ -29,7 +29,13 @@ logger = logging.getLogger(__name__)
 FILE_RETENTION_HOURS = float(os.getenv("FILE_RETENTION_HOURS", "24"))
 _UPLOADS_DIR = Path(__file__).parent.parent.parent / "uploads"
 _UI_CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "ui.yml"
-_FD_CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "file-downloader.yml"
+
+# Read ui.yml early (before app creation) so the downloader router can be
+# conditionally registered based on downloader.enabled in config/ui.yml.
+_ui_cfg_early: dict = {}
+if _UI_CONFIG_PATH.exists():
+    import yaml as _yaml_early
+    _ui_cfg_early = _yaml_early.safe_load(_UI_CONFIG_PATH.read_text()) or {}
 
 
 @asynccontextmanager
@@ -44,24 +50,17 @@ async def lifespan(app: FastAPI):
             result["deleted_bytes"],
         )
 
-    # Load tab visibility config
+    # Load tab visibility + downloader config from ui.yml
     if _UI_CONFIG_PATH.exists():
         with open(_UI_CONFIG_PATH) as _f:
             app.state.ui_config = yaml.safe_load(_f) or {}
     else:
         app.state.ui_config = {}
 
-    # Load file-downloader path config
-    if _FD_CONFIG_PATH.exists():
-        with open(_FD_CONFIG_PATH) as _f:
-            app.state.fd_config = yaml.safe_load(_f) or {}
-    else:
-        app.state.fd_config = {}
-
     logger.info(
-        "Loaded ui_config with %d tab entries; fd_config with %d path entries",
+        "Loaded ui_config with %d tab entries; downloader.enabled=%s",
         len((app.state.ui_config or {}).get("tabs", {})),
-        len((app.state.fd_config or {}).get("paths", {})),
+        (app.state.ui_config or {}).get("downloader", {}).get("enabled", False),
     )
 
     yield
@@ -151,8 +150,8 @@ app.include_router(
     dependencies=[Depends(require_api_key)],
 )
 
-# File Downloader — only registered when ENABLE_FILE_DOWNLOADER=true
-if os.getenv("ENABLE_FILE_DOWNLOADER", "").lower() == "true":
+# File Downloader — registered when downloader.enabled is true in config/ui.yml
+if _ui_cfg_early.get("downloader", {}).get("enabled", False):
     from src.api.routers import downloader as _dl_mod
     app.include_router(_dl_mod.router, prefix="/api/v1/downloader", tags=["downloader"])
 

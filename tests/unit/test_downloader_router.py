@@ -17,7 +17,7 @@ def _reset_app_module():
     """Reload src.api.main after each test to prevent auth state leaking.
 
     Captures the environment BEFORE the test runs so the restore snapshot
-    never contains test-injected API_KEYS or ENABLE_FILE_DOWNLOADER values.
+    never contains test-injected API_KEYS values.
     """
     saved = os.environ.copy()
     yield
@@ -28,30 +28,41 @@ def _reset_app_module():
 
 
 def _make_client(tmp_path: Path, env: dict, allowed_path: str = None):
-    """Reload the FastAPI app and return (client, patch_ctx) tuple.
+    """Reload the FastAPI app and return a TestClient with ui_config set.
 
-    The caller must use the patch context as a context manager to ensure
-    environment variables are active when requests are made.
+    Patches ``yaml.safe_load`` during the reload so the downloader router is
+    conditionally registered (``enabled: True``), then injects ``ui_config``
+    into ``app.state`` with the allowed paths for path-validation tests.
 
     Args:
-        tmp_path: Temporary directory to use as the fd_config allowed path.
+        tmp_path: Temporary directory to use as the ui_config allowed path.
         env: Environment variables to apply via ``patch.dict``.
         allowed_path: Override for the single allowed path label entry.
             Defaults to ``str(tmp_path)``.
 
     Returns:
-        Tuple of ``(TestClient, app_module)`` with env already patched in.
+        Configured ``TestClient`` with downloader ui_config injected.
     """
+    import yaml
     import src.api.main as m
-    reload(m)
     path_str = allowed_path if allowed_path is not None else str(tmp_path)
-    m.app.state.fd_config = {"paths": [{"label": "T", "path": path_str}]}
+    dl_cfg = {
+        "enabled": True,
+        "log_path": "logs/file-downloads.log",
+        "paths": [{"label": "T", "path": path_str}],
+    }
+    ui_cfg = {"downloader": dl_cfg}
+    # Patch yaml.safe_load so _ui_cfg_early picks up enabled=True at module
+    # reload time, which causes the router to be registered.
+    with patch.object(yaml, "safe_load", return_value=ui_cfg):
+        reload(m)
+    m.app.state.ui_config = ui_cfg
     return TestClient(m.app)
 
 
 def test_get_paths(tmp_path):
     """GET /paths returns configured paths from app state."""
-    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    env = {"API_KEYS": "k"}
     with patch.dict(os.environ, env):
         client = _make_client(tmp_path, env)
         r = client.get("/api/v1/downloader/paths", headers={"X-API-Key": "k"})
@@ -62,7 +73,7 @@ def test_get_paths(tmp_path):
 def test_browse_lists_files(tmp_path):
     """GET /browse returns file entries in the specified directory."""
     (tmp_path / "report.csv").write_text("a,b")
-    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    env = {"API_KEYS": "k"}
     with patch.dict(os.environ, env):
         client = _make_client(tmp_path, env)
         r = client.get(
@@ -77,7 +88,7 @@ def test_browse_rejects_unlisted_path(tmp_path):
     """GET /browse returns 403 for a path not in allowed_paths."""
     other = tmp_path / "other"
     other.mkdir()
-    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    env = {"API_KEYS": "k"}
     with patch.dict(os.environ, env):
         client = _make_client(tmp_path, env, allowed_path=str(tmp_path / "safe"))
         r = client.get(
@@ -90,7 +101,7 @@ def test_browse_rejects_unlisted_path(tmp_path):
 def test_download_plain_file(tmp_path):
     """POST /download streams a plain file from disk."""
     (tmp_path / "r.csv").write_text("col1,col2\n")
-    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    env = {"API_KEYS": "k"}
     with patch.dict(os.environ, env):
         client = _make_client(tmp_path, env)
         r = client.post(
@@ -104,7 +115,7 @@ def test_download_plain_file(tmp_path):
 
 def test_download_rejects_absolute_filename(tmp_path):
     """POST /download returns 400 when filename is an absolute path."""
-    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    env = {"API_KEYS": "k"}
     with patch.dict(os.environ, env):
         client = _make_client(tmp_path, env)
         r = client.post(
@@ -117,7 +128,7 @@ def test_download_rejects_absolute_filename(tmp_path):
 
 def test_download_rejects_path_traversal_filename(tmp_path):
     """POST /download returns 400 when filename contains path traversal."""
-    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    env = {"API_KEYS": "k"}
     with patch.dict(os.environ, env):
         client = _make_client(tmp_path, env)
         r = client.post(
@@ -129,7 +140,7 @@ def test_download_rejects_path_traversal_filename(tmp_path):
 
 
 def _setup_app(tmp_path: Path, env: dict) -> TestClient:
-    """Create a TestClient with env patched in and fd_config set.
+    """Create a TestClient with env patched in and ui_config set.
 
     Unlike ``_make_client``, this helper patches the environment permanently
     for the lifetime of the returned client (uses ``patch.dict`` without a
@@ -137,22 +148,19 @@ def _setup_app(tmp_path: Path, env: dict) -> TestClient:
     outside of a ``with`` block.
 
     Args:
-        tmp_path: Directory used as the single allowed path in fd_config.
+        tmp_path: Directory used as the single allowed path in ui_config.
         env: Environment variables to inject via ``os.environ``.
 
     Returns:
         Configured ``TestClient`` with the patched app state.
     """
     patch.dict(os.environ, env).__enter__()
-    import src.api.main as m
-    reload(m)
-    m.app.state.fd_config = {"paths": [{"label": "T", "path": str(tmp_path)}]}
-    return TestClient(m.app)
+    return _make_client(tmp_path, env)
 
 
 def test_search_files_returns_results(tmp_path):
     (tmp_path / "errors.log").write_text("line1\nERROR found\nline3\n")
-    client = _setup_app(tmp_path, {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"})
+    client = _setup_app(tmp_path, {"API_KEYS": "k"})
     r = client.post("/api/v1/downloader/search-files",
                     json={"path": str(tmp_path), "filename_pattern": "*.log", "search_string": "ERROR"},
                     headers={"X-API-Key": "k"})
@@ -170,7 +178,7 @@ def test_search_archive_returns_results(tmp_path):
         info.size = len(data)
         tf.addfile(info, io.BytesIO(data))
     (tmp_path / "batch.tar.gz").write_bytes(buf.getvalue())
-    client = _setup_app(tmp_path, {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"})
+    client = _setup_app(tmp_path, {"API_KEYS": "k"})
     r = client.post("/api/v1/downloader/search-archive",
                     json={"path": str(tmp_path), "archive_pattern": "*.tar.gz",
                           "file_pattern": "*.log", "search_string": "ERROR"},
@@ -182,13 +190,9 @@ def test_search_archive_returns_results(tmp_path):
 def test_browse_returns_404_for_missing_directory(tmp_path):
     """GET /browse returns 404 when the directory does not exist."""
     missing = str(tmp_path / "nonexistent")
-    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    env = {"API_KEYS": "k"}
     # Allow the parent so the path validation passes, but the subdir is missing
     with patch.dict(os.environ, env):
-        import src.api.main as m
-        from importlib import reload
-        reload(m)
-        m.app.state.fd_config = {"paths": [{"label": "T", "path": str(tmp_path)}]}
         client = _make_client(tmp_path, env)
         r = client.get(
             f"/api/v1/downloader/browse?path={missing}",
@@ -199,7 +203,7 @@ def test_browse_returns_404_for_missing_directory(tmp_path):
 
 def test_archive_contents_returns_404_when_archive_missing(tmp_path):
     """GET /archive-contents returns 404 when archive file does not exist."""
-    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    env = {"API_KEYS": "k"}
     with patch.dict(os.environ, env):
         client = _make_client(tmp_path, env)
         r = client.get(
@@ -213,7 +217,7 @@ def test_archive_contents_returns_400_for_unsupported_format(tmp_path):
     """GET /archive-contents returns 400 for an unsupported archive format."""
     bad_archive = tmp_path / "data.rar"
     bad_archive.write_bytes(b"not a real rar")
-    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    env = {"API_KEYS": "k"}
     with patch.dict(os.environ, env):
         client = _make_client(tmp_path, env)
         r = client.get(
@@ -225,7 +229,7 @@ def test_archive_contents_returns_400_for_unsupported_format(tmp_path):
 
 def test_download_archive_not_found_returns_404(tmp_path):
     """POST /download returns 404 when the named archive does not exist."""
-    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    env = {"API_KEYS": "k"}
     with patch.dict(os.environ, env):
         client = _make_client(tmp_path, env)
         r = client.post(
@@ -251,7 +255,7 @@ def test_download_inner_file_not_found_raises(tmp_path):
         info.size = len(data)
         tf.addfile(info, io.BytesIO(data))
     (tmp_path / "batch.tar.gz").write_bytes(buf.getvalue())
-    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    env = {"API_KEYS": "k"}
     with patch.dict(os.environ, env):
         client = _make_client(tmp_path, env)
         with pytest.raises(FileNotFoundError, match="missing.csv"):
@@ -264,7 +268,7 @@ def test_download_inner_file_not_found_raises(tmp_path):
 
 def test_download_plain_file_not_found_returns_404(tmp_path):
     """POST /download returns 404 when plain file does not exist."""
-    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    env = {"API_KEYS": "k"}
     with patch.dict(os.environ, env):
         client = _make_client(tmp_path, env)
         r = client.post(
@@ -277,7 +281,7 @@ def test_download_plain_file_not_found_returns_404(tmp_path):
 
 def test_download_rejects_path_traversal_archive_name(tmp_path):
     """POST /download returns 400 when archive name contains path traversal."""
-    env = {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"}
+    env = {"API_KEYS": "k"}
     with patch.dict(os.environ, env):
         client = _make_client(tmp_path, env)
         r = client.post(
@@ -297,7 +301,7 @@ def test_download_nested_archive_inner_file(tmp_path):
         info.size = len(data)
         tf.addfile(info, io.BytesIO(data))
     (tmp_path / "a.tar.gz").write_bytes(buf.getvalue())
-    client = _setup_app(tmp_path, {"ENABLE_FILE_DOWNLOADER": "true", "API_KEYS": "k"})
+    client = _setup_app(tmp_path, {"API_KEYS": "k"})
     r = client.post(
         "/api/v1/downloader/download",
         json={"path": str(tmp_path), "filename": "subdir/nested.log", "archive": "a.tar.gz"},

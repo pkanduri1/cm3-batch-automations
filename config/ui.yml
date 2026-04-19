@@ -7,3 +7,17 @@ tabs:
   tester: true
   dbcompare: true
   downloader: false
+
+# File Downloader configuration — replaces the env var ENABLE_FILE_DOWNLOADER
+# and the separate config/file-downloader.yml (now deprecated).
+downloader:
+  enabled: false
+  log_path: "logs/file-downloads.log"
+  archive_base_dir: "/data/archives"
+  paths:
+    - label: "Batch Output"
+      path: /data/batch/output
+    - label: "ETL Logs"
+      path: /opt/etl/logs
+    - label: "Report Archive"
+      path: /data/reports

@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from src.api.models.response import HealthResponse, SystemInfoResponse
 from datetime import datetime
 from typing import List
-import os
 import sys
 
 from src.api.auth import require_api_key, require_role
@@ -202,8 +201,8 @@ _ALL_TABS = ["quick", "runs", "mapping", "tester", "dbcompare", "downloader"]
 async def get_ui_config(request: Request):
     """Return effective tab visibility from config/ui.yml.
 
-    The ``downloader`` tab is additionally gated by the
-    ``ENABLE_FILE_DOWNLOADER`` environment variable.
+    The ``downloader`` tab is gated by ``downloader.enabled`` in
+    ``config/ui.yml``.
     No auth required — tab visibility is not sensitive.
 
     Args:
@@ -214,13 +213,13 @@ async def get_ui_config(request: Request):
     """
     ui_cfg = getattr(request.app.state, "ui_config", {})
     tabs_cfg = ui_cfg.get("tabs", {})
-    fd_enabled = os.getenv("ENABLE_FILE_DOWNLOADER", "").lower() == "true"
+    dl_enabled = bool(ui_cfg.get("downloader", {}).get("enabled", False))
 
     tabs = {}
     for tab in _ALL_TABS:
         enabled = bool(tabs_cfg.get(tab, False))
         if tab == "downloader":
-            enabled = enabled and fd_enabled
+            enabled = enabled and dl_enabled
         tabs[tab] = enabled
 
     return {"tabs": tabs}
