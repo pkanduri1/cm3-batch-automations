@@ -25,3 +25,48 @@ downloader:
 security:
   ip_whitelist: []        # Add IPs/CIDR ranges to restrict access, e.g. ["10.0.0.0/8"]
   trust_proxy: false      # Set true if behind a reverse proxy (uses X-Forwarded-For)
+
+# TLS configuration — switch strategy by changing 'strategy' value only, no code changes needed.
+# Strategies: manual (default), self_signed, enterprise_ca
+#
+# Example — manual (pre-existing cert files):
+#   tls:
+#     enabled: true
+#     strategy: "manual"
+#     cert_path: "/etc/valdo/tls/cert.pem"
+#     key_path: "/etc/valdo/tls/key.pem"
+#
+# Example — self_signed (generated at startup, useful for dev/internal):
+#   tls:
+#     enabled: true
+#     strategy: "self_signed"
+#     cert_path: "/tmp/valdo-tls/cert.pem"
+#     key_path: "/tmp/valdo-tls/key.pem"
+#     cn: "valdo.internal"
+#     san:
+#       - "valdo.internal"
+#       - "localhost"
+#
+# Example — enterprise_ca (fetch from internal CA API):
+#   tls:
+#     enabled: true
+#     strategy: "enterprise_ca"
+#     ca_api_url: "https://ca.corp.example.com/issue"
+#     ca_api_token_env: "CA_API_TOKEN"   # env var holding the bearer token
+#     cert_path: "/etc/valdo/tls/cert.pem"
+#     key_path: "/etc/valdo/tls/key.pem"
+#     cn: "valdo.internal"
+#     san:
+#       - "valdo.internal"
+#     expiry_warn_days: 30
+tls:
+  enabled: false
+  strategy: "manual"            # "manual" | "self_signed" | "enterprise_ca"
+  cert_path: "/etc/valdo/tls/cert.pem"
+  key_path: "/etc/valdo/tls/key.pem"
+  cn: "valdo.internal"
+  san:
+    - "valdo.internal"
+  ca_api_url: ""               # enterprise_ca only: URL to CA API
+  ca_api_token_env: "CA_API_TOKEN"  # enterprise_ca only: env var holding the bearer token
+  expiry_warn_days: 30

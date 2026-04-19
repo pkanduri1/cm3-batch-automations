@@ -1129,14 +1129,27 @@ def generate_test_data(mapping, rows, output, seed, inject_errors_json, multi_re
 
 
 @cli.command()
-@click.option('--host', default='0.0.0.0', show_default=True,
-              help='Bind address for the server')
-@click.option('--port', default=8000, type=int, show_default=True,
-              help='Port to listen on')
+@click.option('--host', default='0.0.0.0', show_default=True, help='Bind address for the server')
+@click.option('--port', default=8000, type=int, show_default=True, help='Port to listen on')
 def serve(host, port):
     """Start the FastAPI validation server."""
     import uvicorn
-    uvicorn.run("src.api.main:app", host=host, port=port)
+    import yaml
+    from pathlib import Path as _Path
+    from src.services.tls_service import resolve_tls
+
+    _ui_yml = _Path(__file__).parent.parent / "config" / "ui.yml"
+    _tls_config = {}
+    if _ui_yml.exists():
+        _tls_config = (yaml.safe_load(_ui_yml.read_text()) or {}).get("tls", {})
+
+    tls_result = resolve_tls(_tls_config)
+    ssl_kwargs = {}
+    if tls_result:
+        cert_path, key_path = tls_result
+        ssl_kwargs = {"ssl_certfile": str(cert_path), "ssl_keyfile": str(key_path)}
+
+    uvicorn.run("src.api.main:app", host=host, port=port, **ssl_kwargs)
 
 
 def main():

@@ -309,6 +309,10 @@ Services
    :members:
    :undoc-members:
 
+.. automodule:: src.services.tls_service
+   :members:
+   :undoc-members:
+
 Contracts & Adapters
 --------------------
 
