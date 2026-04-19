@@ -21,3 +21,7 @@ downloader:
       path: /opt/etl/logs
     - label: "Report Archive"
       path: /data/reports
+
+security:
+  ip_whitelist: []        # Add IPs/CIDR ranges to restrict access, e.g. ["10.0.0.0/8"]
+  trust_proxy: false      # Set true if behind a reverse proxy (uses X-Forwarded-For)

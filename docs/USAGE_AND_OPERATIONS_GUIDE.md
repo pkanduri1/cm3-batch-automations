@@ -3479,6 +3479,56 @@ steps including:
 
 ---
 
+### IP Whitelisting
+
+Valdo supports a configurable IP whitelist so that access to the API server can
+be restricted to known enterprise VDI or office network ranges.  The feature is
+disabled by default (all IPs permitted) for backwards compatibility.
+
+#### Configuration
+
+Add a `security` block to `config/ui.yml`:
+
+```yaml
+security:
+  ip_whitelist: []        # Add IPs/CIDR ranges to restrict access, e.g. ["10.0.0.0/8"]
+  trust_proxy: false      # Set true if behind a reverse proxy (uses X-Forwarded-For)
+```
+
+**Examples:**
+
+```yaml
+# Allow a specific VDI subnet and an individual machine
+security:
+  ip_whitelist:
+    - "10.100.0.0/16"
+    - "192.168.5.42"
+  trust_proxy: false
+
+# Behind an Nginx / HAProxy reverse proxy — trust the forwarded header
+security:
+  ip_whitelist:
+    - "10.0.0.0/8"
+  trust_proxy: true
+```
+
+When `ip_whitelist` is an empty list (the default), the middleware is not added
+and all requests pass through unchanged.
+
+#### Behaviour
+
+- Requests from IPs that are **not** in any configured range receive a
+  `403 Forbidden` response with JSON body `{"error": "Forbidden", "detail": "..."}`.
+- When `trust_proxy: true`, the first IP in the `X-Forwarded-For` header is used
+  as the client address.  Enable this only when a trusted reverse proxy is in
+  front of Valdo.
+- Invalid entries in `ip_whitelist` (e.g. hostnames) are logged as warnings at
+  startup and silently skipped; all valid entries still apply.
+- The middleware uses Python's built-in `ipaddress` module — no additional
+  dependencies are required.
+
+---
+
 ### Performance Tuning
 
 #### Chunked Processing

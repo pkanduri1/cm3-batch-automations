@@ -203,6 +203,14 @@ Configuration & Validators
    :members:
    :undoc-members:
 
+API Middleware
+-------------
+
+.. automodule:: src.api.middleware.ip_whitelist
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 API Routers
 -----------
 

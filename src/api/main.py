@@ -105,6 +105,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# IP Whitelist middleware — loaded from ui.yml security section at module load time.
+# add_middleware must be called before the app starts serving, so we read the config
+# here rather than in the lifespan handler.
+_ui_cfg_for_security: dict = {}
+if _UI_CONFIG_PATH.exists():
+    import yaml as _yaml_sec
+    _ui_cfg_for_security = _yaml_sec.safe_load(_UI_CONFIG_PATH.read_text()) or {}
+
+_security_cfg = _ui_cfg_for_security.get("security", {})
+_ip_whitelist = _security_cfg.get("ip_whitelist", [])
+_trust_proxy = _security_cfg.get("trust_proxy", False)
+
+if _ip_whitelist:  # only add middleware if whitelist is configured
+    from src.api.middleware.ip_whitelist import IPWhitelistMiddleware
+    app.add_middleware(IPWhitelistMiddleware, whitelist=_ip_whitelist, trust_proxy=_trust_proxy)
+
 # Include routers
 app.include_router(
     mappings.router,
