@@ -3634,6 +3634,18 @@ valdo validate --file large_file.txt --mapping mapping.json \
   --use-chunked --chunk-size 200000
 ```
 
+#### Cross-Row Rules in Chunked Mode
+
+Cross-row business rules (`unique`, `consistent`, `sequential`, `group_sum`,
+`group_count`) are evaluated using a map-reduce approach across all chunks.
+For each chunk, partial state (e.g. seen values, running sums, group counts) is
+collected. After all chunks are processed the partial states are merged and
+evaluated globally, ensuring violations are detected even when the evidence
+spans two or more chunks — for example, duplicate key values where one
+occurrence falls in chunk 1 and the other in chunk 2.
+
+Field-level and cross-field rules continue to be evaluated per chunk as before.
+
 #### Parallel Workers
 
 Chunked validation supports parallel worker processes:
@@ -3645,6 +3657,9 @@ valdo validate --file large_file.txt --mapping mapping.json \
 
 Set `--workers` to the number of available CPU cores. Using more workers than
 cores provides no benefit.
+
+> **Note:** Parallel mode is disabled when business rules are enabled (a warning
+> is emitted). Cross-row map-reduce only runs in sequential mode.
 
 #### File Retention
 
