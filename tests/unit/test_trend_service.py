@@ -7,7 +7,7 @@ Tests cover:
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -21,11 +21,8 @@ from src.services.trend_service import VALID_DAYS, get_trend
 # ---------------------------------------------------------------------------
 
 _CUTOFF_DAYS = 30
-# Use a fixed reference date well within any 30-day window so tests are
-# deterministic regardless of when they run (2026-03-31 is "today" in the
-# project, so 2026-03-15 is comfortably inside a 30-day window).
-_RECENT_DATE = "2026-03-30"
-_OLD_DATE = "2026-01-01"   # always outside any supported window
+_RECENT_DATE = (datetime.utcnow() - timedelta(days=5)).strftime("%Y-%m-%d")
+_OLD_DATE = (datetime.utcnow() - timedelta(days=120)).strftime("%Y-%m-%d")
 
 
 def _make_entry(
@@ -109,7 +106,7 @@ class TestGetTrendFromJson:
         """Entries older than the requested window are excluded."""
         monkeypatch.delenv("DB_ADAPTER", raising=False)
         history = [
-            _make_entry(date_str="2026-03-15", status="PASS"),   # inside 30-day window
+            _make_entry(date_str=_RECENT_DATE, status="PASS"),   # inside 30-day window
             _make_entry(date_str=_OLD_DATE,    status="PASS"),   # outside
             _make_entry(date_str="2026-01-15", status="FAIL"),   # outside
         ]
