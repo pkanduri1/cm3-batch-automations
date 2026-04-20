@@ -939,6 +939,14 @@
     </div>
 
     <div id="fdpanel-search" class="fd-subpanel fd-subpanel--hidden" role="tabpanel" aria-labelledby="fdtab-search">
+      <div class="fd-field" id="fdSearchInGroup" style="display:none">
+        <label class="fd-label" for="fdSearchInPath">Search in</label>
+        <input id="fdSearchInPath" class="fd-input fd-input--linked" type="text" readonly
+               placeholder="(using root path from selector above)">
+        <button class="btn btn-link fd-clear-link" onclick="_fdLinkedPath=null;
+          document.getElementById('fdSearchInPath').value='';
+          document.getElementById('fdSearchInGroup').style.display='none'">&#x2715; clear</button>
+      </div>
       <div class="fd-row">
         <label class="fd-label" for="fdSearchFilename">Filename pattern</label>
         <input id="fdSearchFilename" class="fd-input" type="text" placeholder="e.g. *.log">
@@ -952,6 +960,14 @@
     </div>
 
     <div id="fdpanel-searcharch" class="fd-subpanel fd-subpanel--hidden" role="tabpanel" aria-labelledby="fdtab-searcharch">
+      <div class="fd-field" id="fdArchSearchInGroup" style="display:none">
+        <label class="fd-label" for="fdArchSearchInPath">Search in</label>
+        <input id="fdArchSearchInPath" class="fd-input fd-input--linked" type="text" readonly
+               placeholder="(using root path from selector above)">
+        <button class="btn btn-link fd-clear-link" onclick="_fdLinkedPath=null;
+          document.getElementById('fdArchSearchInPath').value='';
+          document.getElementById('fdArchSearchInGroup').style.display='none'">&#x2715; clear</button>
+      </div>
       <div class="fd-row">
         <label class="fd-label" for="fdArchSearchPattern">Archive pattern</label>
         <input id="fdArchSearchPattern" class="fd-input" type="text"
