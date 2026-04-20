@@ -1,3 +1,6 @@
+# DEPRECATED: configuration has moved to config/ui.yml downloader section.
+# This file is no longer read.
+#
 # Configured server paths exposed in the File Downloader tab.
 # Only paths listed here are accessible — no arbitrary filesystem access.
 paths:

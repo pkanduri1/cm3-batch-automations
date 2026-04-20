@@ -3324,6 +3324,92 @@ For full details, see `prompts/README.md`.
 
 ---
 
+## 12.5 TLS / HTTPS Configuration
+
+By default `valdo serve` starts in plain HTTP mode.  To enable HTTPS, add a
+`tls` section to `config/ui.yml`.  **No code changes are needed** — switching
+strategy is a config-only operation.
+
+### Strategies
+
+| Strategy | Description | Required config keys |
+|---|---|---|
+| `manual` | Use pre-existing cert/key files on disk | `cert_path`, `key_path` |
+| `self_signed` | Generate a self-signed cert at startup (dev/internal) | *(optional)* `cert_path`, `key_path`, `cn`, `san` |
+| `enterprise_ca` | Fetch cert/key from a corporate CA REST API | `ca_api_url`, optionally `ca_api_token_env`, `cert_path`, `key_path` |
+
+### Common config keys
+
+| Key | Default | Description |
+|---|---|---|
+| `enabled` | `false` | Set to `true` to enable TLS |
+| `strategy` | `"manual"` | One of `manual`, `self_signed`, `enterprise_ca` |
+| `cert_path` | — | Path where the PEM cert is stored / will be written |
+| `key_path` | — | Path where the PEM private key is stored / will be written |
+| `cn` | `"localhost"` | Certificate common name |
+| `san` | `[cn]` | Subject Alternative Name list (DNS or IP) |
+| `ca_api_url` | — | (`enterprise_ca`) URL to POST the cert request to |
+| `ca_api_token_env` | `"CA_API_TOKEN"` | (`enterprise_ca`) Env var with bearer token |
+| `expiry_warn_days` | `30` | Warn in logs when cert has fewer than this many days left |
+
+### Example — manual (production)
+
+```yaml
+tls:
+  enabled: true
+  strategy: "manual"
+  cert_path: "/etc/valdo/tls/cert.pem"
+  key_path: "/etc/valdo/tls/key.pem"
+  expiry_warn_days: 30
+```
+
+### Example — self-signed (development / internal)
+
+```yaml
+tls:
+  enabled: true
+  strategy: "self_signed"
+  cert_path: "/tmp/valdo-tls/cert.pem"
+  key_path: "/tmp/valdo-tls/key.pem"
+  cn: "valdo.internal"
+  san:
+    - "valdo.internal"
+    - "localhost"
+```
+
+The `cryptography` package must be installed: `pip install cryptography`.
+
+### Example — enterprise CA
+
+```yaml
+tls:
+  enabled: true
+  strategy: "enterprise_ca"
+  ca_api_url: "https://ca.corp.example.com/issue"
+  ca_api_token_env: "CA_API_TOKEN"
+  cert_path: "/etc/valdo/tls/cert.pem"
+  key_path: "/etc/valdo/tls/key.pem"
+  cn: "valdo.internal"
+  san:
+    - "valdo.internal"
+  expiry_warn_days: 30
+```
+
+Set the bearer token in the environment: `export CA_API_TOKEN=<token>`.
+
+The strategy caches the fetched cert to `cert_path`.  On subsequent startups
+it reuses the cached cert as long as it has at least `expiry_warn_days` of
+validity remaining.
+
+### Cert expiry warnings
+
+`valdo serve` logs a `WARNING` message when the resolved cert has fewer days
+of validity remaining than `expiry_warn_days` (default 30).  Monitor these
+warnings in Splunk / your log aggregator to trigger renewal workflows before
+the cert expires.
+
+---
+
 ## 13. Operations Guide
 
 ### Docker Deployment
@@ -3476,6 +3562,56 @@ steps including:
 - Universal Forwarder `inputs.conf` configuration
 - Index and sourcetype setup
 - Example SPL queries for dashboards
+
+---
+
+### IP Whitelisting
+
+Valdo supports a configurable IP whitelist so that access to the API server can
+be restricted to known enterprise VDI or office network ranges.  The feature is
+disabled by default (all IPs permitted) for backwards compatibility.
+
+#### Configuration
+
+Add a `security` block to `config/ui.yml`:
+
+```yaml
+security:
+  ip_whitelist: []        # Add IPs/CIDR ranges to restrict access, e.g. ["10.0.0.0/8"]
+  trust_proxy: false      # Set true if behind a reverse proxy (uses X-Forwarded-For)
+```
+
+**Examples:**
+
+```yaml
+# Allow a specific VDI subnet and an individual machine
+security:
+  ip_whitelist:
+    - "10.100.0.0/16"
+    - "192.168.5.42"
+  trust_proxy: false
+
+# Behind an Nginx / HAProxy reverse proxy — trust the forwarded header
+security:
+  ip_whitelist:
+    - "10.0.0.0/8"
+  trust_proxy: true
+```
+
+When `ip_whitelist` is an empty list (the default), the middleware is not added
+and all requests pass through unchanged.
+
+#### Behaviour
+
+- Requests from IPs that are **not** in any configured range receive a
+  `403 Forbidden` response with JSON body `{"error": "Forbidden", "detail": "..."}`.
+- When `trust_proxy: true`, the first IP in the `X-Forwarded-For` header is used
+  as the client address.  Enable this only when a trusted reverse proxy is in
+  front of Valdo.
+- Invalid entries in `ip_whitelist` (e.g. hostnames) are logged as warnings at
+  startup and silently skipped; all valid entries still apply.
+- The middleware uses Python's built-in `ipaddress` module — no additional
+  dependencies are required.
 
 ---
 
