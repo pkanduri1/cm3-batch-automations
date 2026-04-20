@@ -92,6 +92,7 @@ function initTabVisibility() {
 // ===========================================================================
 var _fdPaths = [];
 var _fdCurrentPath = null;
+var _fdLinkedPath = null;  // path set by Browse→Search linking buttons
 
 /**
  * Return authentication headers for API requests.
@@ -149,15 +150,27 @@ function loadDownloaderPaths() {
 
 /**
  * Clear browse/search result panels when the selected path changes.
+ *
+ * Also resets the linked-path state so that any prior Browse→Search link is
+ * discarded when the user picks a different root from the selector.
  */
 function onFdPathChange() {
   _fdCurrentPath = null;
+  _fdLinkedPath = null;
   ['fdBrowseResults', 'fdSearchResults', 'fdArchSearchResults'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.textContent = '';
   });
   var bc = document.getElementById('fdBreadcrumb');
   if (bc) bc.textContent = '';
+  var si = document.getElementById('fdSearchInPath');
+  var ai = document.getElementById('fdArchSearchInPath');
+  if (si) si.value = '';
+  if (ai) ai.value = '';
+  var sig = document.getElementById('fdSearchInGroup');
+  var aig = document.getElementById('fdArchSearchInGroup');
+  if (sig) sig.style.display = 'none';
+  if (aig) aig.style.display = 'none';
 }
 
 /**
@@ -175,6 +188,60 @@ function switchFdSubTab(name) {
       btn.setAttribute('aria-selected', String(t === name));
     }
   });
+}
+
+/**
+ * Pre-fill a search sub-tab from a Browse row action button.
+ *
+ * Sets _fdLinkedPath so that the next search call uses the chosen directory
+ * instead of the root path selector value. Optionally pre-fills filename and
+ * archive pattern inputs then switches the active sub-tab and focuses the
+ * search string input.
+ *
+ * @param {string} path   - Filesystem path to search in (sets _fdLinkedPath).
+ * @param {string} subTab - Sub-tab to activate: 'search' or 'searcharch'.
+ * @param {Object} opts   - Optional pre-fill values:
+ *   filename {string}        - Pre-fills #fdSearchFilename (search sub-tab).
+ *   archivePattern {string}  - Pre-fills #fdArchSearchPattern (searcharch sub-tab).
+ *   filePattern {string}     - Pre-fills #fdArchFilePattern (searcharch sub-tab).
+ *   focusId {string}         - Element ID to focus after switching tab.
+ */
+function _fdLinkToSearch(path, subTab, opts) {
+  _fdLinkedPath = path;
+  opts = opts || {};
+
+  var searchInEl = document.getElementById('fdSearchInPath');
+  var archInEl   = document.getElementById('fdArchSearchInPath');
+  if (searchInEl) searchInEl.value = path;
+  if (archInEl)   archInEl.value   = path;
+
+  if (opts.filename) {
+    var fn = document.getElementById('fdSearchFilename');
+    if (fn) fn.value = opts.filename;
+  }
+  if (opts.archivePattern) {
+    var ap = document.getElementById('fdArchSearchPattern');
+    if (ap) ap.value = opts.archivePattern;
+  }
+  if (opts.filePattern) {
+    var fp = document.getElementById('fdArchFilePattern');
+    if (fp) fp.value = opts.filePattern;
+  }
+
+  // Show the appropriate "Search in" group
+  var searchInGroup = document.getElementById('fdSearchInGroup');
+  var archInGroup   = document.getElementById('fdArchSearchInGroup');
+  if (subTab === 'search') {
+    if (searchInGroup) searchInGroup.style.display = 'block';
+  } else {
+    if (archInGroup) archInGroup.style.display = 'block';
+  }
+
+  switchFdSubTab(subTab);
+
+  var focusId = opts.focusId || (subTab === 'search' ? 'fdSearchString' : 'fdArchSearchString');
+  var focusEl = document.getElementById(focusId);
+  if (focusEl) setTimeout(function() { focusEl.focus(); }, 50);
 }
 
 /**
@@ -315,9 +382,31 @@ function _fdRenderEntry(entry, path, pattern) {
     var subPath = path + '/' + entry.name;
     openBtn.onclick = function() { _fdBrowseDir(subPath, pattern); };
 
+    var searchHereBtn = document.createElement('button');
+    searchHereBtn.className = 'btn-fd-link';
+    searchHereBtn.textContent = '\uD83D\uDD0D Search here';
+    searchHereBtn.title = 'Search files in this directory';
+    (function(sp) {
+      searchHereBtn.onclick = function() {
+        _fdLinkToSearch(sp, 'search', { focusId: 'fdSearchFilename' });
+      };
+    })(subPath);
+
+    var searchArchHereBtn = document.createElement('button');
+    searchArchHereBtn.className = 'btn-fd-link';
+    searchArchHereBtn.textContent = '\uD83D\uDDDC Search archives here';
+    searchArchHereBtn.title = 'Search inside archives in this directory';
+    (function(sp) {
+      searchArchHereBtn.onclick = function() {
+        _fdLinkToSearch(sp, 'searcharch', { focusId: 'fdArchSearchString' });
+      };
+    })(subPath);
+
     row.appendChild(nameEl);
     row.appendChild(meta);
     row.appendChild(openBtn);
+    row.appendChild(searchHereBtn);
+    row.appendChild(searchArchHereBtn);
     return row;
   }
 
@@ -354,7 +443,18 @@ function _fdRenderEntry(entry, path, pattern) {
       }
     };
 
+    var searchInArchBtn = document.createElement('button');
+    searchInArchBtn.className = 'btn-fd-link';
+    searchInArchBtn.textContent = '\uD83D\uDD0D Search in archive';
+    searchInArchBtn.title = 'Search string inside this archive';
+    (function(p, n) {
+      searchInArchBtn.onclick = function() {
+        _fdLinkToSearch(p, 'searcharch', { archivePattern: n, filePattern: '*' });
+      };
+    })(path, entry.name);
+
     row.appendChild(expandBtn);
+    row.appendChild(searchInArchBtn);
     var wrapper = document.createElement('div');
     wrapper.appendChild(row);
     wrapper.appendChild(childContainer);
@@ -367,6 +467,18 @@ function _fdRenderEntry(entry, path, pattern) {
   dlBtn.textContent = '\u2B07 Download';
   dlBtn.onclick = function() { fdDownload(path, entry.name, null); };
   row.appendChild(dlBtn);
+
+  var searchInFileBtn = document.createElement('button');
+  searchInFileBtn.className = 'btn-fd-link';
+  searchInFileBtn.textContent = '\uD83D\uDD0D Search in file';
+  searchInFileBtn.title = 'Search string inside this file';
+  (function(p, n) {
+    searchInFileBtn.onclick = function() {
+      _fdLinkToSearch(p, 'search', { filename: n });
+    };
+  })(path, entry.name);
+  row.appendChild(searchInFileBtn);
+
   return row;
 }
 
@@ -403,8 +515,19 @@ function fdExpandArchive(path, archive, container, btn) {
         dlBtn.textContent = '\u2B07';
         dlBtn.onclick = (function(f) { return function() { fdDownload(path, f, archive); }; })(innerFile);
 
+        var innerSearchBtn = document.createElement('button');
+        innerSearchBtn.className = 'btn-fd-link';
+        innerSearchBtn.textContent = '\uD83D\uDD0D';
+        innerSearchBtn.title = 'Search in this archive member';
+        (function(p, arc, inf) {
+          innerSearchBtn.onclick = function() {
+            _fdLinkToSearch(p, 'searcharch', { archivePattern: arc, filePattern: inf });
+          };
+        })(path, archive, innerFile);
+
         row.appendChild(nameEl);
         row.appendChild(dlBtn);
+        row.appendChild(innerSearchBtn);
         container.appendChild(row);
       });
     })
@@ -3733,7 +3856,7 @@ toggleAutoRefresh = function() {
  * (or a truncation notice) in #fdSearchResults.
  */
 function fdSearchFiles() {
-  var path = document.getElementById('fdPathSelect').value;
+  var path = _fdLinkedPath || document.getElementById('fdPathSelect').value;
   if (!path) { alert('Please select a path first.'); return; }
   var filenamePattern = document.getElementById('fdSearchFilename').value.trim();
   var searchString    = document.getElementById('fdSearchString').value.trim();
@@ -3850,7 +3973,7 @@ function _fdRenderSearchResults(data, container) {
  * the shared _fdRenderSearchResults renderer.
  */
 function fdSearchArchive() {
-  var path = document.getElementById('fdPathSelect').value;
+  var path = _fdLinkedPath || document.getElementById('fdPathSelect').value;
   if (!path) { alert('Please select a path first.'); return; }
   var archivePattern = document.getElementById('fdArchSearchPattern').value.trim();
   var filePattern    = document.getElementById('fdArchFilePattern').value.trim();
