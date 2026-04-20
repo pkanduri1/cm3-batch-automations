@@ -1,10 +1,13 @@
 """Business rule validation engine."""
 
+import logging
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Optional
 import pandas as pd
 import re
 from datetime import datetime
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -320,3 +323,41 @@ class RuleEngine:
     def set_total_rows(self, total_rows: int):
         """Set total rows for compliance calculation."""
         self.statistics['total_rows'] = total_rows
+
+    @property
+    def cross_row_rules(self) -> List[Dict]:
+        """Return enabled rules with type == 'cross_row'.
+
+        Used by the chunked validator to separate cross-row rules (handled via
+        map-reduce across chunks) from per-chunk field/cross-field rules.
+
+        Returns:
+            List of enabled rule dicts whose ``type`` is ``'cross_row'``.
+        """
+        return [r for r in self.enabled_rules if r.get("type") == "cross_row"]
+
+    def validate_non_cross_row(self, df: pd.DataFrame) -> List[RuleViolation]:
+        """Execute all enabled rules EXCEPT cross_row type rules.
+
+        Used by the chunked validator to run field-level and cross-field rules
+        per chunk, while cross-row rules are handled separately via map-reduce
+        to correctly detect violations that span chunk boundaries.
+
+        Args:
+            df: DataFrame chunk to validate.
+
+        Returns:
+            List of :class:`RuleViolation` objects from field and cross-field
+            rules only.  Cross-row rules are excluded entirely.
+        """
+        violations: List[RuleViolation] = []
+        for rule in self.enabled_rules:
+            if rule.get("type") == "cross_row":
+                continue
+            try:
+                violations.extend(self._execute_rule(rule, df))
+            except Exception as exc:
+                _logger.warning(
+                    "Error executing rule %s: %s", rule.get("id"), exc
+                )
+        return violations

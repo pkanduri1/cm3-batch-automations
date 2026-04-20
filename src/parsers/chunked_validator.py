@@ -380,6 +380,13 @@ class ChunkedFileValidator:
                             for col, count in chunk_stats.get('empty_strings', {}).items():
                                 total_empty_strings[col] = total_empty_strings.get(col, 0) + count
             else:
+                # Cross-row rules require map-reduce across all chunks to detect
+                # violations that straddle chunk boundaries (issue #358).
+                from src.validators.cross_row_validator import CrossRowValidator as _CRV
+                _cross_row_validator = _CRV()
+                # rule_id → {'rule': rule_dict, 'states': [partial_state, ...]}
+                _cross_row_partial_states: dict = {}
+
                 # When the file has no header row, supply field names from the
                 # mapping so that named-field lookups in _validate_chunk work.
                 col_names: Optional[List[str]] = None
@@ -401,11 +408,13 @@ class ChunkedFileValidator:
                     total_rows += len(chunk)
                     duplicate_count += chunk_stats['duplicates']
 
-                    # Optional business-rule validation
+                    # Optional business-rule validation (map-reduce for cross-row rules).
                     if self.rule_engine is not None:
                         self.rule_engine.set_total_rows(total_rows)
-                        violations = self.rule_engine.validate(chunk)
-                        for v in violations:
+
+                        # Field / cross-field rules: evaluate per chunk immediately.
+                        chunk_violations = self.rule_engine.validate_non_cross_row(chunk)
+                        for v in chunk_violations:
                             vdict = v.to_dict()
                             business_violations.append(vdict)
                             issue = {
@@ -424,6 +433,17 @@ class ChunkedFileValidator:
                             else:
                                 info.append(issue)
 
+                        # Cross-row rules: collect partial state per chunk (map step).
+                        for rule in self.rule_engine.cross_row_rules:
+                            scoped_chunk = self.rule_engine._apply_condition(rule, chunk)
+                            partial = _cross_row_validator.collect_partial_state(
+                                rule, scoped_chunk
+                            )
+                            entry = _cross_row_partial_states.setdefault(
+                                rule['id'], {'rule': rule, 'states': []}
+                            )
+                            entry['states'].append(partial)
+
                     # Aggregate null counts
                     for col, count in chunk_stats['nulls'].items():
                         total_nulls[col] = total_nulls.get(col, 0) + count
@@ -438,6 +458,35 @@ class ChunkedFileValidator:
                     # Periodic garbage collection
                     if chunk_num % 10 == 0:
                         self.memory_monitor.force_garbage_collection()
+
+                # Cross-row rules: merge partial states and evaluate (reduce step).
+                if self.rule_engine is not None:
+                    for rule_id, data in _cross_row_partial_states.items():
+                        rule = data['rule']
+                        merged = _cross_row_validator.merge_partial_states(
+                            rule, data['states']
+                        )
+                        cr_violations = _cross_row_validator.evaluate_merged_state(
+                            rule, merged
+                        )
+                        for v in cr_violations:
+                            vdict = v.to_dict()
+                            business_violations.append(vdict)
+                            issue = {
+                                'severity': v.severity,
+                                'category': 'business_rule',
+                                'message': v.message,
+                                'row': v.row_number,
+                                'field': v.field,
+                                'rule_id': v.rule_id,
+                                'rule_name': v.rule_name,
+                            }
+                            if v.severity == 'error':
+                                errors.append(issue)
+                            elif v.severity == 'warning':
+                                warnings.append(issue)
+                            else:
+                                info.append(issue)
 
             if progress:
                 progress.finish()
